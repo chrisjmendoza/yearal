@@ -8,6 +8,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.kotest.matchers.shouldNotBe
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,9 +34,8 @@ import java.util.TimeZone
  * `Dispatchers.Main` for a `StandardTestDispatcher` while [MainActivity] actually composes
  * `IfcApp` (a real Compose tree, not a bare `ComponentActivity` like `ConverterSharingTest`'s) hung
  * the JVM indefinitely — Compose's `Recomposer` expects a real, Choreographer-backed main dispatcher,
- * not a virtual-time one, to ever produce a frame. Robolectric's own real (paused) main-looper
- * dispatcher plus [MainViewModel.today] being a plain `StateFlow` (read synchronously with `.value`,
- * no collection needed) avoids the swap entirely; [idleMainLooper] pumps it instead of `runCurrent()`.
+ * not a virtual-time one, to ever produce a frame. Robolectric's own (paused) main-looper dispatcher
+ * avoids the swap entirely, and [idleMainLooper] pumps it instead of `runCurrent()`.
  */
 @RunWith(AndroidJUnit4::class)
 class TimeZoneChangeEndToEndTest {
@@ -43,26 +46,24 @@ class TimeZoneChangeEndToEndTest {
     private fun idleMainLooper() = shadowOf(Looper.getMainLooper()).idle()
 
     /**
-     * Pumps the main looper until [value] returns a non-null result, or fails after [TIMEOUT_MILLIS].
+     * Pumps the main looper until [value] returns a non-null result, or fails after [MAX_PUMPS] pumps.
      *
-     * `MainViewModel.today` is fed by `RealDateTicker` on a background dispatcher, so its first value
-     * and its post-broadcast value both arrive on real time that a single `idle()` cannot force. Reading
-     * once after one pump passes on an idle machine and fails when the run is loaded — this test did
-     * exactly that in a full-suite run. `nanoTime` is a monotonic stopwatch, not a clock: nothing here
-     * computes a date (CLAUDE.md rule 2).
+     * Everything in this chain runs on `viewModelScope`, i.e. `Dispatchers.Main`, which Robolectric
+     * pauses: the ticker loop, its emission and `stateIn`'s sharing coroutine are all main-looper tasks.
+     * So the only thing that advances them is pumping the looper — sleeping does not, because the paused
+     * looper's clock does not follow real time. Reading `.value` after a single pump therefore passes or
+     * fails on scheduling luck, which is exactly how this test failed under a loaded full-suite run and
+     * again on CI.
      */
     private fun <T : Any> awaitOnMainLooper(
         what: String,
         value: () -> T?,
     ): T {
-        val deadline = System.nanoTime() + TIMEOUT_MILLIS * NANOS_PER_MILLI
-        while (System.nanoTime() < deadline) {
+        repeat(MAX_PUMPS) {
             idleMainLooper()
             value()?.let { return it }
-            Thread.sleep(POLL_MILLIS)
         }
-        idleMainLooper()
-        return value() ?: error("$what did not arrive within $TIMEOUT_MILLIS ms")
+        return value() ?: error("$what did not arrive after $MAX_PUMPS main-looper pumps")
     }
 
     @After
@@ -78,6 +79,13 @@ class TimeZoneChangeEndToEndTest {
         idleMainLooper()
         val viewModel = ViewModelProvider(controller.get())[MainViewModel::class.java]
 
+        // MainViewModel.today shares WhileSubscribed, so the ticker only runs while something collects
+        // it. In the app that subscriber is the Compose tree; under Robolectric, whether composition has
+        // produced a frame by now is not something this test should depend on, so it subscribes itself.
+        // Unconfined runs the collector inline here, so the subscription exists before the first pump.
+        val subscriber = CoroutineScope(Dispatchers.Unconfined)
+        subscriber.launch { viewModel.today.collect { } }
+
         val dateBefore = awaitOnMainLooper("the ticker's first date") { viewModel.today.value }
 
         TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Kiritimati"))
@@ -89,12 +97,12 @@ class TimeZoneChangeEndToEndTest {
             }
         dateAfter shouldNotBe dateBefore
 
+        subscriber.cancel()
         controller.pause().stop().destroy()
     }
 
     private companion object {
-        const val TIMEOUT_MILLIS = 10_000L
-        const val POLL_MILLIS = 10L
-        const val NANOS_PER_MILLI = 1_000_000L
+        /** Generous: each pump is cheap, and every step of the chain is a main-looper task. */
+        const val MAX_PUMPS = 200
     }
 }
