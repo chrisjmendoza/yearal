@@ -57,6 +57,13 @@ is tracked in git (a `git ls-files '**/src/test/screenshots/*.png'` check gates 
 [screenshots.md](screenshots.md) for how the owner records that first baseline (ROADMAP R6 / M2 T10).
 A Kotest `checkAll` inside an expression-bodied test (`fun x() = runBlocking { checkAll(...) }`) returns a
 non-`Unit` value and Jupiter silently skips it — use a block body and check the test-results XML counts.
+Robolectric pauses the main looper, and its clock does **not** follow real time. Anything on
+`Dispatchers.Main` — including `viewModelScope`, so most `stateIn` sharing — advances only when the test
+pumps the looper (`shadowOf(Looper.getMainLooper()).idle()`); `Thread.sleep` advances nothing. A test that
+reads `.value` once after a single pump passes on an idle machine and fails under load or on CI. Pump in a
+bounded loop until the value arrives, and fail with a message saying what never came. Separately, a flow
+shared `WhileSubscribed` does not run at all unless something collects it: if the only subscriber is the
+Compose tree, subscribe in the test instead of resting on composition having produced a frame.
 
 ## 3. Definition of Done
 
