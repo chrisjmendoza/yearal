@@ -14,14 +14,15 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * [MoreScreen] under Robolectric: the Settings, Learn and Privacy rows are buttons that fire their own
- * callback, and the About row shows the app name and version without being clickable.
+ * [MoreScreen] under Robolectric: the Holidays, Settings, Learn and Privacy rows are buttons that fire
+ * their own callback, and the About row shows the app name and version without being clickable.
  */
 @RunWith(AndroidJUnit4::class)
 class MoreScreenTest {
     @get:Rule
     val compose = createComposeRule()
 
+    private var holidaysClicks = 0
     private var settingsClicks = 0
     private var learnClicks = 0
     private var privacyClicks = 0
@@ -32,12 +33,27 @@ class MoreScreenTest {
                 MoreScreen(
                     appName = "Yearal",
                     versionName = "0.1.0",
+                    onHolidaysClick = { holidaysClicks++ },
                     onSettingsClick = { settingsClicks++ },
                     onLearnClick = { learnClicks++ },
                     onPrivacyClick = { privacyClicks++ },
                 )
             }
         }
+    }
+
+    @Test
+    fun `Holidays row is clickable and invokes its callback`() {
+        show()
+
+        compose
+            .onNodeWithText("Holidays")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+
+        holidaysClicks shouldBe 1
+        compose.onNodeWithText("Browse holiday sets and this year's dates").assertIsDisplayed()
     }
 
     @Test
@@ -51,7 +67,7 @@ class MoreScreenTest {
             .performClick()
 
         settingsClicks shouldBe 1
-        compose.onNodeWithText("Weekday headers, theme, holidays").assertIsDisplayed()
+        compose.onNodeWithText("Weekday headers, theme").assertIsDisplayed()
     }
 
     @Test

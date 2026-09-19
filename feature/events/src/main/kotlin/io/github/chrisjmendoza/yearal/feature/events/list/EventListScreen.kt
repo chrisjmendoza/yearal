@@ -1,6 +1,7 @@
 package io.github.chrisjmendoza.yearal.feature.events.list
 
 import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -42,12 +43,16 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.currentWindowWidthClass
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCalendar
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
 import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
 import io.github.chrisjmendoza.yearal.feature.events.R
+import io.github.chrisjmendoza.yearal.feature.events.editor.EventEditorViewModel
+import io.github.chrisjmendoza.yearal.feature.events.editor.rememberEventEditorState
 
 private val RowMinHeight = 48.dp
 private val ScreenPadding = 16.dp
@@ -57,12 +62,24 @@ private val RowContentSpacing = 12.dp
 private val SectionSpacing = 8.dp
 
 /**
- * The events list (`EventListKey`, `docs/FEATURES.md` E1, E3, E5–E7, E9): collects
- * [EventListViewModel.uiState] and renders it through the stateless [EventListScreen]. This is the
- * composable `:app` places behind `EventListKey`.
+ * The events list (`EventListKey`, `docs/FEATURES.md` E1, E3, E5–E7, E9; docs/ARCHITECTURE.md §4
+ * "Adaptive layouts"): collects [EventListViewModel.uiState] and renders it through the stateless
+ * [EventsScreen]. This is the composable `:app` places behind `EventListKey`.
  *
- * @param navigator receives [EventEditorKey] when the user taps a row or the "Add event" button.
- * @param modifier applied to the screen's root [Scaffold].
+ * [currentWindowWidthClass] decides the layout (docs/ROADMAP.md M3 T4):
+ *
+ * - **Compact and medium:** a row tap or the "Add event" FAB pushes `EventEditorKey` full-screen,
+ *   unchanged from before this task.
+ * - **Expanded:** a row tap or the FAB only calls [EventListViewModel.selectEvent] /
+ *   [EventListViewModel.selectNewEvent]; no navigation happens. The selection feeds a second,
+ *   [EventEditorViewModel] — created only while there is a selection, keyed by it so switching the
+ *   selected event creates a fresh instance rather than reusing a stale one — whose
+ *   [rememberEventEditorState] output goes straight to the list-detail pane. [BackHandler] delegates
+ *   to the editor's own `requestBack`, so the unsaved-changes guard still shows before the selection is
+ *   cleared (`EventEditorViewModel.requestBack`'s existing dirty check, unchanged).
+ *
+ * @param navigator receives `EventEditorKey` at compact/medium widths.
+ * @param modifier applied to the screen's root.
  */
 @Composable
 fun EventListRoute(
@@ -71,14 +88,66 @@ fun EventListRoute(
     viewModel: EventListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    EventListScreen(
-        state = state,
+    val selection by viewModel.selection.collectAsStateWithLifecycle()
+    val widthClass = currentWindowWidthClass()
+    val editorKey = if (widthClass == WindowWidthClass.EXPANDED) selection.toEditorKeyOrNull() else null
+
+    val editorViewModel =
+        editorKey?.let { key ->
+            hiltViewModel<EventEditorViewModel, EventEditorViewModel.Factory>(
+                key = selection.editorViewModelKey(),
+                creationCallback = { factory -> factory.create(key) },
+            )
+        }
+    val editor = editorViewModel?.let { rememberEventEditorState(it, onLeave = viewModel::clearSelection) }
+
+    if (editorViewModel != null) {
+        BackHandler(onBack = editorViewModel::requestBack)
+    }
+
+    EventsScreen(
+        widthClass = widthClass,
+        listState = state,
         onQueryChange = viewModel::setQuery,
-        onAddEvent = { navigator.navigate(EventEditorKey()) },
-        onOpenEvent = { id -> navigator.navigate(EventEditorKey(eventId = id)) },
+        onAddEvent = {
+            if (widthClass == WindowWidthClass.EXPANDED) {
+                viewModel.selectNewEvent()
+            } else {
+                navigator.navigate(EventEditorKey())
+            }
+        },
+        onOpenEvent = { id ->
+            if (widthClass == WindowWidthClass.EXPANDED) {
+                viewModel.selectEvent(id)
+            } else {
+                navigator.navigate(EventEditorKey(eventId = id))
+            }
+        },
+        editorState = editor?.uiState,
+        editorCallbacks = editor?.callbacks,
         modifier = modifier,
     )
 }
+
+/** The `EventEditorKey` the expanded-width detail pane should show, or `null` for its empty state. */
+private fun EventListSelection.toEditorKeyOrNull(): EventEditorKey? =
+    when (this) {
+        EventListSelection.None -> null
+        EventListSelection.New -> EventEditorKey()
+        is EventListSelection.Existing -> EventEditorKey(eventId = eventId)
+    }
+
+/**
+ * A stable [hiltViewModel] key for this selection, distinct per event id (and for "new"), so switching
+ * the expanded-width pane's selection creates a fresh [EventEditorViewModel] instead of reusing a
+ * stale one. `null` for [EventListSelection.None], where no ViewModel is created at all.
+ */
+private fun EventListSelection.editorViewModelKey(): String? =
+    when (this) {
+        EventListSelection.None -> null
+        EventListSelection.New -> "event-list-editor-new"
+        is EventListSelection.Existing -> "event-list-editor-$eventId"
+    }
 
 /**
  * The stateless events list — the unit for previews and Compose tests. A search field, then either an

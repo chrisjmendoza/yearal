@@ -43,7 +43,24 @@ class MonthWidgetStateTest {
         state.days.size shouldBe 28
         state.days.map { it.dayOfMonth } shouldBe (1..28).toList()
         state.days.single { it.isToday }.dayOfMonth shouldBe 8
+        state.days.single { it.isToday }.gregorianDate shouldBe LocalDate.of(2026, 9, 17)
         state.intercalary shouldBe null
+    }
+
+    @Test
+    fun `each cell carries the Gregorian date its tap target needs, in order`() {
+        val state = stateFor(LocalDate.of(2026, 9, 17))
+
+        // IFC September 1..28, 2026 is Gregorian September 10..October 7 (day-of-year aligned).
+        state.days.map { it.gregorianDate } shouldBe
+            (0..27).map { LocalDate.of(2026, 9, 10).plusDays(it.toLong()) }
+    }
+
+    @Test
+    fun `the intercalary band carries its own Gregorian date`() {
+        val state = stateFor(LocalDate.of(2028, 6, 17)) // Leap Day 2028.
+
+        checkNotNull(state.intercalary).gregorianDate shouldBe LocalDate.of(2028, 6, 17)
     }
 
     @Test

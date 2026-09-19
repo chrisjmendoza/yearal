@@ -1,5 +1,6 @@
 package io.github.chrisjmendoza.yearal.feature.calendar.month
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,6 +42,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.currentWindowWidthClass
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.MonthGrid
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.DatePickerRange
@@ -48,11 +51,16 @@ import io.github.chrisjmendoza.yearal.core.designsystem.picker.GregorianDatePick
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.IfcDatePicker
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.rememberIfcDatePickerState
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.navigation.ConverterKey
 import io.github.chrisjmendoza.yearal.core.navigation.DayKey
+import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
 import io.github.chrisjmendoza.yearal.core.navigation.MonthKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
 import io.github.chrisjmendoza.yearal.core.navigation.YearKey
 import io.github.chrisjmendoza.yearal.feature.calendar.R
+import io.github.chrisjmendoza.yearal.feature.calendar.day.DayDetailState
+import io.github.chrisjmendoza.yearal.feature.calendar.day.DayViewModel
+import io.github.chrisjmendoza.yearal.feature.calendar.day.rememberDayDetailState
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -61,18 +69,30 @@ private val JumpChooserOptionSpacing = 8.dp
 private val JumpChooserMinTouchTarget = 48.dp
 
 /**
- * The Calendar tab's Month pager (docs/FEATURES.md C1, C3, C5, C7): collects [MonthViewModel.uiState]
- * with the lifecycle and renders it through the stateless [MonthScreen]. This is the composable
- * `:app` places behind [MonthKey].
+ * The Calendar tab's Month pager (docs/FEATURES.md C1, C3, C5, C7; docs/ARCHITECTURE.md §4 "Adaptive
+ * layouts"): collects [MonthViewModel.uiState] with the lifecycle and renders it through the
+ * stateless [CalendarScreen]. This is the composable `:app` places behind [MonthKey].
  *
  * The ViewModel is created for [key]'s month through [MonthViewModel.Factory] (the month is clamped
- * by [MonthPages.monthOf]); a tap on a day selects it and pushes [DayKey] with the day's Gregorian
- * epoch day (CLAUDE.md rule 4). Tapping the month heading zooms out to [YearKey] (ARCHITECTURE §4);
- * the jump-to-date action lets the user pick either calendar and pushes the [MonthKey] of the chosen
- * date (FEATURES C7).
+ * by [MonthPages.monthOf]). [currentWindowWidthClass] decides the layout (docs/ROADMAP.md M3 T4):
+ *
+ * - **Compact and medium:** a tap on a day selects it and pushes [DayKey] with the day's Gregorian
+ *   epoch day (CLAUDE.md rule 4) — unchanged from before this task, so the sheet still works exactly
+ *   as it did.
+ * - **Expanded:** a tap on a day only calls [MonthViewModel.select]; no navigation happens; instead a
+ *   second, [DayViewModel] — created only while there is a selection, keyed by the selected epoch day
+ *   so switching days creates a fresh instance rather than reusing a stale one — feeds the list-detail
+ *   pane's own [DayDetailState] directly, and [BackHandler] clears the selection instead of leaving
+ *   the tab (docs/ARCHITECTURE.md §4). "Add event" and "Open in converter" still navigate: they open a
+ *   different tab, which is unrelated to Calendar's own list-detail split.
+ *
+ * Tapping the month heading zooms out to [YearKey] (ARCHITECTURE §4) in both layouts; the
+ * jump-to-date action lets the user pick either calendar and pushes the [MonthKey] of the chosen date
+ * (FEATURES C7).
  *
  * @param key the month to open on.
- * @param navigator where day taps, the title tap and the jump-to-date action navigate.
+ * @param navigator where the title tap, the jump-to-date action, and (compact/medium only) a day tap
+ * navigate; also where the expanded detail pane's "Add event" / "Open in converter" navigate.
  * @param modifier applied to the screen's root.
  */
 @Composable
@@ -86,20 +106,62 @@ fun MonthRoute(
         ),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    MonthScreen(
-        state = state,
+    val widthClass = currentWindowWidthClass()
+    val selectedEpochDay = state.selected?.toEpochDay()
+
+    // The detail pane's own ViewModel exists only while there is a selection at expanded widths — an
+    // explicit `key` (not the default call-site key) so picking a different day creates a fresh
+    // instance instead of reusing the previous day's (this composable itself never gets a new Nav3
+    // entry to do that for us, unlike DayRoute).
+    val dayViewModel =
+        if (widthClass == WindowWidthClass.EXPANDED && selectedEpochDay != null) {
+            hiltViewModel<DayViewModel, DayViewModel.Factory>(
+                key = "month-day-detail-$selectedEpochDay",
+                creationCallback = { factory -> factory.create(selectedEpochDay) },
+            )
+        } else {
+            null
+        }
+    val dayDetail: DayDetailState? = dayViewModel?.let { rememberDayDetailState(it) }
+
+    // FEATURES C5 / docs/ROADMAP.md M3 T4: back clears the selection instead of popping the tab, but
+    // only while there is a selection to clear — otherwise back falls through to Nav3 as usual.
+    BackHandler(enabled = widthClass == WindowWidthClass.EXPANDED && state.selected != null) {
+        viewModel.clearSelection()
+    }
+
+    CalendarScreen(
+        widthClass = widthClass,
+        monthState = state,
         onPageChanged = viewModel::showPage,
-        onDayClick = { date ->
-            val gregorian = date.toLocalDate()
-            viewModel.select(gregorian)
-            navigator.navigate(DayKey(gregorian.toEpochDay()))
-        },
         onTitleClick = { year -> navigator.navigate(YearKey(year)) },
         onJumpToDate = { date ->
             val month = IfcYearMonth.from(IfcDate.from(date))
             navigator.navigate(MonthKey(month.year, month.month.number))
         },
+        onDayClick = { date ->
+            val gregorian = date.toLocalDate()
+            viewModel.select(gregorian)
+            navigator.navigate(DayKey(gregorian.toEpochDay()))
+        },
+        onSelectDay = { date -> viewModel.select(date.toLocalDate()) },
+        dayState = dayDetail?.uiState,
+        dayCallbacks =
+            DayDetailCallbacks(
+                onEventClick = { eventId -> navigator.navigate(EventEditorKey(eventId = eventId)) },
+                onAddEvent = {
+                    selectedEpochDay?.let { epochDay -> navigator.navigate(EventEditorKey(prefillEpochDay = epochDay)) }
+                },
+                onOpenInConverter = {
+                    selectedEpochDay?.let { epochDay -> navigator.navigate(ConverterKey(prefillEpochDay = epochDay)) }
+                },
+                onRequestDelete = dayViewModel?.let { vm -> vm::requestDelete } ?: {},
+                onConfirmDelete = dayViewModel?.let { vm -> vm::confirmDelete } ?: {},
+                onCancelDelete = dayViewModel?.let { vm -> vm::cancelDelete } ?: {},
+                onClose = viewModel::clearSelection,
+            ),
         modifier = modifier,
+        snackbarHostState = dayDetail?.snackbarHostState,
     )
 }
 

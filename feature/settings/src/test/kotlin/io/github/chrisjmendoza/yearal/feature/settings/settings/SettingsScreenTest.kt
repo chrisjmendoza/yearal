@@ -9,7 +9,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
-import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -33,7 +32,9 @@ import org.junit.runner.RunWith
 /**
  * [SettingsScreen] under Robolectric: each control reflects the state it is given, has the semantics
  * TalkBack needs (`selected`, on/off, disabled), and reports a change through its callback with the
- * right value (FEATURES W1, W2, H5; docs/ARCHITECTURE.md §4 "Accessibility").
+ * right value (FEATURES W1, W2, H5; docs/ARCHITECTURE.md §4 "Accessibility"). Browsing and toggling
+ * holiday sets is `feature:holidays`' own `HolidaysScreenTest` now (ROADMAP M6 T2); this screen only
+ * needs to prove its "Holiday sets" row opens that screen.
  *
  * Tests of the "Delete all data" dialogs drive the two-step flow by reassigning [loadedState]
  * directly (as `feature:events`'s `EventEditorScreenTest` does), since the Compose test rule refuses a
@@ -44,17 +45,10 @@ class SettingsScreenTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private val packs =
-        listOf(
-            HolidayPackItem(id = "ifc", name = "International Fixed Calendar", region = null),
-            HolidayPackItem(id = "us", name = "United States", region = "United States"),
-            HolidayPackItem(id = "religious-christian", name = "Christian (Easter family)", region = null),
-        )
-
     private val weekdaySelections = mutableListOf<WeekdayDisplay>()
     private val themeSelections = mutableListOf<ThemeMode>()
     private val dynamicColorChanges = mutableListOf<Boolean>()
-    private val holidayChanges = mutableListOf<Pair<String, Boolean>>()
+    private var holidaysOpened = 0
     private var backPresses = 0
     private var deleteAllDataRequested = 0
     private var deleteAllDataContinued = 0
@@ -63,14 +57,14 @@ class SettingsScreenTest {
     private var deleteAllDataDoneDismissed = 0
 
     private var loadedState: SettingsUiState.Loaded by
-        mutableStateOf(SettingsUiState.Loaded(UserSettings.DEFAULT, packs, dynamicColorSupported = true))
+        mutableStateOf(SettingsUiState.Loaded(UserSettings.DEFAULT, dynamicColorSupported = true))
 
     private fun show(
         settings: UserSettings = UserSettings.DEFAULT,
         dynamicColorSupported: Boolean = true,
         deleteAllDataStep: DeleteAllDataStep = DeleteAllDataStep.NONE,
     ) {
-        loadedState = SettingsUiState.Loaded(settings, packs, dynamicColorSupported, deleteAllDataStep)
+        loadedState = SettingsUiState.Loaded(settings, dynamicColorSupported, deleteAllDataStep)
         compose.setContent {
             IfcTheme(dynamicColor = false) {
                 SettingsScreen(
@@ -79,7 +73,7 @@ class SettingsScreenTest {
                     onWeekdayDisplaySelected = { weekdaySelections += it },
                     onThemeModeSelected = { themeSelections += it },
                     onDynamicColorChanged = { dynamicColorChanges += it },
-                    onHolidaySetEnabledChanged = { id, enabled -> holidayChanges += id to enabled },
+                    onOpenHolidays = { holidaysOpened++ },
                     onRequestDeleteAllData = { deleteAllDataRequested++ },
                     onContinueDeleteAllData = { deleteAllDataContinued++ },
                     onCancelDeleteAllData = { deleteAllDataCancelled++ },
@@ -175,25 +169,16 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun `holiday switches show every pack, its region, and the stored on-off state`() {
-        show(UserSettings(enabledHolidaySets = setOf("ifc", "us")))
+    fun `the holiday sets row is reachable and opens the Holidays screen`() {
+        show()
 
-        compose.onNodeWithText("International Fixed Calendar").performScrollTo().assertIsOn()
-        compose.onNodeWithText("United States").performScrollTo().assertIsOn()
-        compose.onNodeWithText("Region: United States").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Christian (Easter family)").performScrollTo().assertIsOff()
-    }
+        compose
+            .onNodeWithText("Holiday sets")
+            .performScrollTo()
+            .assertHasClickAction()
+            .performClick()
 
-    @Test
-    fun `clicking a holiday switch reports the pack id with the new state`() {
-        show(UserSettings(enabledHolidaySets = setOf("ifc", "us")))
-
-        compose.onNodeWithText("United States").performScrollTo().performClick()
-        compose.onNodeWithText("Christian (Easter family)").performScrollTo().performClick()
-        compose.onNodeWithText("International Fixed Calendar").performScrollTo().performClick()
-
-        holidayChanges shouldContainExactly
-            listOf("us" to false, "religious-christian" to true, "ifc" to false)
+        holidaysOpened shouldBe 1
     }
 
     @Test
@@ -291,7 +276,7 @@ class SettingsScreenTest {
                     onWeekdayDisplaySelected = {},
                     onThemeModeSelected = {},
                     onDynamicColorChanged = {},
-                    onHolidaySetEnabledChanged = { _, _ -> },
+                    onOpenHolidays = {},
                 )
             }
         }

@@ -14,6 +14,9 @@ import java.time.LocalDate
  * itself is `:core:calendar`'s [IfcDate.Regular]; this only carries what the widget renders).
  *
  * @property dayOfMonth 1..28.
+ * @property gregorianDate the real, Gregorian date of this cell (CLAUDE.md rule 4), used to build its
+ *   tap target ([io.github.chrisjmendoza.yearal.widget.today.dayLaunchIntent], ROADMAP M3 T5) --
+ *   never displayed itself.
  * @property isToday whether this cell is the real today, matched by **Gregorian** date (CLAUDE.md
  *   rule 4 -- events, "today", and everything else tied to real life compare Gregorian dates, never
  *   IFC numeric fields).
@@ -24,6 +27,7 @@ import java.time.LocalDate
  */
 data class MonthDayCellState(
     val dayOfMonth: Int,
+    val gregorianDate: LocalDate,
     val isToday: Boolean,
     val hasEvent: Boolean = false,
 )
@@ -37,6 +41,9 @@ data class MonthDayCellState(
  * @property subtitle the Gregorian date, its real weekday, and the "no IFC weekday" note
  *   ([IfcDateFormatter.intercalarySubtitle]) -- the day belongs to no week (spec §2.4), so it is never
  *   given a nominal weekday.
+ * @property gregorianDate the real, Gregorian date of this band (CLAUDE.md rule 4), used to build its
+ *   tap target ([io.github.chrisjmendoza.yearal.widget.today.dayLaunchIntent], ROADMAP M3 T5) --
+ *   Leap Day and Year Day are ordinary dates and get their own tap target exactly like a grid cell.
  * @property isToday whether the real today is this intercalary day; when true the band itself carries
  *   the today highlight, since it is not part of the 4x7 grid.
  * @property hasEvent whether at least one event occurrence falls on this intercalary day (ROADMAP M5
@@ -47,6 +54,7 @@ data class MonthDayCellState(
 data class MonthIntercalaryState(
     val label: String,
     val subtitle: String,
+    val gregorianDate: LocalDate,
     val isToday: Boolean,
     val hasEvent: Boolean = false,
 )
@@ -120,6 +128,7 @@ fun buildMonthWidgetState(
             val gregorianDate = date.toLocalDate()
             MonthDayCellState(
                 dayOfMonth = day,
+                gregorianDate = gregorianDate,
                 isToday = gregorianDate == today.gregorianDate,
                 hasEvent = gregorianDate in eventDates,
             )
@@ -131,6 +140,7 @@ fun buildMonthWidgetState(
             MonthIntercalaryState(
                 label = formatter.formatDay(day),
                 subtitle = formatter.intercalarySubtitle(day),
+                gregorianDate = gregorianDate,
                 isToday = gregorianDate == today.gregorianDate,
                 hasEvent = gregorianDate in eventDates,
             )

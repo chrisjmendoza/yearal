@@ -157,10 +157,10 @@ private fun TodayWidgetContent(
                 .background(GlanceTheme.colors.widgetBackground)
                 .padding(12.dp)
                 .semantics { contentDescription = state.contentDescription }
-        // launchAppIntent is null only if the platform cannot resolve this app's own launcher activity
+        // todayLaunchIntent is null only if the platform cannot resolve this app's own launcher activity
         // (docs/security-and-privacy.md §6.4 requires an explicit intent, so there is nothing safe to
         // launch in that case); the widget still shows the date, just without a tap action.
-        launchAppIntent(context)?.let { intent ->
+        todayLaunchIntent(context)?.let { intent ->
             modifier = modifier.clickable(actionStartActivity(intent))
         }
 

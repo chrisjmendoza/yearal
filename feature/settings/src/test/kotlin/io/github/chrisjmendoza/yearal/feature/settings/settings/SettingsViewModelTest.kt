@@ -4,12 +4,10 @@ import app.cash.turbine.test
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
-import io.github.chrisjmendoza.yearal.core.holidays.HolidayPackLoader
 import io.github.chrisjmendoza.yearal.core.testing.EventFixtures
 import io.github.chrisjmendoza.yearal.core.testing.FakeEventRepository
 import io.github.chrisjmendoza.yearal.core.testing.FakeSettingsRepository
 import io.kotest.matchers.collections.shouldBeEmpty
-import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -22,12 +20,12 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import java.util.Locale
 
 /**
- * [SettingsViewModel] against [FakeSettingsRepository] and the real [HolidayPackLoader]: the state is
- * whatever the store holds plus the bundled pack catalogue, and every intent goes through the store
- * and comes back as a new state (docs/ARCHITECTURE.md §4 "State management"; FEATURES W1, W2, H5).
+ * [SettingsViewModel] against [FakeSettingsRepository]: the state is whatever the store holds, and
+ * every intent goes through the store and comes back as a new state (docs/ARCHITECTURE.md §4 "State
+ * management"; FEATURES W1, W2, H5). Holiday-set toggling itself is `feature:holidays`'s own
+ * `HolidaysViewModelTest` now (ROADMAP M6 T2); this ViewModel no longer touches the bundled catalogue.
  *
  * A [StandardTestDispatcher] is used on purpose: with an unconfined one the first value is mapped
  * synchronously on subscription and `stateIn` conflates the initial [SettingsUiState.Loading] away.
@@ -35,21 +33,14 @@ import java.util.Locale
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
     private val dispatcher = StandardTestDispatcher()
-    private val loader = HolidayPackLoader()
-    private lateinit var defaultLocale: Locale
 
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
-        // Pack names and region names are resolved for the default locale; pin it so the expected
-        // strings below are the same on every machine.
-        defaultLocale = Locale.getDefault()
-        Locale.setDefault(Locale.US)
     }
 
     @After
     fun tearDown() {
-        Locale.setDefault(defaultLocale)
         Dispatchers.resetMain()
     }
 
@@ -57,10 +48,10 @@ class SettingsViewModelTest {
         repository: FakeSettingsRepository,
         dynamicColorSupported: Boolean = true,
         eventRepository: FakeEventRepository = FakeEventRepository(),
-    ) = SettingsViewModel(repository, loader, dynamicColorSupported, eventRepository)
+    ) = SettingsViewModel(repository, dynamicColorSupported, eventRepository)
 
     @Test
-    fun `starts loading, then mirrors the stored settings and lists the bundled packs`() =
+    fun `starts loading, then mirrors the stored settings`() =
         runTest(dispatcher) {
             val stored =
                 UserSettings(
@@ -76,12 +67,6 @@ class SettingsViewModelTest {
                 val loaded = awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>()
                 loaded.settings shouldBe stored
                 loaded.dynamicColorSupported shouldBe true
-                loaded.packs shouldContainExactly
-                    listOf(
-                        HolidayPackItem(id = "ifc", name = "International Fixed Calendar", region = null),
-                        HolidayPackItem(id = "us", name = "United States", region = "United States"),
-                        HolidayPackItem(id = "religious-christian", name = "Christian (Easter family)", region = null),
-                    )
             }
         }
 
@@ -158,78 +143,6 @@ class SettingsViewModelTest {
                 repository.current shouldBe UserSettings.DEFAULT.copy(dynamicColor = false)
             }
         }
-
-    @Test
-    fun `toggling a holiday set off then on round-trips`() =
-        runTest(dispatcher) {
-            val repository = FakeSettingsRepository()
-            val viewModel = viewModel(repository)
-            viewModel.uiState.test {
-                awaitItem() shouldBe SettingsUiState.Loading
-                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.enabledHolidaySets shouldBe
-                    setOf("ifc", "us")
-
-                viewModel.setHolidaySetEnabled("us", false)
-                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.enabledHolidaySets shouldBe
-                    setOf("ifc")
-                repository.current.enabledHolidaySets shouldBe setOf("ifc")
-
-                viewModel.setHolidaySetEnabled("us", true)
-                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.enabledHolidaySets shouldBe
-                    setOf("ifc", "us")
-                repository.current shouldBe UserSettings.DEFAULT
-            }
-        }
-
-    @Test
-    fun `the IFC set can be switched off like any other and a new set switched on`() =
-        runTest(dispatcher) {
-            val repository = FakeSettingsRepository()
-            val viewModel = viewModel(repository)
-            viewModel.uiState.test {
-                awaitItem() shouldBe SettingsUiState.Loading
-                awaitItem()
-
-                viewModel.setHolidaySetEnabled("ifc", false)
-                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.enabledHolidaySets shouldBe
-                    setOf("us")
-
-                viewModel.setHolidaySetEnabled("religious-christian", true)
-                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.enabledHolidaySets shouldBe
-                    setOf("us", "religious-christian")
-            }
-        }
-
-    @Test
-    fun `enabling an already enabled set or disabling an absent one stores the same value`() =
-        runTest(dispatcher) {
-            val repository = FakeSettingsRepository()
-            val viewModel = viewModel(repository)
-            viewModel.uiState.test {
-                awaitItem() shouldBe SettingsUiState.Loading
-                awaitItem()
-
-                viewModel.setHolidaySetEnabled("ifc", true)
-                viewModel.setHolidaySetEnabled("religious-christian", false)
-                dispatcher.scheduler.advanceUntilIdle()
-
-                repository.current shouldBe UserSettings.DEFAULT
-                // StateFlow conflates equal values, so no new state was emitted.
-                expectNoEvents()
-            }
-        }
-
-    @Test
-    fun `pack items resolve the name for the locale and the region as a country name`() {
-        val us = loader.loadBundled("US")
-        us.toItem(Locale.US) shouldBe HolidayPackItem(id = "us", name = "United States", region = "United States")
-        us.toItem(Locale.GERMANY) shouldBe
-            HolidayPackItem(id = "us", name = "United States", region = "Vereinigte Staaten")
-
-        val ifc = loader.loadBundled("ifc")
-        ifc.toItem(Locale.FRANCE) shouldBe
-            HolidayPackItem(id = "ifc", name = "International Fixed Calendar", region = null)
-    }
 
     // ----- "Delete all data" (FEATURES W6): two-step destructive confirmation, cancel at each step,
     // the repository and settings both reset. -----

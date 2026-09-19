@@ -4,6 +4,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -22,6 +23,7 @@ import io.github.chrisjmendoza.yearal.core.navigation.ConverterKey
 import io.github.chrisjmendoza.yearal.core.navigation.DayKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventListKey
+import io.github.chrisjmendoza.yearal.core.navigation.HolidaysKey
 import io.github.chrisjmendoza.yearal.core.navigation.LearnKey
 import io.github.chrisjmendoza.yearal.core.navigation.MonthKey
 import io.github.chrisjmendoza.yearal.core.navigation.MoreKey
@@ -36,10 +38,12 @@ import io.github.chrisjmendoza.yearal.feature.calendar.year.YearRoute
 import io.github.chrisjmendoza.yearal.feature.converter.ConverterRoute
 import io.github.chrisjmendoza.yearal.feature.events.editor.EventEditorRoute
 import io.github.chrisjmendoza.yearal.feature.events.list.EventListRoute
+import io.github.chrisjmendoza.yearal.feature.holidays.HolidaysRoute
 import io.github.chrisjmendoza.yearal.feature.settings.learn.LearnRoute
 import io.github.chrisjmendoza.yearal.feature.settings.more.MoreRoute
 import io.github.chrisjmendoza.yearal.feature.settings.privacy.PrivacyRoute
 import io.github.chrisjmendoza.yearal.feature.settings.settings.SettingsRoute
+import io.github.chrisjmendoza.yearal.ui.navigation.applyRoute
 import io.github.chrisjmendoza.yearal.ui.navigation.rememberTabBackStacks
 
 /**
@@ -51,6 +55,16 @@ import io.github.chrisjmendoza.yearal.ui.navigation.rememberTabBackStacks
 fun IfcApp(viewModel: MainViewModel = hiltViewModel()) {
     val today by viewModel.today.collectAsStateWithLifecycle()
     val tabs = rememberTabBackStacks()
+
+    // Intent routing (ROADMAP M3 T5, M4 T10; docs/ARCHITECTURE.md §4 "Intent routing"): MainActivity
+    // handed the resolved AppRoute to the ViewModel from onCreate/onNewIntent; this applies it to the
+    // tab back stacks the moment both it and (for AppRoute.CurrentMonth) `today` are available, then
+    // consumes it so a later recomposition -- a settings change, a rotation -- never re-applies it.
+    val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingRoute, today) {
+        val route = pendingRoute ?: return@LaunchedEffect
+        if (tabs.applyRoute(route, today)) viewModel.consumeRoute()
+    }
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -103,6 +117,7 @@ fun IfcApp(viewModel: MainViewModel = hiltViewModel()) {
                             versionName = BuildConfig.VERSION_NAME,
                         )
                     }
+                    entry<HolidaysKey> { HolidaysRoute(navigator = tabs) }
                     entry<SettingsKey> { SettingsRoute(navigator = tabs) }
                     entry<LearnKey> { LearnRoute(navigator = tabs) }
                     entry<PrivacyKey> { PrivacyRoute(navigator = tabs) }

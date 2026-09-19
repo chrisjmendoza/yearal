@@ -15,6 +15,10 @@
     <string name="events_search_clear">Clear search</string>
     <!-- Empty state: no events exist yet. -->
     <string name="events_empty_no_events">No events yet. Tap + to create one.</string>
+    <!-- Expanded-width list-detail pane (docs/ROADMAP.md M3 T4): shown in the detail pane before any
+         event is selected. -->
+    <string name="events_detail_empty_title">No event selected</string>
+    <string name="events_detail_empty_message">Select an event, or tap + to create one, to see it here.</string>
     <!-- Empty state: the search text matches nothing. -->
     <string name="events_empty_no_matches">No events match your search.</string>
     <!-- Placeholder shown in place of a blank title (docs/domain/event/Event.kt KDoc: "(No title)"). -->

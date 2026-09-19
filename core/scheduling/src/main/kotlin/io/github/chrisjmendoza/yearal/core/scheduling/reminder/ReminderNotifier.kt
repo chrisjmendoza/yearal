@@ -26,7 +26,9 @@ import javax.inject.Singleton
  * one channel, `VISIBILITY_PRIVATE` with a **redacted public version** so a lock screen that hides
  * sensitive content shows "Event reminder" and a time and no event text (FEATURES P3), no
  * full-screen intent, and a tap that opens the app through an explicit, immutable `PendingIntent`
- * that carries nothing (§6.4; CLAUDE.md rule 8).
+ * that carries only the event id (§6.4; CLAUDE.md rule 8) — `:app`'s `IntentRouter` (ROADMAP M4 T10)
+ * reads [ReminderIntent.ACTION_OPEN_EVENT] and [ReminderIntent.EXTRA_EVENT_ID] to open that event's
+ * own editor instead of the normal start destination.
  *
  * **Notifications are optional, not required.** On API 33 and later, posting without
  * `POST_NOTIFICATIONS` is a no-op: nothing is posted, nothing is logged and nothing throws, and the
@@ -96,13 +98,13 @@ internal class ReminderNotifier
             deviceZone: ZoneId,
         ): Notification {
             val time = timeText(reminder, deviceZone)
-            return baseBuilder()
+            return baseBuilder(event.id)
                 .setContentTitle(event.title.ifBlank { context.getString(R.string.reminder_untitled_event) })
                 .setContentText(time)
                 .setCategory(NotificationCompat.CATEGORY_REMINDER)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-                .setPublicVersion(publicVersion(time))
+                .setPublicVersion(publicVersion(time, event.id))
                 .setAutoCancel(true)
                 .build()
         }
@@ -112,19 +114,22 @@ internal class ReminderNotifier
          * sensitive content: a fixed localized label and the time, and **no title, notes or
          * location** (FEATURES P3; `docs/security-and-privacy.md` §3.3).
          */
-        private fun publicVersion(time: String): Notification =
-            baseBuilder()
+        private fun publicVersion(
+            time: String,
+            eventId: Long,
+        ): Notification =
+            baseBuilder(eventId)
                 .setContentTitle(context.getString(R.string.reminder_public_title))
                 .setContentText(time)
                 .build()
 
-        /** What both copies share: the icon and the tap target. */
-        private fun baseBuilder(): NotificationCompat.Builder =
+        /** What both copies share: the icon and the tap target for [eventId]. */
+        private fun baseBuilder(eventId: Long): NotificationCompat.Builder =
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_reminder_notification)
                 .setShowWhen(false)
-                .apply { contentIntent()?.let(::setContentIntent) }
+                .apply { contentIntent(eventId)?.let(::setContentIntent) }
 
         /**
          * When the occurrence starts, as the user reads it: a localized short time, or "All day".
@@ -149,24 +154,34 @@ internal class ReminderNotifier
          * Opens the app's own launcher activity, resolved through `PackageManager` exactly as the
          * widgets do (`:core:scheduling` cannot name `MainActivity`, which lives in `:app`).
          *
-         * Explicit, immutable and **without extras**: no event id, date or text rides along
-         * (`docs/security-and-privacy.md` §6.4; CLAUDE.md rule 8). Routing a tap to the event's own
-         * day is `IntentRouter`'s job in a later task, and needs the extras allow-list of §6.3 first.
+         * Explicit, immutable and carrying only [eventId] under [ReminderIntent.EXTRA_EVENT_ID], with
+         * [ReminderIntent.ACTION_OPEN_EVENT] as the action — no event title, date or other content
+         * rides along (`docs/security-and-privacy.md` §6.4; CLAUDE.md rule 8). `:app`'s `IntentRouter`
+         * (ROADMAP M4 T10) reads these to open the event's own editor.
+         *
+         * The request code is derived from [eventId] (`eventId.hashCode()`), not a single shared
+         * constant: two different events must never share one `PendingIntent`, or tapping the older
+         * notification would open whichever event most recently rebuilt it
+         * (`docs/security-and-privacy.md` §6.4 "a stable per-event request code"). Two reminders on the
+         * *same* event naturally resolve to the identical `PendingIntent`, which is harmless — both
+         * already point at the same event.
          *
          * `null` only if the platform cannot resolve this app's launcher, in which case the
          * notification is still posted and simply does nothing when tapped — there is no safe
          * implicit intent to fall back to.
          */
-        private fun contentIntent(): PendingIntent? {
+        private fun contentIntent(eventId: Long): PendingIntent? {
             val launch =
                 context.packageManager
                     .getLaunchIntentForPackage(context.packageName)
                     // Required to start an activity from a notification, outside an activity context.
                     ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    ?.setAction(ReminderIntent.ACTION_OPEN_EVENT)
+                    ?.putExtra(ReminderIntent.EXTRA_EVENT_ID, eventId)
                     ?: return null
             return PendingIntent.getActivity(
                 context,
-                CONTENT_REQUEST_CODE,
+                eventId.hashCode(),
                 launch,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
@@ -175,9 +190,6 @@ internal class ReminderNotifier
         companion object {
             /** The app's single reminder channel (`docs/security-and-privacy.md` §3.3). */
             const val CHANNEL_ID: String = "reminders"
-
-            /** Request code of the shared "open the app" `PendingIntent`; every tap target is identical. */
-            private const val CONTENT_REQUEST_CODE: Int = 100
 
             /**
              * A stable notification id for a reminder, derived from **ids and dates only**: the same

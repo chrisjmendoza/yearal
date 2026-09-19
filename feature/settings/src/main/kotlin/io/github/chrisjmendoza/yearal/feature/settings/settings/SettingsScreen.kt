@@ -50,13 +50,15 @@ import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
+import io.github.chrisjmendoza.yearal.core.navigation.HolidaysKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
 import io.github.chrisjmendoza.yearal.feature.settings.R
 
 /**
  * The Settings screen (docs/FEATURES.md W1, W2, H5): collects [SettingsViewModel.uiState] with the
  * lifecycle and renders it through the stateless [SettingsScreen]. This is the composable `:app`
- * places behind `SettingsKey`; the back arrow pops through [navigator].
+ * places behind `SettingsKey`; the back arrow pops through [navigator], and the "Holiday sets" row
+ * pushes [HolidaysKey] (ROADMAP M6 T2 — that screen, not this one, now owns the pack switches).
  *
  * @param modifier applied to the screen's root [Scaffold].
  */
@@ -73,7 +75,7 @@ fun SettingsRoute(
         onWeekdayDisplaySelected = viewModel::setWeekdayDisplay,
         onThemeModeSelected = viewModel::setThemeMode,
         onDynamicColorChanged = viewModel::setDynamicColor,
-        onHolidaySetEnabledChanged = viewModel::setHolidaySetEnabled,
+        onOpenHolidays = { navigator.navigate(HolidaysKey) },
         onRequestDeleteAllData = viewModel::requestDeleteAllData,
         onContinueDeleteAllData = viewModel::continueDeleteAllData,
         onCancelDeleteAllData = viewModel::cancelDeleteAllData,
@@ -87,16 +89,17 @@ fun SettingsRoute(
  * The stateless Settings screen — the unit for previews, screenshot and Compose tests
  * (docs/ARCHITECTURE.md §4 "State management"). Four sections: the weekday-header mode as a radio
  * group with a reminder that IFC weekdays are not real ones (calendar-spec §4.1), the theme as a radio
- * group plus the dynamic-colour switch (disabled below API 31), one switch per bundled holiday pack,
- * and "Delete all data" (FEATURES W6) behind a two-step destructive confirmation. Every control
- * reflects [SettingsUiState.Loaded.settings] (or [SettingsUiState.Loaded.deleteAllDataStep]) and
- * reports a change through its callback; nothing is stored locally.
+ * group plus the dynamic-colour switch (disabled below API 31), a "Holiday sets" row that opens the
+ * Holidays screen (FEATURES H5; ROADMAP M6 T2 — the switches themselves live only there now), and
+ * "Delete all data" (FEATURES W6) behind a two-step destructive confirmation. Every control reflects
+ * [SettingsUiState.Loaded.settings] (or [SettingsUiState.Loaded.deleteAllDataStep]) and reports a
+ * change through its callback; nothing is stored locally.
  *
  * Opts in to the Material 3 experimental marker only because `TopAppBar`'s default arguments
  * (`TopAppBarDefaults`) still carry it.
  *
  * @param onBack the top app bar's back arrow.
- * @param onHolidaySetEnabledChanged receives the pack id (`HolidaySet.id`) and the new state.
+ * @param onOpenHolidays the "Holiday sets" row's action.
  * @param onRequestDeleteAllData opens the first "Delete all data" confirmation.
  * @param onContinueDeleteAllData moves from the first confirmation to the final one.
  * @param onCancelDeleteAllData backs out of either confirmation.
@@ -111,7 +114,7 @@ fun SettingsScreen(
     onWeekdayDisplaySelected: (WeekdayDisplay) -> Unit,
     onThemeModeSelected: (ThemeMode) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
-    onHolidaySetEnabledChanged: (id: String, enabled: Boolean) -> Unit,
+    onOpenHolidays: () -> Unit,
     modifier: Modifier = Modifier,
     onRequestDeleteAllData: () -> Unit = {},
     onContinueDeleteAllData: () -> Unit = {},
@@ -146,7 +149,7 @@ fun SettingsScreen(
                     onWeekdayDisplaySelected = onWeekdayDisplaySelected,
                     onThemeModeSelected = onThemeModeSelected,
                     onDynamicColorChanged = onDynamicColorChanged,
-                    onHolidaySetEnabledChanged = onHolidaySetEnabledChanged,
+                    onOpenHolidays = onOpenHolidays,
                     onRequestDeleteAllData = onRequestDeleteAllData,
                     modifier = Modifier.padding(padding),
                 )
@@ -186,7 +189,7 @@ private fun LoadedContent(
     onWeekdayDisplaySelected: (WeekdayDisplay) -> Unit,
     onThemeModeSelected: (ThemeMode) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
-    onHolidaySetEnabledChanged: (id: String, enabled: Boolean) -> Unit,
+    onOpenHolidays: () -> Unit,
     onRequestDeleteAllData: () -> Unit,
     modifier: Modifier,
 ) {
@@ -201,7 +204,7 @@ private fun LoadedContent(
         HorizontalDivider()
         ThemeSection(state, onThemeModeSelected, onDynamicColorChanged)
         HorizontalDivider()
-        HolidaySection(state, onHolidaySetEnabledChanged)
+        HolidaysLinkSection(onOpenHolidays)
         HorizontalDivider()
         DataSection(onRequestDeleteAllData)
     }
@@ -365,23 +368,21 @@ private fun ThemeSection(
     )
 }
 
-/** FEATURES H5: one switch per bundled pack, in catalogue order. */
+/**
+ * FEATURES H5: a single row linking to the Holidays screen, which now owns browsing and toggling every
+ * bundled set (ROADMAP M6 T2). This replaces the per-pack switches that used to live in this section —
+ * duplicating them here and there was a maintenance trap, and both screens read the same
+ * [io.github.chrisjmendoza.yearal.core.domain.settings.SettingsRepository.settings] flow regardless of
+ * which one changes it.
+ */
 @Composable
-private fun HolidaySection(
-    state: SettingsUiState.Loaded,
-    onHolidaySetEnabledChanged: (id: String, enabled: Boolean) -> Unit,
-) {
+private fun HolidaysLinkSection(onOpenHolidays: () -> Unit) {
     SectionHeading(stringResource(R.string.settings_section_holidays))
-    SectionInfo(stringResource(R.string.settings_holidays_info))
-    state.packs.forEach { pack ->
-        SwitchRow(
-            title = pack.name,
-            detail = pack.region?.let { stringResource(R.string.settings_holiday_region, it) },
-            checked = pack.id in state.settings.enabledHolidaySets,
-            enabled = true,
-            onCheckedChange = { enabled -> onHolidaySetEnabledChanged(pack.id, enabled) },
-        )
-    }
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.settings_holidays_row_title)) },
+        supportingContent = { Text(stringResource(R.string.settings_holidays_row_detail)) },
+        modifier = Modifier.fillMaxWidth().clickableRole(onClick = onOpenHolidays),
+    )
 }
 
 @Composable
@@ -518,22 +519,13 @@ private fun SettingsPreview(
             state =
                 SettingsUiState.Loaded(
                     settings = UserSettings.DEFAULT,
-                    packs = previewPacks,
                     dynamicColorSupported = dynamicColorSupported,
                 ),
             onBack = {},
             onWeekdayDisplaySelected = {},
             onThemeModeSelected = {},
             onDynamicColorChanged = {},
-            onHolidaySetEnabledChanged = { _, _ -> },
+            onOpenHolidays = {},
         )
     }
 }
-
-/** The bundled packs as the loader lists them for an English device (preview data, not resources). */
-private val previewPacks =
-    listOf(
-        HolidayPackItem(id = "ifc", name = "International Fixed Calendar", region = null),
-        HolidayPackItem(id = "us", name = "United States", region = "United States"),
-        HolidayPackItem(id = "religious-christian", name = "Christian (Easter family)", region = null),
-    )

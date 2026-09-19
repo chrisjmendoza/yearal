@@ -102,9 +102,24 @@ class MonthViewModel
             this.page.value = page.coerceIn(0, MonthPages.LAST_PAGE)
         }
 
-        /** Marks [date] as the selected day (FEATURES C5); the grid fills its cell or band. */
+        /**
+         * Marks [date] as the selected day (FEATURES C5); the grid fills its cell or band. At compact
+         * and medium widths this also names the day pushed as `DayKey`; at expanded widths it is the
+         * expanded-width list-detail pane's own selection (docs/ROADMAP.md M3 T4) — the same property
+         * serves both, so switching width classes mid-session never loses or duplicates a selection.
+         */
         fun select(date: LocalDate) {
             selected.value = date
+        }
+
+        /**
+         * Clears the selection (docs/ROADMAP.md M3 T4): the expanded-width list-detail pane's empty
+         * state returns, and the grid's cell fill is removed. Invoked by the detail pane's close action
+         * and by the system back gesture while a day is selected at expanded widths — at compact and
+         * medium widths the selection is left alone (`DayKey`'s own back pops the sheet instead).
+         */
+        fun clearSelection() {
+            selected.value = null
         }
 
         private fun holidaysAround(

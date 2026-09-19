@@ -37,7 +37,8 @@ what's listed in [Privacy](#privacy).
   Reminder notifications fire even in Doze and hide the event's title on the lock screen. A single
   occurrence of a repeating event can be deleted (with undo).
 - **Built-in holidays** — the IFC observances (Year Day, Leap Day, Sol 1) and a US federal + observances
-  pack, shown on the grid, in Day detail and in the Today agenda; any pack can be switched off in Settings.
+  pack, shown on the grid, in Day detail and in the Today agenda. The Holidays screen (More → Holidays)
+  lists any year's holidays in both calendars and switches packs on or off.
 - **Today and Month home-screen widgets**, refreshed at midnight and after a clock, time-zone or locale
   change, reboot, or app update — no per-minute polling. The Month widget marks days that have events
   (never their titles) and updates within a second or so of an edit.
@@ -49,7 +50,6 @@ what's listed in [Privacy](#privacy).
 
 - **Snooze, notification actions and tapping a reminder straight into its event** — reminders currently
   open the app.
-- **A holidays browser** (a per-year list of holidays, independent of the grid) — M6.
 - **Widget configuration** (per-widget options) and an agenda widget — M5/M7a.
 - **Device-calendar overlay, `.ics` import/export, and URL subscriptions** — releases 1.1–1.3
   ([docs/ROADMAP.md](docs/ROADMAP.md) release map).

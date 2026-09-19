@@ -34,6 +34,11 @@
     <!-- Dismiss button shared by the jump-to-date dialogs. -->
     <string name="month_jump_cancel">Cancel</string>
 
+    <!-- Expanded-width list-detail pane (docs/ROADMAP.md M3 T4): shown in the detail pane before any
+         day is selected. -->
+    <string name="month_detail_empty_title">No day selected</string>
+    <string name="month_detail_empty_message">Select a day in the calendar to see its details here.</string>
+
     <!-- Year overview (FEATURES C6, C7) -->
 
     <!-- Spoken description of the app-bar action that shows the year before the one on screen. -->

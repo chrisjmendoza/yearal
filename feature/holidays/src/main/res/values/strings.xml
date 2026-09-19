@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App bar title of the Holidays screen (FEATURES H1, H2, H3, H5; ROADMAP M6 T2). -->
+    <string name="holidays_title">Holidays</string>
+
+    <!-- Content description of the app bar's back arrow. -->
+    <string name="holidays_back">Back</string>
+
+    <!-- Section heading above the bundled holiday sets and their switches. -->
+    <string name="holidays_section_sets">Holiday sets</string>
+
+    <!-- Explains what the set switches do. Shown once at the top of the section. -->
+    <string name="holidays_sets_info">Enabled sets are shown here and on the calendar.</string>
+
+    <!-- Supporting line under a regional holiday set. %1$s = the country name, e.g. "United States". -->
+    <string name="holidays_set_region">Region: %1$s</string>
+
+    <!-- How many holidays a set defines, shown under its name. -->
+    <plurals name="holidays_set_count">
+        <item quantity="one">%1$d holiday</item>
+        <item quantity="other">%1$d holidays</item>
+    </plurals>
+
+    <!-- Where a set's data came from (FEATURES H1, H2; docs/holidays-and-import.md §2.4 "sources").
+         %1$s = the sources, already joined into one line. Omitted when a set has none. -->
+    <string name="holidays_set_sources">Source: %1$s</string>
+
+    <!-- Joins multiple entries of a set's sources list into one line, e.g. "5 U.S.C. § 6103, ...". -->
+    <string name="holidays_list_separator">, </string>
+
+    <!-- Section heading above the year's holiday list. -->
+    <string name="holidays_section_year">Holidays this year</string>
+
+    <!-- Content description of the previous/next year actions (FEATURES C7-style paging). -->
+    <string name="holidays_year_previous">Previous year</string>
+    <string name="holidays_year_next">Next year</string>
+
+    <!-- Shown instead of the year list when every holiday set is disabled. -->
+    <string name="holidays_empty_state">No holiday sets are turned on. Turn one on above to see its dates here.</string>
+
+    <!-- A holiday shown on the date it is observed on instead of its real date, e.g. a Saturday holiday
+         observed on the Friday before (docs/ARCHITECTURE.md §3.3). %1$s = the holiday's name. -->
+    <string name="holidays_observed">%1$s (observed)</string>
+
+    <!-- The IFC long form and its IFC-prefixed numeric form on one line, e.g.
+         "September 8, 2026 · IFC 2026-10-08" (CLAUDE.md rule 5: the numeric form always keeps its
+         mandatory "IFC" prefix). %1$s = the long form, %2$s = the numeric form. -->
+    <string name="holidays_row_ifc_line">%1$s · %2$s</string>
+
+    <!-- The merged TalkBack description of one year-list row: the holiday's name, both dates and the
+         real weekday (the weekday is already part of %3$s, docs/ARCHITECTURE.md §4 "Accessibility").
+         %1$s = holiday name, %2$s = the IFC line above, %3$s = the Gregorian date with its real weekday. -->
+    <string name="holidays_row_description">%1$s. IFC %2$s. Gregorian %3$s.</string>
+</resources>

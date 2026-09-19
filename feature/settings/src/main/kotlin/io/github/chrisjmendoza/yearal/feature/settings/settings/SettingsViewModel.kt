@@ -4,13 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.chrisjmendoza.yearal.core.domain.event.EventRepository
-import io.github.chrisjmendoza.yearal.core.domain.holiday.HolidaySet
 import io.github.chrisjmendoza.yearal.core.domain.settings.SettingsRepository
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
-import io.github.chrisjmendoza.yearal.core.holidays.BundledHolidayPacks
-import io.github.chrisjmendoza.yearal.core.holidays.HolidayPackLoader
 import io.github.chrisjmendoza.yearal.feature.settings.di.DynamicColorSupported
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,7 +15,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -26,9 +22,11 @@ import javax.inject.Inject
  * H5). The state mirrors [SettingsRepository.settings]; every intent is a read-modify-write through
  * [SettingsRepository.update], so the screen never holds a value the store does not.
  *
- * The bundled pack list is built once, when the ViewModel is created: three small JSON resources,
- * parsed in well under a millisecond, named for the default locale at that moment (the same
- * once-per-ViewModel locale policy as the calendar feature's formatter).
+ * Browsing and toggling holiday sets (FEATURES H5) lives on the Holidays screen since ROADMAP M6 T2;
+ * this screen only links there (`io.github.chrisjmendoza.yearal.feature.settings.more.MoreScreen` also
+ * links to it directly from the More hub), rather than duplicating a second set of switches over the
+ * same [UserSettings.enabledHolidaySets] — both screens read the identical [SettingsRepository.settings]
+ * flow, so there is exactly one source of truth and nothing to keep in sync by hand.
  *
  * "Delete all data" (FEATURES W6) is a two-step [DeleteAllDataStep] intent: [requestDeleteAllData]
  * opens the first confirmation, [continueDeleteAllData] opens the final one,
@@ -45,19 +43,15 @@ class SettingsViewModel
     @Inject
     constructor(
         private val repository: SettingsRepository,
-        loader: HolidayPackLoader,
         @DynamicColorSupported dynamicColorSupported: Boolean,
         private val eventRepository: EventRepository,
     ) : ViewModel() {
-        private val packs: List<HolidayPackItem> =
-            BundledHolidayPacks.all.map { packName -> loader.loadBundled(packName).toItem(Locale.getDefault()) }
-
         private val deleteAllDataStep = MutableStateFlow(DeleteAllDataStep.NONE)
 
         /** [SettingsUiState.Loading] until the store answers, then a [SettingsUiState.Loaded] per change. */
         val uiState: StateFlow<SettingsUiState> =
             combine(repository.settings, deleteAllDataStep) { settings, step ->
-                SettingsUiState.Loaded(settings, packs, dynamicColorSupported, step)
+                SettingsUiState.Loaded(settings, dynamicColorSupported, step)
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SettingsUiState.Loading)
 
         /** Opens the first "Delete all data" confirmation. */
@@ -107,20 +101,6 @@ class SettingsViewModel
             update { it.copy(dynamicColor = enabled) }
         }
 
-        /**
-         * Adds [id] to or removes it from [UserSettings.enabledHolidaySets] (FEATURES H5). Any pack,
-         * the IFC observances included, may be switched off; the defaults are what a fresh install shows.
-         */
-        fun setHolidaySetEnabled(
-            id: String,
-            enabled: Boolean,
-        ) {
-            update {
-                val sets = if (enabled) it.enabledHolidaySets + id else it.enabledHolidaySets - id
-                it.copy(enabledHolidaySets = sets)
-            }
-        }
-
         private fun update(transform: (UserSettings) -> UserSettings) {
             viewModelScope.launch { repository.update(transform) }
         }
@@ -129,19 +109,3 @@ class SettingsViewModel
             const val STOP_TIMEOUT_MILLIS = 5_000L
         }
     }
-
-/**
- * The list entry for [set]: its name for [locale]'s language tag (exact match, else English) and its
- * region as a country name in [locale], or the raw code if the JDK has no name for it.
- */
-internal fun HolidaySet.toItem(locale: Locale): HolidayPackItem =
-    HolidayPackItem(
-        id = id,
-        name = nameFor(locale.toLanguageTag()),
-        region =
-            region?.let { code ->
-                // "und-US" is a valid tag with no language; forLanguageTag never throws, and an unknown
-                // region simply has no display name, so the code itself is shown instead.
-                Locale.forLanguageTag("und-$code").getDisplayCountry(locale).ifEmpty { code }
-            },
-    )

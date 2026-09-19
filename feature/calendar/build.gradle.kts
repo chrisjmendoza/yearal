@@ -14,4 +14,8 @@ dependencies {
     // module exposing HolidaySet values, not a data layer, so the feature boundary rule allows it.
     implementation(project(":core:holidays"))
     implementation(libs.findLibrary("androidx-compose-material-icons-core").get())
+    // docs/ROADMAP.md M3 T4: the expanded-width list-detail pane clears the day selection on the
+    // system back gesture via BackHandler; :feature:events already carries this same catalog entry
+    // for its own editor back guard.
+    implementation(libs.findLibrary("androidx-activity-compose").get())
 }

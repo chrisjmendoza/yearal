@@ -133,9 +133,9 @@ Addresses A1 only. Off by default.
 **title and time only** — never the description or location — with `VISIBILITY_PRIVATE`, a redacted
 public version, `CATEGORY_REMINDER`, `setAutoCancel(true)`, no full-screen intent, and a stable id
 derived from the event id, the occurrence date and the reminder's lead time, so re-posting replaces its
-own notification instead of adding one. The tap target is an explicit, immutable `PendingIntent` to the
-app's launcher activity with **no extras** (§6.4); routing to the event's own day waits for
-`IntentRouter`.
+own notification instead of adding one. **As built (ROADMAP M4 T10):** the tap target is an explicit,
+immutable `PendingIntent` to the app's launcher activity carrying only the event id
+(`ReminderIntent.EXTRA_EVENT_ID`, §6.4), which `IntentRouter` reads to open that event's own editor.
 
 - Reminder channel notifications use `VISIBILITY_PRIVATE` **plus a redacted `setPublicVersion()`** ("Event reminder · 14:30", no title/notes). This respects the user's system-level "hide sensitive content on lock screen" choice at zero UX cost. **MVP.** Built as a localized "Event reminder" label plus the same time text ("All day" for an all-day event) and nothing else; a test asserts the event title appears nowhere in the public version.
 - In-app toggle **"Hide event details in notifications"**: the notification content itself becomes generic everywhere (shade, heads-up, wearables, notification history), details only after opening the app. Default off; forced-on suggestion when app lock is enabled. **v1.x**, with app lock.
@@ -347,7 +347,7 @@ Target exported surface (everything else `android:exported="false"`):
 
 | Component | Exported | Hardening |
 |---|---|---|
-| Main activity (launcher) | Yes | Accepts only typed extras from our own widgets/notifications (epoch-day, event ID). Validate and fail soft on unknown IDs. Never accept a URI, file path, class name, or nested `Intent` from extras (no intent redirection). |
+| Main activity (launcher) | Yes | **As built (ROADMAP M3 T5, M4 T10).** `IntentRouter` (`:app`, package `intent`) reads only `intent.action` (exact string match against the four known actions) and two `Long` extras (`WidgetIntents.EXTRA_EPOCH_DAY`, `ReminderIntent.EXTRA_EVENT_ID`), each through `longExtraOrNull`, which requires the stored value to actually be a `Long` — never `Intent.getLongExtra`'s type-mismatch-to-default coercion, so a `Uri`, a nested `Intent`, or a class name stored under either exact extra name is indistinguishable from the extra being absent. No other field is ever read (no `intent.data`, no `getParcelableExtra`, no `getSerializableExtra`, no reflection on any extra's class or the intent's component) — no intent redirection is possible by construction, not just by convention. An unrecognized/missing action or a failed check resolves to `AppRoute.Default` (the normal start destination); an epoch day outside `:core:calendar`'s supported years does the same; a structurally valid but non-existent event id is still routed, and the event editor's own "not found" state handles it. `MainActivity.onCreate`/`onNewIntent` each hand the intent to `MainViewModel`, which routes at most once per launch intent (tracked in `SavedStateHandle`, so neither a configuration change nor a process restart re-routes) while `onNewIntent` (via the unchanged `singleTask` launch mode) always routes a genuinely new tap. |
 | Glance widget receivers (`TodayWidgetReceiver` M5 T1, `MonthWidgetReceiver` M5 T3, event dots M5 T6, both in `:widget`; the Agenda widget follows in M7a) | Yes (required by launchers) | Only ever re-render from the app's own bindings (the injected `Clock`/`ZoneProvider`; `ObserveAgendaUseCase.presence` for the Month widget's dots, read through `:core:domain`, bounded by a timeout and a catch so a slow or broken query never hangs or crashes the render); ignore unexpected extras. Only the `APPWIDGET_UPDATE` filter is declared, so a spoofed broadcast just causes a refresh. |
 | `.ics` import activity (v1.2) | Yes | `content://` + `text/calendar` only → preview screen → gate + confirm (§6.1). |
 | Widget configuration activity | **No** (*launchers start it via the app-widget service; verify on Pixel + Samsung launchers*) | Behind app lock. Validates the `appWidgetId` belongs to us. |
@@ -372,7 +372,17 @@ Also:
 - **Always `FLAG_IMMUTABLE`** (a mutability flag is mandatory when targeting 31+), always an **explicit** component, combined with `FLAG_UPDATE_CURRENT` and a stable per-event request code.
 - No `FLAG_MUTABLE` anywhere — no inline-reply or bubble use cases exist. If one appears, it needs a written justification.
 - Notification taps open the activity directly (no broadcast/service trampolines; blocked since API 31). **As built (M6 T1):** the reminder notification's `contentIntent` is `PendingIntent.getActivity` on the launcher intent resolved through `PackageManager.getLaunchIntentForPackage` — `:core:scheduling` may not name `MainActivity`, which lives in `:app` — the same helper shape the widgets use.
-- Extras carry IDs, never content (no event titles inside `PendingIntent` extras). Today no app-owned `PendingIntent` carries **any** extra: the rollover alarm, the reminder alarm and the reminder tap are all extra-free, and `IntentRouter` is the change that will introduce the first typed id extras (§6.3).
+- Extras carry IDs, never content (no event titles inside `PendingIntent` extras). The rollover alarm
+  and the reminder alarm stay extra-free. **As built (ROADMAP M3 T5, M4 T10):** the reminder
+  notification's tap `PendingIntent` (`ReminderNotifier`) is the first to carry a typed extra — the
+  event id under `ReminderIntent.EXTRA_EVENT_ID`, with `ReminderIntent.ACTION_OPEN_EVENT` — and its
+  request code is derived from the event id (`eventId.hashCode()`), not one shared constant, so two
+  different events' notifications never overwrite each other's `PendingIntent`; two reminders on the
+  *same* event resolve to the identical `PendingIntent`, which is harmless. The Today widget's tap
+  carries `WidgetIntents.ACTION_OPEN_TODAY` (no extra); the Month widget's whole-widget tap carries
+  `WidgetIntents.ACTION_OPEN_MONTH` (no extra) and each of its 28 day cells plus its intercalary band
+  carries `WidgetIntents.ACTION_OPEN_DAY` and that day's epoch day under `WidgetIntents.EXTRA_EPOCH_DAY`
+  — ids and epoch days only, `IntentRouter` in `:app` is what validates them (§6.3's launcher row).
 
 ### 6.5 `FileProvider` / content providers
 

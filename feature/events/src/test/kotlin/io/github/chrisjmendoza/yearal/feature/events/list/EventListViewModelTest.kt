@@ -173,4 +173,55 @@ class EventListViewModelTest {
             state().query shouldBe "keep"
             state().items shouldHaveSize 1
         }
+
+    // docs/ROADMAP.md M3 T4: the expanded-width list-detail pane's own selection — ignored at
+    // compact/medium widths, where EventListRoute never reads it.
+
+    @Test
+    fun `selection starts at None`() =
+        runTest(dispatcher) {
+            viewModel().selection.value shouldBe EventListSelection.None
+        }
+
+    @Test
+    fun `selecting an event is reflected in the selection`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+
+            viewModel.selectEvent(42L)
+
+            viewModel.selection.value shouldBe EventListSelection.Existing(42L)
+        }
+
+    @Test
+    fun `selecting new event is reflected in the selection`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+
+            viewModel.selectNewEvent()
+
+            viewModel.selection.value shouldBe EventListSelection.New
+        }
+
+    @Test
+    fun `clearing the selection resets it to None`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.selectEvent(42L)
+
+            viewModel.clearSelection()
+
+            viewModel.selection.value shouldBe EventListSelection.None
+        }
+
+    @Test
+    fun `selecting a different event replaces rather than accumulates`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.selectEvent(1L)
+
+            viewModel.selectEvent(2L)
+
+            viewModel.selection.value shouldBe EventListSelection.Existing(2L)
+        }
 }

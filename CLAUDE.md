@@ -8,7 +8,8 @@ the month Sol, plus Year Day and Leap Day. Solo developer working with AI agents
 (JSON packs), `:core:testing`. Android: `:app` (Hilt, 5-tab Nav3 shell), `:core:designsystem` (theme,
 `MonthGrid`, date pickers), `:core:navigation`, `:core:data` (settings DataStore, Room 3 event storage), `:core:scheduling`
 (midnight rollover + reminder alarms, receivers, notifications), `:feature:calendar` (Today, Month, Year, Day detail), `:feature:converter`
-(Gregorian ↔ IFC), `:feature:events` (list + editor), `:feature:settings` (Settings, More hub, Learn, Privacy), `:widget` (Glance Today and Month widgets). `docs/ROADMAP.md` has the ledger; frozen
+(Gregorian ↔ IFC), `:feature:events` (list + editor), `:feature:holidays` (browse/toggle packs),
+`:feature:settings` (Settings, More hub, Learn, Privacy), `:widget` (Glance Today and Month widgets). `docs/ROADMAP.md` has the ledger; frozen
 contracts are in `docs/contracts/`.
 Toolchain decisions are frozen in `docs/adr/0001-toolchain.md` — read it before touching build-logic.
 

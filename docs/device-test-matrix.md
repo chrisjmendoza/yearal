@@ -46,6 +46,16 @@ version and date when it passes. Target coverage: API 26, 33 and 36, plus one Sa
 | R10 | Force-stop the app, reopen it: the pending reminder is armed again. | |
 | R11 | Samsung / Xiaomi battery management: the app is not put to sleep; note any OEM limit for the in-app help text. | |
 
+## Intent routing (M3 T5)
+
+| # | Check | Result |
+|---|---|---|
+| N1 | Tap a reminder notification: the app opens that event's editor, not the last-used tab. | |
+| N2 | Tap a day cell on the Month widget: that day opens. Tap the widget's heading or a gap: the current month opens. **Unit-tested only — the per-cell click regions were never rendered on a device.** | |
+| N3 | Tap the Today widget: the Today tab opens. | |
+| N4 | Leave the app in the background until Android kills it, then reopen it from a widget or a notification: it routes correctly, and rotating afterwards does not route a second time. | |
+| N5 | At expanded width (tablet or unfolded foldable), a widget or notification tap still opens the day as a sheet over the two panes — confirm that reads as acceptable for now (known gap, ROADMAP M3 T4). | |
+
 ## App
 
 | # | Check | Result |

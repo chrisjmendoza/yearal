@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
@@ -24,6 +25,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.navigation.HolidaysKey
 import io.github.chrisjmendoza.yearal.core.navigation.LearnKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
 import io.github.chrisjmendoza.yearal.core.navigation.PrivacyKey
@@ -32,9 +34,9 @@ import io.github.chrisjmendoza.yearal.feature.settings.R
 
 /**
  * The More tab's hub (docs/ARCHITECTURE.md §4 "Screens and navigation": More holds Holidays, Settings
- * and Learn/About). This is the composable `:app` places behind `MoreKey`; the Settings, Learn and
- * Privacy rows push [SettingsKey], [LearnKey] and [PrivacyKey] through [navigator]. The Holidays row is
- * added when that screen exists.
+ * and Learn/About). This is the composable `:app` places behind `MoreKey`; the Holidays, Settings,
+ * Learn and Privacy rows push [HolidaysKey], [SettingsKey], [LearnKey] and [PrivacyKey] through
+ * [navigator].
  *
  * @param appName the launcher label, e.g. `Yearal`; it lives in `:app`'s resources, so the caller
  * passes it rather than the feature duplicating the string.
@@ -52,6 +54,7 @@ fun MoreRoute(
     MoreScreen(
         appName = appName,
         versionName = versionName,
+        onHolidaysClick = { navigator.navigate(HolidaysKey) },
         onSettingsClick = { navigator.navigate(SettingsKey) },
         onLearnClick = { navigator.navigate(LearnKey) },
         onPrivacyClick = { navigator.navigate(PrivacyKey) },
@@ -60,12 +63,15 @@ fun MoreRoute(
 }
 
 /**
- * The stateless More hub — Settings, Learn and Privacy rows plus a non-interactive About row showing
- * [appName] and [versionName] — the unit for previews, screenshot and Compose tests.
+ * The stateless More hub — Holidays, Settings, Learn and Privacy rows plus a non-interactive About row
+ * showing [appName] and [versionName] — the unit for previews, screenshot and Compose tests.
  *
  * Opts in to the Material 3 experimental marker only because `TopAppBar`'s default arguments
  * (`TopAppBarDefaults`) still carry it.
  *
+ * @param onHolidaysClick the Holidays row's action (docs/FEATURES.md H1, H2, H3, H5; ROADMAP M6 T2).
+ *   Browsing and toggling holiday sets now lives only on that screen — Settings links here instead of
+ *   duplicating the switches, so there is one control for "which sets are enabled".
  * @param onSettingsClick the Settings row's action.
  * @param onLearnClick the Learn row's action (docs/FEATURES.md L2).
  * @param onPrivacyClick the Privacy row's action (docs/FEATURES.md P5).
@@ -75,6 +81,7 @@ fun MoreRoute(
 fun MoreScreen(
     appName: String,
     versionName: String,
+    onHolidaysClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onLearnClick: () -> Unit,
     onPrivacyClick: () -> Unit,
@@ -91,6 +98,13 @@ fun MoreScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState()),
         ) {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.more_holidays)) },
+                supportingContent = { Text(stringResource(R.string.more_holidays_detail)) },
+                leadingContent = { Icon(imageVector = Icons.Filled.DateRange, contentDescription = null) },
+                modifier = Modifier.clickable(role = Role.Button, onClick = onHolidaysClick),
+            )
+            HorizontalDivider()
             ListItem(
                 headlineContent = { Text(stringResource(R.string.more_settings)) },
                 supportingContent = { Text(stringResource(R.string.more_settings_detail)) },
@@ -128,6 +142,7 @@ internal fun MoreScreenPreview() {
         MoreScreen(
             appName = "Yearal",
             versionName = "0.1.0",
+            onHolidaysClick = {},
             onSettingsClick = {},
             onLearnClick = {},
             onPrivacyClick = {},

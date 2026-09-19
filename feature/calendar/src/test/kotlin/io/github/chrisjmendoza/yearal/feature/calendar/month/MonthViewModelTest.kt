@@ -276,6 +276,27 @@ class MonthViewModelTest {
             }
         }
 
+    // docs/ROADMAP.md M3 T4: the expanded-width list-detail pane's close action and its BackHandler
+    // both call clearSelection — proven directly on the ViewModel since MonthRoute's own wiring needs
+    // a real window and Hilt, neither of which this module's tests set up (docs/WORKFLOW.md §3, no
+    // XRoute in this codebase is unit-tested for the same reason).
+
+    @Test
+    fun `clearing the selection resets it to null`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(december2026)
+            viewModel.uiState.test {
+                awaitItem()
+                awaitItem().selected shouldBe null
+
+                viewModel.select(yearDay2026)
+                awaitItem().selected shouldBe yearDay2026
+
+                viewModel.clearSelection()
+                awaitItem().selected shouldBe null
+            }
+        }
+
     // FEATURES C4: event dots, sourced from ObserveAgendaUseCase for the three warm pages.
 
     @Test

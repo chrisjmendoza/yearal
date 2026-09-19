@@ -170,8 +170,21 @@ Architecture, tooling and CI:
   repo-relative paths, and CI verifies them automatically once the first goldens are committed
   ([docs/screenshots.md](docs/screenshots.md)).
 - `docs/reviews/`: an external review of the project and our written response to it.
+- A Holidays screen (M6 T2; FEATURES H5): browse every bundled holiday set with its region, size and
+  sources, switch sets on or off, and read a chosen year's holidays grouped by IFC month with both dates
+  on every row — tap one to open that day.
+- Calendar and Events use both panes on a wide screen (M3 T4; FEATURES C11, Q7): a tablet, an unfolded
+  foldable or a phone in landscape shows the month grid beside the day's detail, and the events list beside
+  the editor, instead of a bottom sheet and a full-screen editor. Narrow screens are unchanged.
+- Reminders and widgets open the right screen (M3 T5, M4 T10; FEATURES S5, E4): a reminder notification opens
+  its event, a day on the Month widget opens that day, and the Today widget opens Today, instead of whichever
+  tab happened to be showing. Everything arriving in an intent is validated and falls back to the normal start
+  screen rather than trusting it; intents still carry nothing but IDs.
 
 ### Changed
+
+- Holiday sets are switched on and off in the new Holidays screen rather than in Settings; Settings and the
+  More hub both link to it, so there is a single place that owns the setting.
 
 - The Convert tab uses a swap-arrows icon instead of one that read as "refresh" (R5).
 

@@ -19,6 +19,15 @@ dependencies {
     // public signature of WeekdayHeaders and MonthGrid, hence `api`.
     api(project(":core:domain"))
 
+    // docs/ROADMAP.md M3 T4 "Adaptive layouts": the window size class source behind
+    // `currentWindowWidthClass()` (adaptive/WindowWidthClass.kt) — the same AndroidX artifact `:app`
+    // already carries transitively through `androidx-compose-material3-adaptive-navigation-suite` for
+    // its own bar/rail switch (docs/ARCHITECTURE.md §1 "Flagged as unverified" / §4). Apache 2.0,
+    // ~40KB (androidx.compose.material3.adaptive:adaptive-android 1.3.0, BOM-managed); `implementation`
+    // because only this module's own `adaptive` package needs it — feature modules read
+    // `WindowWidthClass` instead of the library's own types.
+    implementation(libs.findLibrary("androidx-compose-material3-adaptive").get())
+
     // ROADMAP R6 / M2 T10: the Compose preview scanner (see `roborazzi { }` below) that captures
     // every @Preview in this module as a Roborazzi screenshot without a hand-written test per preview.
     testImplementation(libs.findLibrary("roborazzi-compose-preview-scanner-support").get())

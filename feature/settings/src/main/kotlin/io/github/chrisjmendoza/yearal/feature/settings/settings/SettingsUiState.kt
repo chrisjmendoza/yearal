@@ -3,22 +3,6 @@ package io.github.chrisjmendoza.yearal.feature.settings.settings
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 
 /**
- * One bundled holiday pack as the Settings screen lists it (FEATURES H5), already formatted for the
- * current locale so the screen renders text only.
- *
- * @property id the pack's `HolidaySet.id`, the value stored in [UserSettings.enabledHolidaySets]
- * (`"ifc"`, `"us"`, …). **Not** the bundled file name, which may differ in case.
- * @property name the display name for the device language, falling back to English.
- * @property region the localized country name for a regional pack (`"United States"`), or `null` for
- * region-independent sets such as the IFC observances and the Easter family.
- */
-data class HolidayPackItem(
-    val id: String,
-    val name: String,
-    val region: String?,
-)
-
-/**
  * Where the "Delete all data" action (FEATURES W6) stands: a two-step destructive confirmation, per
  * `docs/security-and-privacy.md` §2.4, so a single mis-tap can never erase everything.
  */
@@ -42,11 +26,11 @@ sealed interface SettingsUiState {
     data object Loading : SettingsUiState
 
     /**
-     * The current preferences plus the static catalogue they apply to.
+     * The current preferences.
      *
-     * @property settings the stored value; every control reflects it and nothing else.
-     * @property packs the bundled holiday packs in `BundledHolidayPacks.all` order; a pack is switched
-     * on when its [HolidayPackItem.id] is in [UserSettings.enabledHolidaySets].
+     * @property settings the stored value; every control reflects it and nothing else. Holiday sets
+     * (FEATURES H5) are browsed and toggled on the Holidays screen now (ROADMAP M6 T2); this screen
+     * only links there, so it no longer needs the bundled pack catalogue itself.
      * @property dynamicColorSupported whether the device can honour [UserSettings.dynamicColor]
      * (API 31+); when `false` the switch is shown disabled and the stored value is left untouched.
      * @property deleteAllDataStep which step of the "Delete all data" confirmation is open, if any
@@ -54,7 +38,6 @@ sealed interface SettingsUiState {
      */
     data class Loaded(
         val settings: UserSettings,
-        val packs: List<HolidayPackItem>,
         val dynamicColorSupported: Boolean,
         val deleteAllDataStep: DeleteAllDataStep = DeleteAllDataStep.NONE,
     ) : SettingsUiState

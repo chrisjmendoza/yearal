@@ -44,7 +44,8 @@ import io.github.chrisjmendoza.yearal.core.designsystem.theme.BrandLightColorSch
 import io.github.chrisjmendoza.yearal.core.domain.ZoneProvider
 import io.github.chrisjmendoza.yearal.widget.R
 import io.github.chrisjmendoza.yearal.widget.di.WidgetEntryPoint
-import io.github.chrisjmendoza.yearal.widget.today.launchAppIntent
+import io.github.chrisjmendoza.yearal.widget.today.dayLaunchIntent
+import io.github.chrisjmendoza.yearal.widget.today.monthLaunchIntent
 import io.github.chrisjmendoza.yearal.widget.today.todayDate
 import java.time.Clock
 import java.time.Instant
@@ -209,10 +210,13 @@ private fun MonthWidgetContent(
                 .background(GlanceTheme.colors.widgetBackground)
                 .padding(8.dp)
                 .semantics { contentDescription = state.contentDescription }
-        // launchAppIntent is null only if the platform cannot resolve this app's own launcher activity;
-        // see TodayGlanceWidget's KDoc. Reused rather than duplicated (docs/security-and-privacy.md §6.4:
-        // one explicit-intent helper, not two).
-        launchAppIntent(context)?.let { intent ->
+        // monthLaunchIntent is null only if the platform cannot resolve this app's own launcher
+        // activity; see TodayGlanceWidget's KDoc. This is the whole-widget fallback target -- the
+        // title, the header rows and the Gregorian span line, none of which name one specific day.
+        // Individual day cells and the intercalary band below override it with their own tap target
+        // (ROADMAP M3 T5; FEATURES S5): Glance/RemoteViews resolves a tap against the most specific
+        // clickable view under the finger, so a cell's own `clickable` wins inside its own bounds.
+        monthLaunchIntent(context)?.let { intent ->
             modifier = modifier.clickable(actionStartActivity(intent))
         }
 
@@ -280,12 +284,21 @@ private fun WeekdayHeaderRow(
  * text otherwise) so a dot never shifts the grid's row height. Carries no semantics of its own, exactly
  * like the day number beside it (docs/ARCHITECTURE.md §5, "not the app's full-grid pattern of one rich
  * description per cell").
+ *
+ * Its own tap target (ROADMAP M3 T5; FEATURES S5) opens [dayCell.gregorianDate] specifically, through
+ * [dayLaunchIntent] -- overriding the whole-widget [monthLaunchIntent] fallback for this cell's own
+ * bounds, the same nested-clickable pattern `RemoteViews` gives any calendar-style widget.
  */
 @Composable
 private fun RowScope.DayNumberCell(dayCell: MonthDayCellState) {
     val colors = GlanceTheme.colors
+    val context = LocalContext.current
+    var cellModifier = GlanceModifier.defaultWeight().padding(1.dp)
+    dayLaunchIntent(context, dayCell.gregorianDate.toEpochDay())?.let { intent ->
+        cellModifier = cellModifier.clickable(actionStartActivity(intent))
+    }
     Box(
-        modifier = GlanceModifier.defaultWeight().padding(1.dp),
+        modifier = cellModifier,
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
@@ -336,21 +349,27 @@ private const val EVENT_DOT_GLYPH: String = "•"
  * the primary container plus bold text -- shape and weight, not colour alone, matching [DayNumberCell].
  * [intercalary.hasEvent] appends the same [EVENT_DOT_GLYPH] used on a regular day cell (ROADMAP M5 T6),
  * since Leap Day and Year Day can carry events like any other day (CLAUDE.md rule 6).
+ *
+ * Its own tap target (ROADMAP M3 T5) opens [intercalary.gregorianDate] specifically, exactly like
+ * [DayNumberCell] -- the day belongs to no week, but it is still one specific day.
  */
 @Composable
 private fun IntercalaryRow(intercalary: MonthIntercalaryState) {
     val colors = GlanceTheme.colors
+    val context = LocalContext.current
     val containerColor = if (intercalary.isToday) colors.primaryContainer else colors.tertiaryContainer
     val contentColor = if (intercalary.isToday) colors.onPrimaryContainer else colors.onTertiaryContainer
-    Column(
-        modifier =
-            GlanceModifier
-                .fillMaxWidth()
-                .padding(top = 2.dp)
-                .background(containerColor)
-                .cornerRadius(8.dp)
-                .padding(6.dp),
-    ) {
+    var bandModifier =
+        GlanceModifier
+            .fillMaxWidth()
+            .padding(top = 2.dp)
+            .background(containerColor)
+            .cornerRadius(8.dp)
+            .padding(6.dp)
+    dayLaunchIntent(context, intercalary.gregorianDate.toEpochDay())?.let { intent ->
+        bandModifier = bandModifier.clickable(actionStartActivity(intent))
+    }
+    Column(modifier = bandModifier) {
         Text(
             text = if (intercalary.hasEvent) "${intercalary.label} $EVENT_DOT_GLYPH" else intercalary.label,
             style =

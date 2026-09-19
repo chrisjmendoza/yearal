@@ -7,7 +7,6 @@ import android.os.Looper
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldNotBe
 import org.junit.After
 import org.junit.Test
@@ -43,6 +42,29 @@ class TimeZoneChangeEndToEndTest {
 
     private fun idleMainLooper() = shadowOf(Looper.getMainLooper()).idle()
 
+    /**
+     * Pumps the main looper until [value] returns a non-null result, or fails after [TIMEOUT_MILLIS].
+     *
+     * `MainViewModel.today` is fed by `RealDateTicker` on a background dispatcher, so its first value
+     * and its post-broadcast value both arrive on real time that a single `idle()` cannot force. Reading
+     * once after one pump passes on an idle machine and fails when the run is loaded — this test did
+     * exactly that in a full-suite run. `nanoTime` is a monotonic stopwatch, not a clock: nothing here
+     * computes a date (CLAUDE.md rule 2).
+     */
+    private fun <T : Any> awaitOnMainLooper(
+        what: String,
+        value: () -> T?,
+    ): T {
+        val deadline = System.nanoTime() + TIMEOUT_MILLIS * NANOS_PER_MILLI
+        while (System.nanoTime() < deadline) {
+            idleMainLooper()
+            value()?.let { return it }
+            Thread.sleep(POLL_MILLIS)
+        }
+        idleMainLooper()
+        return value() ?: error("$what did not arrive within $TIMEOUT_MILLIS ms")
+    }
+
     @After
     fun tearDown() {
         TimeZone.setDefault(originalDefaultZone)
@@ -56,14 +78,23 @@ class TimeZoneChangeEndToEndTest {
         idleMainLooper()
         val viewModel = ViewModelProvider(controller.get())[MainViewModel::class.java]
 
-        val dateBefore = viewModel.today.value.shouldNotBeNull()
+        val dateBefore = awaitOnMainLooper("the ticker's first date") { viewModel.today.value }
 
         TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Kiritimati"))
         application.sendBroadcast(Intent(Intent.ACTION_TIMEZONE_CHANGED))
-        idleMainLooper()
 
-        viewModel.today.value shouldNotBe dateBefore
+        val dateAfter =
+            awaitOnMainLooper("the date for the new zone") {
+                viewModel.today.value?.takeIf { it != dateBefore }
+            }
+        dateAfter shouldNotBe dateBefore
 
         controller.pause().stop().destroy()
+    }
+
+    private companion object {
+        const val TIMEOUT_MILLIS = 10_000L
+        const val POLL_MILLIS = 10L
+        const val NANOS_PER_MILLI = 1_000_000L
     }
 }

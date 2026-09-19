@@ -94,26 +94,77 @@ private val ProgressIndicatorStroke = 2.dp
 /**
  * The event editor (`EventEditorKey`, `docs/ROADMAP.md` M4 T4): collects
  * [EventEditorViewModel.uiState] and renders it through the stateless [EventEditorScreen]. Reacts to
- * [EventEditorViewModel.editorEvents] by leaving the screen ([navigator.goBack]) on
+ * [EventEditorViewModel.editorEvents] by calling [onLeave] on
  * [EventEditorEvent.Saved]/[EventEditorEvent.Deleted]/[EventEditorEvent.NavigatedAway], and by
  * launching the `POST_NOTIFICATIONS` Activity Result request on
  * [EventEditorEvent.RequestNotificationPermission] (FEATURES E4, P2) — the request itself lives here,
  * not in the ViewModel, so [EventEditorViewModel] needs no Android permission API. Reacts to the
- * system back gesture by asking the ViewModel first, so an unsaved draft can show its guard.
+ * system back gesture by asking the ViewModel first, so an unsaved draft can show its guard — the
+ * unsaved-changes guard and the Save/Delete in-flight guard both live in the ViewModel, so they work
+ * the same way whether this composes as its own `EventEditorKey` entry (compact widths) or inline in
+ * the expanded-width list-detail pane (docs/ROADMAP.md M3 T4;
+ * `io.github.chrisjmendoza.yearal.feature.events.list.EventListRoute`).
  *
  * @param key which event to edit, or none for a new one.
- * @param navigator receives the "leave the editor" action.
+ * @param navigator receives the "leave the editor" action by default (see [onLeave]).
+ * @param onLeave invoked instead of [navigator]'s own back action when the editor is done — on save,
+ * delete, or a confirmed discard. Defaults to [Navigator.goBack] (popping `EventEditorKey`'s own Nav3
+ * entry, compact widths' behaviour, unchanged from before this task); the expanded-width list-detail
+ * pane passes a callback that clears the selection instead, since there is no entry to pop there.
+ * @param viewModelKey a distinct key for [hiltViewModel] when more than one [EventEditorViewModel] can
+ * exist in the same `ViewModelStore` at once — the expanded-width pane's own case, where switching the
+ * selected event reuses the same composition rather than getting a fresh Nav3 entry. `null` (the
+ * default) uses the call site's own key, which is enough for `EventEditorKey`'s own Nav3 entry, where
+ * a different event always means a new entry and therefore a new `ViewModelStore` regardless.
  */
 @Composable
 fun EventEditorRoute(
     key: EventEditorKey,
     navigator: Navigator,
     modifier: Modifier = Modifier,
+    onLeave: () -> Unit = navigator::goBack,
+    viewModelKey: String? = null,
     viewModel: EventEditorViewModel =
         hiltViewModel<EventEditorViewModel, EventEditorViewModel.Factory>(
+            key = viewModelKey,
             creationCallback = { factory -> factory.create(key) },
         ),
 ) {
+    val editor = rememberEventEditorState(viewModel, onLeave)
+    BackHandler(onBack = viewModel::requestBack)
+    EventEditorScreen(state = editor.uiState, callbacks = editor.callbacks, modifier = modifier)
+}
+
+/**
+ * Bundles an [EventEditorViewModel]'s live [EventEditorUiState] with every [EventEditorCallbacks]
+ * bound to it (docs/ARCHITECTURE.md §4 "State management").
+ *
+ * @property uiState the ViewModel's current state.
+ * @property callbacks every intent [EventEditorScreen] can report, already bound to [viewModel].
+ */
+internal data class EventEditorState(
+    val uiState: EventEditorUiState,
+    val callbacks: EventEditorCallbacks,
+)
+
+/**
+ * Collects [viewModel]'s [EventEditorViewModel.uiState], wires its one-shot
+ * [EventEditorViewModel.editorEvents] — [onLeave] on
+ * [EventEditorEvent.Saved]/[EventEditorEvent.Deleted]/[EventEditorEvent.NavigatedAway], the
+ * `POST_NOTIFICATIONS` Activity Result request on
+ * [EventEditorEvent.RequestNotificationPermission] (FEATURES E4, P2) — and binds every
+ * [EventEditorCallbacks] to it. Shared by [EventEditorRoute] (its own Nav3 entry) and the
+ * expanded-width list-detail pane
+ * ([io.github.chrisjmendoza.yearal.feature.events.list.EventListRoute], docs/ROADMAP.md M3 T4), so
+ * both wire the editor's unsaved-changes guard and its Save/Delete in-flight guard exactly the same
+ * way. The caller still owns the system back gesture ([EventEditorRoute]'s own [BackHandler]); this
+ * helper only reacts to the ViewModel's own one-shot events.
+ */
+@Composable
+internal fun rememberEventEditorState(
+    viewModel: EventEditorViewModel,
+    onLeave: () -> Unit,
+): EventEditorState {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val permissionLauncher =
@@ -132,45 +183,41 @@ fun EventEditorRoute(
                 }
 
                 EventEditorEvent.Saved, EventEditorEvent.Deleted, EventEditorEvent.NavigatedAway -> {
-                    navigator.goBack()
+                    onLeave()
                 }
             }
         }
     }
-    BackHandler(onBack = viewModel::requestBack)
-    EventEditorScreen(
-        state = state,
-        callbacks =
-            EventEditorCallbacks(
-                onTitleChange = viewModel::setTitle,
-                onDescriptionChange = viewModel::setDescription,
-                onLocationChange = viewModel::setLocation,
-                onAllDayChange = viewModel::setAllDay,
-                onStartDateChange = viewModel::setStartDate,
-                onAllDayEndDateChange = viewModel::setAllDayEndDate,
-                onStartMinuteChange = viewModel::setStartMinuteOfDay,
-                onEndMinuteChange = viewModel::setEndMinuteOfDay,
-                onZoneChoiceChange = viewModel::setZoneChoice,
-                onRecurrenceKindChange = viewModel::setRecurrenceKind,
-                onLeapDayPolicyChange = viewModel::setLeapDayPolicy,
-                onRecurrenceEndKindChange = viewModel::setRecurrenceEndKind,
-                onUntilDateChange = viewModel::setUntilDate,
-                onCountChange = viewModel::setCount,
-                onToggleReminder = viewModel::toggleReminder,
-                onSave = viewModel::save,
-                onRequestDelete = viewModel::requestDelete,
-                onConfirmDelete = viewModel::confirmDelete,
-                onCancelDelete = viewModel::cancelDelete,
-                onBack = viewModel::requestBack,
-                onConfirmDiscard = viewModel::confirmDiscard,
-                onCancelDiscard = viewModel::cancelDiscard,
-                onRestoreAllOccurrences = viewModel::restoreAllOccurrences,
-                onDismissNotificationPermissionNotice = viewModel::dismissNotificationPermissionNotice,
-                onOpenNotificationSettings = { openNotificationSettings(context) },
-                onDismissRecurrenceResetNotice = viewModel::dismissRecurrenceResetNotice,
-            ),
-        modifier = modifier,
-    )
+    val callbacks =
+        EventEditorCallbacks(
+            onTitleChange = viewModel::setTitle,
+            onDescriptionChange = viewModel::setDescription,
+            onLocationChange = viewModel::setLocation,
+            onAllDayChange = viewModel::setAllDay,
+            onStartDateChange = viewModel::setStartDate,
+            onAllDayEndDateChange = viewModel::setAllDayEndDate,
+            onStartMinuteChange = viewModel::setStartMinuteOfDay,
+            onEndMinuteChange = viewModel::setEndMinuteOfDay,
+            onZoneChoiceChange = viewModel::setZoneChoice,
+            onRecurrenceKindChange = viewModel::setRecurrenceKind,
+            onLeapDayPolicyChange = viewModel::setLeapDayPolicy,
+            onRecurrenceEndKindChange = viewModel::setRecurrenceEndKind,
+            onUntilDateChange = viewModel::setUntilDate,
+            onCountChange = viewModel::setCount,
+            onToggleReminder = viewModel::toggleReminder,
+            onSave = viewModel::save,
+            onRequestDelete = viewModel::requestDelete,
+            onConfirmDelete = viewModel::confirmDelete,
+            onCancelDelete = viewModel::cancelDelete,
+            onBack = viewModel::requestBack,
+            onConfirmDiscard = viewModel::confirmDiscard,
+            onCancelDiscard = viewModel::cancelDiscard,
+            onRestoreAllOccurrences = viewModel::restoreAllOccurrences,
+            onDismissNotificationPermissionNotice = viewModel::dismissNotificationPermissionNotice,
+            onOpenNotificationSettings = { openNotificationSettings(context) },
+            onDismissRecurrenceResetNotice = viewModel::dismissRecurrenceResetNotice,
+        )
+    return EventEditorState(state, callbacks)
 }
 
 /**

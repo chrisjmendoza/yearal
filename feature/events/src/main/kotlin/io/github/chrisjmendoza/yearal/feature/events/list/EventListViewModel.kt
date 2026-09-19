@@ -16,6 +16,7 @@ import io.github.chrisjmendoza.yearal.core.domain.event.Recurrence
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalTime
@@ -48,6 +49,7 @@ class EventListViewModel
         formatter: IfcDateFormatter,
     ) : ViewModel() {
         private val query = MutableStateFlow(savedStateHandle.get<String>(KEY_QUERY) ?: "")
+        private val _selection = MutableStateFlow<EventListSelection>(EventListSelection.None)
 
         /** [EventListUiState.Loading] until both flows have emitted, then a [EventListUiState.Loaded] per change. */
         val uiState: StateFlow<EventListUiState> =
@@ -59,10 +61,35 @@ class EventListViewModel
                 buildEventListUiState(events, calendars, q, formatter)
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), EventListUiState.Loading)
 
+        /**
+         * The expanded-width list-detail pane's own selection (docs/ROADMAP.md M3 T4;
+         * docs/ARCHITECTURE.md §4 "Adaptive layouts") — ignored at compact widths, where a row or the
+         * "Add event" FAB navigates to `EventEditorKey` instead. Retained across a configuration change
+         * or a fold/unfold by ordinary `ViewModel` retention (`:feature:calendar`'s own Month selection
+         * follows the same rule); not persisted to [savedStateHandle], so a process death restarts on
+         * [EventListSelection.None] rather than reopening whatever was selected.
+         */
+        val selection: StateFlow<EventListSelection> = _selection.asStateFlow()
+
         /** Updates the search text; an empty string shows every event. */
         fun setQuery(text: String) {
             savedStateHandle[KEY_QUERY] = text
             query.value = text
+        }
+
+        /** Selects [eventId] for the expanded-width detail pane (docs/ROADMAP.md M3 T4). */
+        fun selectEvent(eventId: Long) {
+            _selection.value = EventListSelection.Existing(eventId)
+        }
+
+        /** Selects "new event" for the expanded-width detail pane (docs/ROADMAP.md M3 T4). */
+        fun selectNewEvent() {
+            _selection.value = EventListSelection.New
+        }
+
+        /** Clears the selection: the expanded-width detail pane returns to its empty state. */
+        fun clearSelection() {
+            _selection.value = EventListSelection.None
         }
 
         private companion object {
@@ -70,6 +97,23 @@ class EventListViewModel
             const val KEY_QUERY = "events.list.query"
         }
     }
+
+/**
+ * What the expanded-width list-detail pane's detail side shows (docs/ROADMAP.md M3 T4;
+ * docs/ARCHITECTURE.md §4 "Adaptive layouts"). Ignored at compact widths.
+ */
+sealed interface EventListSelection {
+    /** Nothing selected: the detail pane shows its empty state. */
+    data object None : EventListSelection
+
+    /** A brand-new, unsaved event: the detail pane shows the editor with `EventEditorKey()`. */
+    data object New : EventListSelection
+
+    /** An existing event: the detail pane shows the editor with `EventEditorKey(eventId = eventId)`. */
+    data class Existing(
+        val eventId: Long,
+    ) : EventListSelection
+}
 
 /** Builds the loaded state: filters [events] by [query], then joins each with its calendar. */
 internal fun buildEventListUiState(

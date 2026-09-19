@@ -29,6 +29,7 @@ dependencies {
     implementation(project(":feature:calendar"))
     implementation(project(":feature:converter"))
     implementation(project(":feature:events"))
+    implementation(project(":feature:holidays"))
     implementation(project(":feature:settings"))
     implementation(project(":widget"))
 

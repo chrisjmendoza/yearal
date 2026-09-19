@@ -79,8 +79,12 @@ private val ColorDotSize = 12.dp
 private val AgendaRowSpacing = 12.dp
 
 /**
- * The Day detail (docs/FEATURES.md C5): collects [DayViewModel.uiState] with the lifecycle and renders
- * it through the stateless [DayScreen]. This is the composable `:app` places behind [DayKey].
+ * The Day detail sheet at compact and medium widths (docs/FEATURES.md C5; docs/ARCHITECTURE.md §4
+ * "Adaptive layouts"): collects [DayViewModel.uiState] with the lifecycle and renders it through the
+ * stateless [DayScreen]. This is the composable `:app` places behind [DayKey]. At expanded widths the
+ * same [DayViewModel] and [DayDetail] content show inline instead, in
+ * [io.github.chrisjmendoza.yearal.feature.calendar.month.MonthRoute]'s list-detail pane rather than as
+ * a sheet — [DayKey] itself is only ever pushed for the compact/medium sheet.
  *
  * The ViewModel is created for [key]'s date through [DayViewModel.Factory]; dismissing the sheet pops
  * the entry with [Navigator.goBack]. Tapping an agenda row or "Add event" pushes [EventEditorKey]
@@ -105,6 +109,44 @@ fun DayRoute(
             creationCallback = { factory -> factory.create(key.epochDay) },
         ),
 ) {
+    val detail = rememberDayDetailState(viewModel)
+    DayScreen(
+        state = detail.uiState,
+        onDismiss = navigator::goBack,
+        onEventClick = { eventId -> navigator.navigate(EventEditorKey(eventId = eventId)) },
+        onAddEvent = { navigator.navigate(EventEditorKey(prefillEpochDay = key.epochDay)) },
+        onOpenInConverter = { navigator.navigate(ConverterKey(prefillEpochDay = key.epochDay)) },
+        onRequestDelete = viewModel::requestDelete,
+        onConfirmDelete = viewModel::confirmDelete,
+        onCancelDelete = viewModel::cancelDelete,
+        snackbarHostState = detail.snackbarHostState,
+        modifier = modifier,
+    )
+}
+
+/**
+ * Bundles a [DayViewModel]'s live [DayUiState] with a [SnackbarHostState] already wired to its undo
+ * action (docs/ARCHITECTURE.md §4 "State management").
+ *
+ * @property uiState the ViewModel's current state.
+ * @property snackbarHostState hosts the undo snackbar after an occurrence delete; already collecting
+ * [DayViewModel.events] by the time this is returned.
+ */
+internal data class DayDetailState(
+    val uiState: DayUiState,
+    val snackbarHostState: SnackbarHostState,
+)
+
+/**
+ * Collects [viewModel]'s [DayViewModel.uiState] and hosts the undo snackbar for its
+ * [DayViewModel.events] ([DayEvent.OccurrenceDeleted]), so an occurrence delete's undo works the same
+ * whether the day shows in [DayRoute]'s sheet (compact and medium widths) or the expanded-width
+ * Calendar list-detail pane
+ * ([io.github.chrisjmendoza.yearal.feature.calendar.month.MonthRoute], docs/ROADMAP.md M3 T4) — the
+ * one place this wiring is written, so the two never drift apart.
+ */
+@Composable
+internal fun rememberDayDetailState(viewModel: DayViewModel): DayDetailState {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val undoMessage = stringResource(R.string.day_delete_occurrence_snackbar)
@@ -126,24 +168,15 @@ fun DayRoute(
             }
         }
     }
-    DayScreen(
-        state = state,
-        onDismiss = navigator::goBack,
-        onEventClick = { eventId -> navigator.navigate(EventEditorKey(eventId = eventId)) },
-        onAddEvent = { navigator.navigate(EventEditorKey(prefillEpochDay = key.epochDay)) },
-        onOpenInConverter = { navigator.navigate(ConverterKey(prefillEpochDay = key.epochDay)) },
-        onRequestDelete = viewModel::requestDelete,
-        onConfirmDelete = viewModel::confirmDelete,
-        onCancelDelete = viewModel::cancelDelete,
-        snackbarHostState = snackbarHostState,
-        modifier = modifier,
-    )
+    return DayDetailState(state, snackbarHostState)
 }
 
 /**
- * The stateless Day detail — a [ModalBottomSheet] (docs/ARCHITECTURE.md §4 "Screen behaviors":
- * a bottom sheet on compact widths; the expanded-width pane is docs/ROADMAP.md M3) around
- * [DayDetail], the unit for previews, screenshot and Compose tests.
+ * The stateless Day detail — a [ModalBottomSheet] (docs/ARCHITECTURE.md §4 "Screen behaviors": a
+ * bottom sheet at compact and medium widths; at expanded widths [DayDetail] is composed directly in
+ * the Calendar list-detail pane instead, with no sheet chrome — see
+ * [io.github.chrisjmendoza.yearal.feature.calendar.month.MonthListDetailScreen]) around [DayDetail],
+ * the unit for previews, screenshot and Compose tests.
  *
  * Navigation 3 renders the day as its own entry, so the sheet sits over whatever the tab shows
  * beneath; [onDismiss] is invoked by the scrim, the back gesture, a swipe down and the close button.

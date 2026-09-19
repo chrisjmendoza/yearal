@@ -225,7 +225,8 @@ D:\Dev\intl-fixed-calendar
 │   ├─ settings                  Settings + More hub (done); Learn/About
 │   ├─ converter                 Gregorian ↔ IFC converter (done): direction switch, both pickers, copy / share
 │   ├─ events                    Event list + editor (done), against :core:domain interfaces only
-│   └─ holidays
+│   └─ holidays                  Holidays screen (done, M6 T2): browse/toggle every bundled set, a per-year
+│                                 list grouped by IFC month; Settings links here instead of duplicating switches
 ├─ widget                        Glance widgets, widget receivers, config activity, WidgetUpdater impl
 └─ baselineprofile               (M8)
 ```
@@ -264,6 +265,15 @@ Yes, add it, but keep it minimal. With about 17 modules, copy-pasted `android {}
   - `ifc.kotlin.serialization` and `ifc.room`: the compiler plugins must be applied from `build-logic`'s classpath (ADR 0001, decision 3).
 - Spotless is configured per module by the convention plugins (ktlint from the catalog).
 - Do not write custom tasks beyond these.
+- **A new Android module needs `src/test/resources/robolectric.properties` with `sdk=36`** (the app's
+  `targetSdk`). A library module has no `targetSdk` in its test manifest, so without that file Robolectric
+  silently picks the newest SDK it ships and every Compose interaction test fails with a cryptic
+  `InputManager.getInstance()` `NoSuchMethodException`. All eight Android modules carry an identical copy;
+  making it a convention-plugin default is ROADMAP **R7**.
+- **Prefer a scrollable `Column` over `LazyColumn` for a bounded list in a screen that has Robolectric
+  tests.** Robolectric's default window never composes off-screen lazy items and `performScrollTo()`
+  cannot realise them, so assertions on anything past the fold fail with no hint at the cause. Every
+  screen in the app follows this today.
 
 ## 3. Domain model
 
@@ -391,13 +401,14 @@ reminders(id PK, event_id FK CASCADE, minutes_before INT, UNIQUE(event_id, minut
   stops after two, as soon as no later occurrence of that event could produce an earlier instant.
 - **Notifications** are [security-and-privacy.md](security-and-privacy.md) §3.3's: one channel, title and
   time only, `VISIBILITY_PRIVATE` with a redacted public version, no full-screen intent, stable ids
-  derived from ids, and a tap that opens the app through an explicit, extras-free `PendingIntent`. On API
+  derived from ids, and a tap that opens the app through an explicit `PendingIntent` carrying the event
+  id (`ReminderIntent.EXTRA_EVENT_ID`, ROADMAP M4 T10 — §4 "Intent routing" has the detail). On API
   33+ the permission is checked immediately before posting; denied means nothing is posted and the alarm
   is still armed, so the app works in full without notifications (FEATURES P2).
 - **Around it:** the in-context `POST_NOTIFICATIONS` request is the event editor's (`:feature:events`), and
   `IfcApplication.onCreate` calls `reschedule()` off the main thread through `AppStartup` on every process
   start, so a reminder alarm lost to a force-stop or an OEM task killer is back as soon as anything starts
-  the app. **Not built:** tap routing to the event (`IntentRouter`) and snooze.
+  the app. **Not built:** snooze.
 
 ### 3.3 Holidays
 
@@ -436,7 +447,56 @@ The pager keeps three months warm with `beyondViewportPageCount = 1`: `MonthView
 - **Nav keys** live in `:core:navigation`: `TodayKey`, `MonthKey(year, month)`, `YearKey(year)`, `DayKey(epochDay)`, `ConverterKey(prefillEpochDay?)`, `EventListKey`, `EventEditorKey(eventId?, prefillEpochDay?)`, `MoreKey` (the hub tab), `HolidaysKey`, `SettingsKey`, `LearnKey`, `PrivacyKey`.
 - **Per-tab back stacks** are `TabBackStacks` in `:app`: one `NavBackStack` per tab, the Today root prefixed when another tab is shown so that back from a tab root returns to Today; the Calendar tab's root `MonthKey` is resolved from `DateTicker` when the tab is first opened.
 - **Entry providers:** `:app` owns the per-tab back stacks (the Nav3 "top-level back stack" recipe), the single `NavDisplay`, and its `entryProvider` block, which registers one `entry<XKey> { XRoute(...) }` per nav key directly in [`ui/IfcApp.kt`](../app/src/main/kotlin/io/github/chrisjmendoza/yearal/ui/IfcApp.kt) — features do not expose their own `EntryProviderScope` extension; each just exports its `XRoute` composable(s) for `:app` to wire up.
-- **Intent routing:** widget and notification taps send explicit intents with extras. `IntentRouter` in `:app` builds the back stack, for example `[MonthKey, DayKey]`. No URI deep links are needed until Nav3 1.2 is stable.
+- **Intent routing — as built (ROADMAP M3 T5, M4 T10).** Widget and notification taps send explicit
+  intents with typed extras; `IntentRouter` (`:app`, package `intent`) turns a validated one into an
+  [`AppRoute`](../app/src/main/kotlin/io/github/chrisjmendoza/yearal/intent/AppRoute.kt) and
+  [`TabBackStacks.applyRoute`](../app/src/main/kotlin/io/github/chrisjmendoza/yearal/ui/navigation/TabBackStacks.kt)
+  turns that into a back stack — a day opens `[MonthKey(of that day), DayKey(epochDay)]` on the
+  Calendar tab, an event opens `[EventListKey, EventEditorKey(eventId)]` on the Events tab, "today"
+  selects the Today tab, and the Month widget's whole-widget tap opens `[MonthKey(current month)]`. No
+  URI deep links are needed until Nav3 1.2 is stable.
+  - **Where the extra-name contract lives.** `:widget` and `:core:scheduling` each own a small, plain
+    object of action-string and extra-name constants
+    ([`WidgetIntents`](../widget/src/main/kotlin/io/github/chrisjmendoza/yearal/widget/WidgetIntents.kt),
+    [`ReminderIntent`](../core/scheduling/src/main/kotlin/io/github/chrisjmendoza/yearal/core/scheduling/reminder/ReminderIntent.kt))
+    rather than a shared module. `:core:navigation`'s `NavKey` types need
+    `androidx.navigation3:navigation3-runtime` as an `api` dependency, and that artifact's own POM pulls
+    in `androidx.compose.runtime` and `runtime-saveable` — a UI back-stack dependency this task judged
+    **not acceptable** to add to either a headless Glance widget module or a headless alarm/notification
+    module that has never needed Compose. `:core:domain` is the module both producers already share, but
+    it is off limits to a module boundary change here; a new module was judged unwarranted for two small
+    constant objects. `:app` already depends on both `:widget` and `:core:scheduling`
+    (`docs/ARCHITECTURE.md` §2), so `IntentRouter` references their constants directly, and NavKey
+    construction stays entirely in `:app` — one source of truth per producer, checked by
+    `IntentRouterTest`, `ReminderNotifierTest` and this module's own launch-intent tests, rather than a
+    shared contract module.
+  - **Validation is the point** (`docs/security-and-privacy.md` §6.3): an unrecognized or missing
+    action, or a `Long` extra that is absent or stored under its name as any other type (a `Uri`, a
+    nested `Intent`, a class name — `IntentRouter.longExtraOrNull` requires an exact type match, never
+    `Bundle`'s type-mismatch-to-default coercion), resolves to `AppRoute.Default` and the app opens on
+    its normal start destination. An epoch day that parses but falls outside `:core:calendar`'s
+    supported years (`IfcDate.MIN_YEAR..MAX_YEAR`) fails the same way. An event id that is structurally
+    valid but no longer exists is still routed to the editor, which already has its own "not found"
+    state (`EventEditorViewModel`'s `notFound` flag) — `IntentRouter` cannot check existence itself
+    without a database read (CLAUDE.md rule 8: ids only).
+  - **Exactly-once delivery.** `MainActivity` keeps `android:launchMode="singleTask"` (unchanged) so a
+    tap that finds the activity already running delivers through `onNewIntent`, which always routes —
+    it is inherently a new, deliberate action. `onCreate` routes through
+    `MainViewModel.routeFromCreate`, which is a no-op if `SavedStateHandle` already recorded a route
+    for this activity instance's lifetime: unchanged across a configuration change (the same
+    `MainViewModel` survives it) and, thanks to the `SavedStateHandle`'s restored `Bundle`, also unchanged
+    across a process restart where Android re-delivers the original launch `Intent`.
+    `IfcApp` applies the pending route (`TabBackStacks.applyRoute`) once the tab back stacks — and, for
+    `AppRoute.CurrentMonth`, `DateTicker`'s "today" — are available, then consumes it.
+  - **Producers.** The reminder notification's tap (`:core:scheduling`, `ReminderNotifier`) carries
+    `ReminderIntent.ACTION_OPEN_EVENT` and the event id, with a request code derived from the event id
+    so two different events' notifications never share one `PendingIntent`. The Today widget's tap
+    carries `WidgetIntents.ACTION_OPEN_TODAY`. The Month widget's 28 day cells and its trailing Leap
+    Day / Year Day band are each individually clickable (`GlanceModifier.clickable` per cell, resolved
+    to its own explicit intent with `ACTION_OPEN_DAY` and that cell's epoch day) — Glance/RemoteViews
+    resolves a tap to the most specific clickable view under it, so a cell's own target overrides the
+    whole-widget `ACTION_OPEN_MONTH` fallback (the title, header rows and Gregorian-span line) inside its
+    own bounds. Every `PendingIntent` stays explicit, immutable, and carries only ids or epoch days.
 - **Screen behaviors:**
   - **Today:** the hero IFC date, the Gregorian equivalent, both weekdays, year progress, today's agenda, and the next intercalary day or holiday.
   - **Month:** a `HorizontalPager` of months (done: an app bar with a Today action, a jump-to-date action (FEATURES C7) and the visible page's own title; each page's `MonthGrid` carries the same heading text inside the grid; holidays come from `HolidayCatalog`, which evaluates the enabled packs with `HolidayEngine` for the visible page ±1). The app bar's title mirrors the visible page's `MonthGrid` heading and is itself the tappable control that zooms out to **Year** (docs/ROADMAP.md M3 T2) — done this way, rather than making the grid's own heading tappable, because the grid is a shared `:core:designsystem` component and the zoom-out is `:feature:calendar` behavior. The jump-to-date action opens a small calendar chooser (Gregorian or IFC, the event editor's own pattern) and pushes the chosen date's `MonthKey`. **Year** is 13 mini-months in a `LazyVerticalGrid(Adaptive(160.dp))`, each drawn as a single `Canvas` rather than 28 real day cells (`YearMiniMonthTile`, `:core:designsystem`) — 364 real cells visibly cost frames while scrolling the grid. On a two-column phone, Year Day takes the 14th slot.
@@ -452,6 +512,7 @@ The pager keeps three months warm with `beyondViewportPageCount = 1`: `MonthView
     `IFC` form, both labelled weekdays, and the proleptic note for years up to 1923 (the latest adoption calendar-spec
     §7.1 names); copy and `ACTION_SEND` text always carry the `IFC` marker and the Gregorian date.
   - **Day detail:** a bottom sheet on compact widths (done: a material3 `ModalBottomSheet` inside the Nav3 entry — Nav3 1.1.7 has no sheet scene, only `DialogSceneStrategy`) and a pane on expanded widths (M3 T4). It shows both dates, both weekdays and the day's events, with "Add event" and "Open in converter" actions. An agenda row's long-press (also a TalkBack custom action) opens a delete confirmation: "delete this occurrence" for a recurring event — an `EventRepository.addExdate` on the occurrence's own start date, never the day the sheet is showing (`docs/contracts/Events.md` §4) — with an undo snackbar, or a plain, permanent delete for a one-off event (M4 T8).
+  - **Holidays** (done, M6 T2, `:feature:holidays`): two sections behind `HolidaysKey`. "Holiday sets" lists every bundled pack (`BundledHolidayPacks.all` via `HolidayPackLoader`) with its name, region, how many holidays it defines, its sources when the pack carries them, and a switch that writes through `SettingsRepository.enabledHolidaySets` — the only place that toggle lives now; Settings' own screen links here instead of duplicating it (`docs/FEATURES.md` H5). "Holidays this year" lists every occurrence of the enabled sets for a chosen IFC year (`HolidayEngine.occurrences`), grouped by IFC month — an intercalary day groups under the month it follows, so Leap Day needs no special case — each row showing the holiday's name, its IFC date in long and numeric (`IFC`-prefixed) form, and its Gregorian date with its real weekday; tapping a row pushes `DayKey`. The year defaults to and follows `DateTicker` (including across a December 31 → January 1 rollover) until the user pages away with the previous/next actions, which clamp to `DatePickerRange` (1583–9999). Every set disabled shows an explanatory empty state rather than nothing.
   - **Learn** (done, M3 T3, `:feature:settings`): static sections (what the IFC is, the floating days, nominal-vs-actual weekdays, how dates are calculated, a brief history, an FAQ) plus an expandable-FAQ list. Every worked-example date is computed through `:core:calendar` (`LearnFacts`) and rendered with `IfcDateFormatter`, never typed as a literal.
   - **Privacy** (done, the in-app half of M2 T12, `:feature:settings`): a static, truthful statement of what the app stores and what its two declared permissions (`RECEIVE_BOOT_COMPLETED`, `WAKE_LOCK`) are for, sourced from `docs/security-and-privacy.md`'s allow-list; the hosted-policy URL is left blank until one exists.
 
@@ -504,10 +565,76 @@ Use plain unidirectional data flow with no MVI framework.
 
 ### Adaptive layouts
 
-- Navigation is a bar on compact widths and a rail on medium widths and up.
-- Calendar becomes list-detail on expanded widths, with Month on the left and Day detail on the right. It uses the Nav3 Scenes list-detail strategy if `adaptive-navigation3` is stable, otherwise a small custom two-pane Scene.
-- Events list and editor use the same pattern.
+**As built (docs/ROADMAP.md M3 T4).**
+
+- Navigation is a bar on compact widths and a rail on medium widths and up, via `:app`'s
+  `NavigationSuiteScaffold` (unchanged by this task).
+- The width decision lives in one place, `core/designsystem/adaptive/WindowWidthClass.kt`:
+  `WindowWidthClass { COMPACT, MEDIUM, EXPANDED }` and the composable `currentWindowWidthClass()`, built
+  on `androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2()` and the Material window size
+  class breakpoints (600dp / 840dp) — the same source `NavigationSuiteScaffold` uses for its own
+  bar-to-rail switch, so the nav chrome and the screen content agree. `:feature:calendar` and
+  `:feature:events` both call it; neither depends on the other (CLAUDE.md rule 10).
+- **No Nav3 `SceneStrategy` was written.** At the versions pinned in `gradle/libs.versions.toml`
+  (`nav3 = "1.1.7"`), there is no `adaptive-navigation3` artifact in the resolved dependency graph — a
+  `androidx.compose.material3.adaptive:adaptive` (`adaptive-android` 1.3.0) is present and used for
+  `currentWindowAdaptiveInfoV2()`, but nothing provides a Nav3 list-detail `SceneStrategy` that would
+  render two back stack entries side by side. Per this section's own fallback clause, the list-detail
+  Scene is `core/designsystem/adaptive/TwoPaneLayout.kt`: a plain `Row` of two `Box`es (list, a
+  `VerticalDivider`, detail), each its own semantics traversal group so TalkBack reads the whole list
+  pane then the whole detail pane. It is not a `SceneStrategy` and needs none: the two-pane switch
+  happens *inside* the existing single Nav3 entry (`MonthKey`, `EventListKey`), so **`:app`'s
+  `IfcApp.kt` / `NavDisplay` wiring needed no change** for this task.
+- **Calendar:** `MonthRoute` reads `currentWindowWidthClass()` and renders `CalendarScreen`
+  (`feature/calendar/month/CalendarScreen.kt`), which is `MonthScreen` alone at compact/medium widths
+  (a day tap pushes `DayKey`, the sheet, exactly as before this task) or `MonthListDetailScreen` at
+  expanded widths: `MonthScreen` as the list pane (a day tap only calls `MonthViewModel.select`, no
+  navigation) and the selected day's `DayDetail` — the same stateless content `DayScreen`'s sheet
+  renders, without the sheet chrome — as the detail pane, or an empty state before anything is
+  selected. The detail pane's own `DayViewModel` is created only while there is a selection, keyed by
+  the selected epoch day (`hiltViewModel(key = "month-day-detail-$epochDay", …)`) so switching the
+  selected day gets a fresh instance rather than a stale one; `DayScreen.kt`'s
+  `rememberDayDetailState` (collecting state and hosting the undo snackbar) is shared by the sheet and
+  the pane so neither can drift from the other. `BackHandler` clears the selection
+  (`MonthViewModel.clearSelection`) only at expanded widths while something is selected; at compact and
+  medium widths back is untouched (`DayKey`'s own sheet dismiss still applies). A day tapped through a
+  widget or notification intent (`IntentRouter`'s `[MonthKey, DayKey]`) still opens `DayKey`'s sheet on
+  top of the two-pane layout at expanded widths — fixing that is `:app`'s `IntentRouter`, out of this
+  task's module ownership, and left as a follow-up.
+- **Events:** the same shape. `EventListRoute` reads `currentWindowWidthClass()` and renders
+  `EventsScreen` (`feature/events/list/EventsScreen.kt`): `EventListScreen` alone at compact/medium
+  widths (a row tap or the FAB pushes `EventEditorKey` full-screen, unchanged), or
+  `EventListDetailScreen` at expanded widths: the list as the list pane (a row tap or the FAB only
+  calls `EventListViewModel.selectEvent` / `selectNewEvent`, no navigation) and the selected event's
+  `EventEditorScreen` — the same stateless content the full-screen editor renders — as the detail pane,
+  or an empty state. `EventListViewModel.selection: StateFlow<EventListSelection>` (`None` / `New` /
+  `Existing(eventId)`) is the pane's own selection, ignored at compact/medium widths. The detail pane's
+  `EventEditorViewModel` is likewise created only while selected, keyed by the selection
+  (`"event-list-editor-$eventId"` / `"event-list-editor-new"`); `EventEditorScreen.kt`'s
+  `rememberEventEditorState` (state collection, the one-shot event wiring, and the
+  `POST_NOTIFICATIONS` request) is shared by `EventEditorRoute` (its own Nav3 entry) and the pane, so
+  the unsaved-changes guard and the Save/Delete in-flight guard — both live in
+  `EventEditorViewModel` — work identically in both layouts. `EventEditorRoute` gained two optional
+  parameters for this: `onLeave` (default `Navigator::goBack`; the pane passes
+  `EventListViewModel::clearSelection` instead) and `viewModelKey` (default `null`, needed only when
+  more than one `EventEditorViewModel` can exist in the same `ViewModelStore` at once — the pane's
+  case). `BackHandler` at `EventListRoute` delegates to the open editor's own `requestBack` while a
+  selection exists, so the discard-confirmation guard shows before the selection is cleared, exactly as
+  it does today when leaving the full-screen editor.
+- Rotation, a fold/unfold, and a desktop-window resize are not a reset: the selection
+  (`MonthViewModel.selected`, `EventListViewModel.selection`) and the open editor's draft
+  (`EventEditorViewModel`'s own `SavedStateHandle`-backed state) live in ViewModels retained across
+  configuration changes, not in the two-pane composables themselves — proven in
+  `WindowWidthClassTest` (a live resize recomposes into the new bucket) and `CalendarScreenTest` /
+  `EventsScreenTest` (the caller-held selection survives the width class flipping back and forth).
 - The app is edge-to-edge (enforced at target 36), supports predictive back, and does not lock orientation. Target 36 ignores orientation locks on sw600dp and up anyway.
+
+**Dependency added:** `androidx.compose.material3.adaptive:adaptive` (BOM-managed, resolved to 1.3.0 /
+`adaptive-android`), Apache License 2.0, ~40KB, `implementation` in `core/designsystem` only — the
+catalog alias (`gradle/libs.versions.toml`) already existed, unused, in anticipation of this task;
+`adaptive-layout` and `adaptive-navigation` remain unused. `androidx.window:window-core`'s
+`WindowSizeClass` type comes along transitively (an `api` dependency of `adaptive-android`) and is used
+directly rather than re-wrapped, since `WindowWidthClass` already hides it from callers.
 
 ### Accessibility
 
@@ -599,9 +726,9 @@ first thing in `:widget`, on Glance 1.2.0.
   by default, so nothing extra needs declaring).
 - The tap action opens the app through `launchAppIntent`, which resolves the launcher via
   `PackageManager.getLaunchIntentForPackage` rather than naming `MainActivity` — `:widget` cannot depend
-  on `:app` (§2) — then `androidx.glance.appwidget.action.actionStartActivity(intent)`. `IntentRouter`
-  (M3 T5) does not exist yet, so no extras are added; the app simply opens on its normal start
-  destination.
+  on `:app` (§2) — then `androidx.glance.appwidget.action.actionStartActivity(intent)`. **As built
+  (ROADMAP M3 T5):** `todayLaunchIntent` adds `WidgetIntents.ACTION_OPEN_TODAY`, so `IntentRouter`
+  selects the Today tab explicitly (see "Intent routing" above).
 - `GlanceTheme` uses Material You dynamic colour on API 31+ (`GlanceTheme.colors`) and the brand palette
   (`BrandLightColorScheme`/`BrandDarkColorScheme` from `:core:designsystem`, wrapped by
   `androidx.glance.material3.ColorProviders`) below it.
@@ -643,8 +770,12 @@ package `widget.month`) is the second widget in `:widget`, built the same way as
   Glance/RemoteViews in 1.2.0 has no modifier to mark a child unimportant for accessibility, so a screen
   reader may still traverse the day numbers individually; this is a platform limitation, not a design
   choice, and is worth revisiting if Glance adds one.
-- The tap action reuses Today's `launchAppIntent` unchanged — one explicit-intent helper for both widgets,
-  per docs/security-and-privacy.md §6.4.
+- The tap action builds on the same `launchAppIntent` helper as Today (`docs/security-and-privacy.md`
+  §6.4). **As built (ROADMAP M3 T5):** the whole-widget area (title, header rows, Gregorian-span line)
+  uses `monthLaunchIntent` (`WidgetIntents.ACTION_OPEN_MONTH`, opens the current month); each of the 28
+  day cells and the trailing intercalary band is individually clickable with `dayLaunchIntent`
+  (`WidgetIntents.ACTION_OPEN_DAY` plus that cell's epoch day), overriding the whole-widget target
+  inside its own bounds (see "Intent routing" above).
 - `WidgetRefresher` (see above) and the renamed `WidgetRolloverListener` cover both widgets with the same
   multibinding entry: `GlanceWidgetRefresher.refreshAll` calls `updateAll` on `TodayGlanceWidget` and
   `MonthGlanceWidget`, one call each, and its target list is `internal` so a test can verify that without a
