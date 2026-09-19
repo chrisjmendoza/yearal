@@ -1,6 +1,6 @@
 # Architecture
 
-Status: **current as of M0 and M1 complete; M2–M5 in progress** (2026-09-18). The toolchain is settled by
+Status: **current as of M0 and M1 complete; M2–M6 in progress** (2026-09-19). The toolchain is settled by
 [adr/0001-toolchain.md](adr/0001-toolchain.md); [`gradle/libs.versions.toml`](../gradle/libs.versions.toml)
 is the authority for versions and §1 explains the choices. Progress per task is in [ROADMAP.md](ROADMAP.md).
 
@@ -18,6 +18,7 @@ is the authority for versions and §1 explains the choices. Progress per task is
 | [WORKFLOW.md](WORKFLOW.md) | How work is done: the gate, Definition of Done, KDoc standard, anti-drift rules, rules for LLM agents |
 | `gradle/libs.versions.toml` | The dependency versions the build actually uses (§1 explains the choices) |
 | [device-test-matrix.md](device-test-matrix.md) | The on-device checks the automated gate cannot make (ROADMAP M5 T8) |
+| [screenshots.md](screenshots.md) | Recording, reviewing and committing Roborazzi goldens; reading a CI diff |
 | [reviews/](reviews/2026-09-19-astra-analysis-response.md) | External reviews of the project and our written response to each |
 | [contracts/](contracts/Events.md) | Frozen public APIs that parallel tasks build against: [Calendar.md](contracts/Calendar.md) (`:core:calendar`, frozen M1 T6) and [Events.md](contracts/Events.md) (events, frozen M4 T1) |
 | [adr/](adr/) | Decisions made after this baseline |
@@ -462,7 +463,27 @@ Use plain unidirectional data flow with no MVI framework.
 - `XRoute(viewModel)` collects with `collectAsStateWithLifecycle`. It delegates to a stateless `XScreen(state, callbacks)`, which is the unit for previews, Roborazzi and Compose tests.
 - "Today" comes from `DateTicker: Flow<LocalDate>` in `:core:domain`:
   - It emits the current date, then delays to the next midnight.
-  - The Android implementation also re-emits on resume and on a context-registered `TIME_SET`, `TIMEZONE_CHANGED` and `DATE_CHANGED` receiver.
+  - **As built (ROADMAP R1).** `RealDateTicker` takes an optional `TimeChangeSignal` (`:core:domain`;
+    default `NoTimeChangeSignal`, a source that never fires, so every existing caller is unchanged): a
+    `Flow<Unit>` of invalidation hints with no payload. On each cycle it races the midnight delay against
+    the signal — whichever comes first — then always re-reads `Clock` and `ZoneProvider`, emits only if
+    the recomputed date differs from the last one emitted, and arms a fresh delay to the new next
+    midnight. A firing that changes nothing produces no duplicate emission; a clock moved backwards
+    across a boundary emits the earlier date. `AndroidTimeChangeSignal` (`:app`,
+    `io.github.chrisjmendoza.yearal.time`) is the Android implementation: it fires on a context-registered
+    `RECEIVER_NOT_EXPORTED` receiver for `TIME_SET`, `TIMEZONE_CHANGED` and `DATE_CHANGED`
+    (`docs/security-and-privacy.md` §6.3), and on every activity resume through
+    `Application.ActivityLifecycleCallbacks` (not `ProcessLifecycleOwner`: `lifecycle-process` is not a
+    dependency of this app, and every resume, not only the first foregrounding, is a safe moment to
+    recompute). Construction does no registration; `IfcApplication.onCreate` calls its `start()` once,
+    the same place it arms the day-rollover alarm, so a half-constructed instance is never handed to
+    `registerReceiver`/`registerActivityLifecycleCallbacks`. `TimeModule` binds it and passes it to
+    `RealDateTicker`.
+  - The same `TimeChangeSignal` also reaches `DefaultObserveAgendaUseCase.invoke`/`presence`
+    (`:app`'s `AgendaModule`, default parameter for source compatibility), so a zone change re-buckets
+    an already-open Month/Day/Today/Year screen's agenda even though `ZoneProvider` itself is a plain
+    synchronous read, not a flow, and none of the repository or holiday-set flows emit on their own
+    (`docs/contracts/Events.md` §5).
 - Never call `LocalDate.now()` outside the `Clock` binding.
 
 ### Intercalary days in a 7-column grid
@@ -728,40 +749,61 @@ update-on-write path this section's "Data" bullet describes, per the two designs
 | | ICS parser fixtures. | |
 | ViewModels | Fakes from `:core:testing`, a fake `Clock` and `DateTicker`, Turbine, and `runTest`. Include a test that advances the clock across midnight. | JUnit4 |
 | Compose UI | Stateless `XScreen` tests under Robolectric (`@GraphicsMode(NATIVE)` for any test that depends on text metrics — legacy mode fakes every Text at one height). Cover semantics (content descriptions, selection) and the intercalary band in June 2028 and in December. Library modules pin `sdk=36` in `src/test/resources/robolectric.properties`: without a `targetSdk` in the test manifest Robolectric picks its newest SDK, where the Compose test rule's input injection breaks. | JUnit4 plus Robolectric 4.17 |
-| Screenshots | Roborazzi. The preview scanner auto-captures every `@Preview` in `:core:designsystem` and the features. | `verifyRoborazziDebug` |
-| | Explicit matrices for MonthGrid: {normal, June-leap, December} x {light, dark} x {font 1.0, 2.0} x {compact, expanded} x {LTR, RTL}. | |
+| Screenshots | Roborazzi. `generateComposePreviewRobolectricTests` (the Compose preview scanner) auto-captures every `@Preview` it finds; as of R6 / M2 T10 that is wired for `:core:designsystem` only — the features follow once `:core:designsystem`'s goldens are committed and reviewed. | `verifyRoborazziDebug`, guarded in CI (§6 "Goldens") |
+| | The MonthGrid matrix {normal, June-leap, December} x {light, dark} x {font 1.0, 2.0} x {compact, expanded} x {LTR, RTL} and the IfcDatePicker matrix {regular, Leap Day, Year Day, clamped, invalid year} x {dark, font 2.0, narrow} are `@Preview` combinations in `MonthGridPreviews.kt` / `IfcDatePickerPreviews.kt`, not hand-written Roborazzi tests — the scanner captures each combination once per preview function. | |
 | | Glance widgets through glance-appwidget-testing or previews. | |
 | Instrumented | Minimal smoke tests. They run nightly and on manual dispatch, not per push: app launch, a widget receiver smoke test, and the alarm re-arm after `TIME_SET` (adb broadcast). | emulator-runner |
 
 ### Goldens
 
 Robolectric native-graphics output differs between Windows and Linux, so CI (Linux) is the only recorder.
+Runbook, with the exact commands: [screenshots.md](screenshots.md).
 
-- A `workflow_dispatch` "record-screenshots" job (`.github/workflows/record-screenshots.yml`) runs
-  `recordRoborazziDebug` on `ubuntu-latest` and uploads the recorded images as a build artifact. It does
-  not commit them: every commit in this repo is GPG-signed (WORKFLOW.md §1), and a bot cannot hold that
-  key, so the owner downloads the artifact, reviews it, and commits the goldens locally with a signed
-  commit.
-- Local and agent runs use `compareRoborazziDebug`, which never blocks.
-- As of M2 T10 no module has a `captureRoboImage` test yet, so the workflow currently records zero
-  images; it lands ahead of the first screenshot test so that test's author has a working recorder
-  immediately. `verifyRoborazziDebug` joins `ci.yml` once the first goldens are committed to the repo.
-- Roborazzi's default output directory is under the gitignored `build/`. The task that writes the first
-  screenshot test therefore sets `roborazzi { outputDir }` in `ifc.android.compose` to a tracked
-  directory per module and widens the workflow's artifact glob to match.
+- **Tracked output directory.** `ifc.android.compose` sets `roborazzi { outputDir }` to
+  `<module>/src/test/screenshots/` (a tracked source directory, not Roborazzi's gitignored
+  `build/outputs/roborazzi` default) and `roborazzi { compare { outputDir } }` to an explicit `build/`
+  subdirectory, so `*_actual.png` / `*_compare.png` diff artifacts from a local `compareRoborazziDebug`
+  never dirty the tracked directory or need a `.gitignore` rule of their own.
+- **Recording.** A `workflow_dispatch` "record-screenshots" job (`.github/workflows/record-screenshots.yml`)
+  runs `recordRoborazziDebug` on `ubuntu-latest`, prints a per-module image count to the run summary, and
+  uploads the recorded `src/test/screenshots/` trees as a build artifact with their relative paths
+  preserved. It does not commit them: every commit in this repo is GPG-signed (WORKFLOW.md §1), and a bot
+  cannot hold that key, so the owner downloads the artifact, reviews it, and commits the goldens locally
+  with a signed commit.
+- **Local and agent runs** use `compareRoborazziDebug`, which never blocks — Windows rendering differs
+  from the Linux-recorded goldens by construction, so a local pixel mismatch is not a signal.
+  `./gradlew check` does not run any Roborazzi lifecycle task (`record`/`compare`/`verify`) at all, so
+  with no goldens tracked every `captureRoboImage` call in `testDebugUnitTest` is a no-op: `check` is
+  green whether or not goldens exist, and never fails from a pixel difference.
+- **First screenshot tests.** As of R6 / M2 T10, `:core:designsystem` is wired to Roborazzi's Compose
+  preview scanner (`roborazzi { generateComposePreviewRobolectricTests { ... } }` in
+  `core/designsystem/build.gradle.kts`, using the `sergio-sastre/ComposablePreviewScanner` +
+  `roborazzi-compose-preview-scanner-support` libraries, MIT and Apache-2.0 respectively,
+  `testImplementation` only). It generates one Robolectric test per `@Preview` under
+  `io.github.chrisjmendoza.yearal.core.designsystem`, fixed at `sdk=36`/`qualifiers=w360dp-h640dp-xhdpi`
+  and `@GraphicsMode(NATIVE)` for determinism, and currently produces 56 images (the MonthGrid and
+  IfcDatePicker preview matrices) with no golden committed yet. No other module has screenshot tests yet;
+  they are added module by module once this one's goldens exist and are reviewed.
+- **`verifyRoborazziDebug` in CI** is guarded, not unconditional: a step in `ci.yml` checks
+  `git ls-files '**/src/test/screenshots/*.png'` and only runs `verifyRoborazziDebug` when that is
+  non-empty, so CI stays green with zero goldens and starts enforcing them automatically the moment the
+  owner commits the first ones — no manual flag flip needed.
 
 ### CI gate per push
 
 `check` (per module: `spotlessCheck`, `lint` on Android modules, `test` — JVM and Robolectric —, the Dokka KDoc
-gate on JVM modules) and `:app:assembleDebug`; `verifyRoborazziDebug` joins once the first goldens are recorded (M2 T10).
+gate on JVM modules) and `:app:assembleDebug`; `verifyRoborazziDebug` runs whenever at least one golden PNG
+is tracked in git (guarded, not unconditional — see "Goldens" above).
 
 ## 7. CI/CD (GitHub Actions)
 
 - **`ci.yml`**
   - Triggers: pushes to `main`, and pull requests (cloud agents and Dependabot; see WORKFLOW.md §1).
   - Setup: ubuntu-latest, `actions/setup-java` (temurin 21), and `gradle/actions/setup-gradle` with caching.
-  - Steps: `./gradlew check :app:assembleDebug` (plus `verifyRoborazziDebug` once goldens exist).
-  - Artifacts: the debug APK on every run; test, lint and Roborazzi diff reports on failure.
+  - Steps: `./gradlew check :app:assembleDebug`, then `verifyRoborazziDebug` guarded behind a
+    `git ls-files` check for tracked goldens (§6 "Goldens").
+  - Artifacts: the debug APK on every run; test, lint and Roborazzi diff reports (`build/reports/roborazzi/`,
+    `build/outputs/roborazzi/`) on failure.
   - Add concurrency cancellation.
   - Optional: a separate fast job that runs `:core:calendar:test :core:domain:test :core:holidays:test`. It finishes in under a minute and gives agents early feedback.
 - **`record-screenshots.yml`:** manual dispatch. See section 6.

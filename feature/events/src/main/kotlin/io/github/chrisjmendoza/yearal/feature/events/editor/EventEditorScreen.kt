@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -57,8 +59,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
@@ -84,6 +88,8 @@ private val SectionSpacing = 16.dp
 private val FieldSpacing = 8.dp
 private val MinTouchTarget = 48.dp
 private val ChipSpacing = 8.dp
+private val ProgressIndicatorSize = 24.dp
+private val ProgressIndicatorStroke = 2.dp
 
 /**
  * The event editor (`EventEditorKey`, `docs/ROADMAP.md` M4 T4): collects
@@ -161,6 +167,7 @@ fun EventEditorRoute(
                 onRestoreAllOccurrences = viewModel::restoreAllOccurrences,
                 onDismissNotificationPermissionNotice = viewModel::dismissNotificationPermissionNotice,
                 onOpenNotificationSettings = { openNotificationSettings(context) },
+                onDismissRecurrenceResetNotice = viewModel::dismissRecurrenceResetNotice,
             ),
         modifier = modifier,
     )
@@ -204,6 +211,7 @@ data class EventEditorCallbacks(
     val onRestoreAllOccurrences: () -> Unit,
     val onDismissNotificationPermissionNotice: () -> Unit,
     val onOpenNotificationSettings: () -> Unit,
+    val onDismissRecurrenceResetNotice: () -> Unit,
 )
 
 /** Which date field a picker dialog is currently editing. */
@@ -361,11 +369,23 @@ private fun EditorTopBar(
         },
         actions = {
             if (loaded != null && !loaded.isNew) {
-                IconButton(onClick = callbacks.onRequestDelete) {
+                IconButton(onClick = callbacks.onRequestDelete, enabled = !loaded.isSaving) {
                     Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.events_editor_delete))
                 }
             }
-            IconButton(onClick = callbacks.onSave, enabled = loaded?.canSave == true) {
+            // ROADMAP R2: a save or delete in flight shows progress and disables Save, so a second tap
+            // before the first write lands cannot start a second one.
+            if (loaded?.isSaving == true) {
+                val savingDescription = stringResource(R.string.events_editor_saving)
+                CircularProgressIndicator(
+                    modifier =
+                        Modifier.size(ProgressIndicatorSize).padding(horizontal = FieldSpacing / 2).semantics {
+                            contentDescription = savingDescription
+                        },
+                    strokeWidth = ProgressIndicatorStroke,
+                )
+            }
+            IconButton(onClick = callbacks.onSave, enabled = loaded != null && loaded.canSave && !loaded.isSaving) {
                 Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.events_editor_save))
             }
         },
@@ -565,6 +585,7 @@ private fun RecurrenceSection(
                 label = stringResource(R.string.events_recurrence_option_yearly_ifc, state.startIfcDayLabel),
                 selected = state.recurrenceKind == RecurrenceKind.YEARLY_IFC,
                 onClick = { callbacks.onRecurrenceKindChange(RecurrenceKind.YEARLY_IFC) },
+                supportingText = yearlyIfcSupportingText(state),
             )
             RecurrenceOption(
                 label =
@@ -574,18 +595,25 @@ private fun RecurrenceSection(
                     ),
                 selected = state.recurrenceKind == RecurrenceKind.YEARLY_GREGORIAN,
                 onClick = { callbacks.onRecurrenceKindChange(RecurrenceKind.YEARLY_GREGORIAN) },
+                supportingText = yearlyGregorianSupportingText(state),
             )
             if (state.monthlyIfcAvailable) {
                 RecurrenceOption(
                     label = stringResource(R.string.events_recurrence_option_monthly_ifc),
                     selected = state.recurrenceKind == RecurrenceKind.MONTHLY_IFC,
                     onClick = { callbacks.onRecurrenceKindChange(RecurrenceKind.MONTHLY_IFC) },
+                    supportingText =
+                        stringResource(
+                            R.string.events_editor_recurrence_explainer_monthly_ifc,
+                            IfcDate.from(state.startDate).dayOfMonth,
+                        ),
                 )
             }
             RecurrenceOption(
                 label = stringResource(R.string.events_recurrence_option_weekly),
                 selected = state.recurrenceKind == RecurrenceKind.WEEKLY,
                 onClick = { callbacks.onRecurrenceKindChange(RecurrenceKind.WEEKLY) },
+                supportingText = stringResource(R.string.events_editor_recurrence_explainer_weekly),
             )
         }
         if (state.recurrenceKind != RecurrenceKind.NONE) {
@@ -593,6 +621,83 @@ private fun RecurrenceSection(
                 LeapDayPolicySection(policy = state.leapDayPolicy, onChange = callbacks.onLeapDayPolicyChange)
             }
             RecurrenceEndSection(state = state, callbacks = callbacks, formatter = formatter, onPickUntil = onPickUntil)
+        }
+        if (state.showRecurrenceResetNotice) {
+            RecurrenceResetNotice(onDismiss = callbacks.onDismissRecurrenceResetNotice)
+        }
+    }
+}
+
+/**
+ * The one-line explainer under "yearly on the IFC date" (ROADMAP R4): whether the Gregorian date this
+ * position falls on shifts by a day in leap years ([EventEditorUiState.Loaded.yearlyIfcGregorianShifts],
+ * `docs/calendar-spec.md` §7.7), or the fixed Gregorian date for Year Day. `null` on a Leap Day anchor,
+ * whose common-year behaviour is explained by [LeapDayPolicySection] instead, right below.
+ */
+@Composable
+private fun yearlyIfcSupportingText(state: EventEditorUiState.Loaded): String? =
+    when (IfcDate.from(state.startDate)) {
+        is IfcDate.Regular -> {
+            if (state.yearlyIfcGregorianShifts) {
+                stringResource(R.string.events_editor_recurrence_explainer_yearly_ifc_shift, state.startIfcDayLabel)
+            } else {
+                stringResource(R.string.events_editor_recurrence_explainer_yearly_ifc_stable, state.startIfcDayLabel)
+            }
+        }
+
+        is IfcDate.YearDay -> {
+            stringResource(R.string.events_editor_recurrence_explainer_yearly_ifc_year_day)
+        }
+
+        is IfcDate.LeapDay -> {
+            null
+        }
+    }
+
+/**
+ * The one-line explainer under "yearly on the Gregorian date" (ROADMAP R4): whether the IFC date this
+ * position falls on shifts in leap years ([EventEditorUiState.Loaded.yearlyGregorianIfcShifts]).
+ */
+@Composable
+private fun yearlyGregorianSupportingText(state: EventEditorUiState.Loaded): String =
+    if (state.yearlyGregorianIfcShifts) {
+        stringResource(R.string.events_editor_recurrence_explainer_yearly_gregorian_shift, state.startGregorianDayLabel)
+    } else {
+        stringResource(
+            R.string.events_editor_recurrence_explainer_yearly_gregorian_stable,
+            state.startGregorianDayLabel,
+        )
+    }
+
+/**
+ * A dismissible, TalkBack-announced explanation shown after the editor reset [RecurrenceKind] from
+ * [RecurrenceKind.MONTHLY_IFC] to [RecurrenceKind.NONE] on its own (ROADMAP R3), because the start moved
+ * to Year Day or Leap Day — which belong to no month. A polite live region so a screen reader announces
+ * the change without stealing focus from whatever the user was doing.
+ */
+@Composable
+private fun RecurrenceResetNotice(onDismiss: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(FieldSpacing),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(FieldSpacing),
+        ) {
+            Text(
+                text = stringResource(R.string.events_editor_recurrence_reset_notice),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite },
+            )
+            IconButton(onClick = onDismiss, modifier = Modifier.heightIn(min = MinTouchTarget)) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.events_editor_recurrence_reset_dismiss),
+                )
+            }
         }
     }
 }
@@ -804,6 +909,7 @@ private fun RecurrenceOption(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
+    supportingText: String? = null,
 ) {
     // Selectable Surface (as IfcDatePicker's Option), not a plain Row + Modifier.selectable: Material3's
     // RadioButton drops its own 48dp touch target when its onClick is null (it hands that job to the
@@ -819,7 +925,18 @@ private fun RecurrenceOption(
             modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).padding(vertical = FieldSpacing / 2),
         ) {
             RadioButton(selected = selected, onClick = null)
-            Text(label, modifier = Modifier.padding(start = FieldSpacing))
+            Column(modifier = Modifier.padding(start = FieldSpacing)) {
+                Text(label)
+                // ROADMAP R4: a one-line, start-date-specific explainer under the option, e.g. "Every
+                // Sol 13 — the Gregorian date shifts by a day in leap years."
+                if (supportingText != null) {
+                    Text(
+                        text = supportingText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }
@@ -1012,6 +1129,7 @@ private val previewCallbacks =
         onRestoreAllOccurrences = {},
         onDismissNotificationPermissionNotice = {},
         onOpenNotificationSettings = {},
+        onDismissRecurrenceResetNotice = {},
     )
 
 @Preview(name = "New event", showBackground = true, heightDp = 1400)

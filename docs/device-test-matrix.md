@@ -9,7 +9,7 @@ version and date when it passes. Target coverage: API 26, 33 and 36, plus one Sa
 
 | # | Check | Result |
 |---|---|---|
-| W1 | Place the Today widget at each of its three sizes and the Month widget at both; the lines shown match the size. | |
+| W1 | Place the Today widget at each of its three sizes and the Month widget at both; the lines shown match the size. | 🟡 2026-09-19, Samsung, build `6175108`: the Today widget (2×1) reads well. The Month widget resized tall keeps the grid in the top third and leaves the rest empty — correct but wasteful; tracked as a design item in ROADMAP M2 T13. |
 | W2 | Dynamic colour on API 31+, the brand palette below; light and dark. | |
 | W3 | Tapping either widget opens the app. | |
 | W4 | With the app force-closed, wait past midnight (or change the device date): both widgets show the new date. | |
@@ -17,9 +17,18 @@ version and date when it passes. Target coverage: API 26, 33 and 36, plus one Sa
 | W6 | Reboot: the widgets are right after unlock. | |
 | W7 | Add, edit and delete an event: the Month widget's dot appears or disappears within about a second, also after a burst of quick edits. | |
 | W8 | An event on Year Day and one on Leap Day (2028) mark the band. | |
-| W9 | Widget picker previews on API ≤ 30, 31–34 and 35+. | |
+| W9 | Widget picker previews on API ≤ 30, 31–34 and 35+. | ❌ 2026-09-19, Samsung (One UI), build `6175108`: both entries showed only a loading spinner — that build's `previewLayout` was the loading layout. M5 T5 (`ed1aa22`) replaces it with static mock-ups; **re-check on the same phone with a build from `ed1aa22` or later**, and if the spinner persists, investigate the Samsung launcher's handling of `previewLayout` / `previewImage`. |
 | W10 | TalkBack on the Month widget: what is actually read out (one description, or every day number). | |
 | W11 | logcat shows no WorkManager complaint about the removed `ACCESS_NETWORK_STATE`. | |
+
+## Live date and zone (R1)
+
+| # | Check | Result |
+|---|---|---|
+| L1 | With Today, Month, Year or Day detail open, change the system time zone across a date line: the date and the agenda update within a second or two, without leaving the screen. | |
+| L2 | Background the app, change the time zone or the date, return: the same, through the resume path. | |
+| L3 | Set the clock backwards across midnight with a screen open: the earlier date is shown. | |
+| L4 | The Convert tab icon reads as "swap", not "refresh", in light and dark, on the bar and on the rail. | |
 
 ## Reminders (M6 T1, T3)
 
@@ -42,6 +51,7 @@ version and date when it passes. Target coverage: API 26, 33 and 36, plus one Sa
 | # | Check | Result |
 |---|---|---|
 | A1 | "Every Sol 13" and "every Year Day" events appear on the right days, on the grid, in Day detail and on Today. | |
+| A1b | Tap Save several times quickly on a new event: exactly one event is created. | |
 | A2 | "Delete this occurrence" removes only that day; undo restores it. | |
 | A3 | "Delete all data" empties events, resets settings, clears widget dots and any pending reminder. | |
 | A4 | `bmgr` backup → reinstall → restore round trip (security-and-privacy.md acceptance checklist). | |

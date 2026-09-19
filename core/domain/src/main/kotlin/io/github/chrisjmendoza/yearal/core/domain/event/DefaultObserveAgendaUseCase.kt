@@ -1,5 +1,7 @@
 package io.github.chrisjmendoza.yearal.core.domain.event
 
+import io.github.chrisjmendoza.yearal.core.domain.NoTimeChangeSignal
+import io.github.chrisjmendoza.yearal.core.domain.TimeChangeSignal
 import io.github.chrisjmendoza.yearal.core.domain.ZoneProvider
 import io.github.chrisjmendoza.yearal.core.domain.holiday.HolidayEngine
 import io.github.chrisjmendoza.yearal.core.domain.holiday.HolidaySetProvider
@@ -7,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.onStart
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -17,8 +20,15 @@ import java.time.ZoneId
  * with [Occurrence.dates] — exactly the pipeline of `docs/ARCHITECTURE.md` §3.4.
  *
  * It is a plain value with no clock of its own (CLAUDE.md rule 2): [zoneProvider] is read again on
- * every recomputation, never cached, so a zone change is picked up the next time a screen re-collects.
- * It does no I/O and logs no event content (rule 8).
+ * every recomputation, never cached. Recomputation happens whenever the repository or holiday-set flows
+ * emit, **and** whenever [timeChangeSignal] fires — [ZoneProvider] is a plain synchronous read, not a
+ * flow, so a zone change on its own emits nothing on those other sources and needs this separate prompt
+ * to be picked up by a screen that is already open (`docs/contracts/Events.md` §5; ROADMAP R1). It does
+ * no I/O and logs no event content (rule 8).
+ *
+ * @param timeChangeSignal defaults to [NoTimeChangeSignal] so existing callers keep exactly their
+ *   previous behaviour: a zone change is still picked up, just only on the next fresh subscription
+ *   (screen re-open) rather than immediately.
  *
  * Spec: `docs/ARCHITECTURE.md` §3.4; `docs/contracts/Events.md` §5 "ObserveAgendaUseCase".
  */
@@ -28,18 +38,20 @@ public class DefaultObserveAgendaUseCase(
     private val holidayEngine: HolidayEngine,
     private val holidaySetProvider: HolidaySetProvider,
     private val zoneProvider: ZoneProvider,
+    private val timeChangeSignal: TimeChangeSignal = NoTimeChangeSignal,
 ) : ObserveAgendaUseCase {
     /**
      * The agenda of every date of [range] with an entry or a holiday, re-emitted whenever the
-     * candidate events, the calendars (colour, visibility) or the enabled holiday sets change. Work
-     * happens off the calling thread ([Dispatchers.Default]).
+     * candidate events, the calendars (colour, visibility) or the enabled holiday sets change, or
+     * [timeChangeSignal] fires. Work happens off the calling thread ([Dispatchers.Default]).
      */
     override fun invoke(range: ClosedRange<LocalDate>): Flow<Map<LocalDate, DayAgenda>> =
         combine(
             eventRepository.observeAgendaCandidates(range),
             eventRepository.observeCalendars(),
             holidaySetProvider.enabledSets(),
-        ) { candidates, calendars, sets ->
+            timeChangeSignal.changes.onStart { emit(Unit) },
+        ) { candidates, calendars, sets, _ ->
             val zone = zoneProvider.currentZone()
             val entriesByDate = entriesByDate(candidates, calendars, range, zone)
             val holidaysByDate =
@@ -63,7 +75,8 @@ public class DefaultObserveAgendaUseCase(
         combine(
             eventRepository.observeAgendaCandidates(range),
             eventRepository.observeCalendars(),
-        ) { candidates, calendars ->
+            timeChangeSignal.changes.onStart { emit(Unit) },
+        ) { candidates, calendars, _ ->
             entriesByDate(candidates, calendars, range, zoneProvider.currentZone()).keys.toSortedSet()
         }.flowOn(Dispatchers.Default)
 

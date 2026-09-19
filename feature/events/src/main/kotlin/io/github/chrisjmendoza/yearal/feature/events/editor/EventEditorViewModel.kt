@@ -45,7 +45,7 @@ import java.time.ZoneId
  * @param key which event to edit, or none for a new one; assisted-injected (see [Factory]).
  * @param savedStateHandle the draft's process-death storage.
  * @param eventRepository loads the event to edit and saves or deletes it.
- * @param uidGenerator supplies the uid of a brand-new event.
+ * @param uidGenerator draws [draftUid] **once**, only for a brand-new event (ROADMAP R2).
  * @param zoneProvider the device zone: the initial value of a "fixed zone" choice.
  * @param dateTicker "today", for a new event with no prefilled start.
  * @param formatter renders every date through `:core:calendar`, never computing one itself (CLAUDE.md rule 1).
@@ -76,8 +76,23 @@ class EventEditorViewModel
         private var existingEvent: Event? = null
         private var loadedDraft: EventDraft? = null
 
+        // ROADMAP R2: drawn once, only for a brand-new event, and persisted immediately so process
+        // death between draft creation and the first save keeps the same uid — never a fresh generator
+        // call per save (the old bug: two overlapping saves of one new draft minted two uids and stored
+        // two events).
+        private val draftUid: String =
+            if (isNew) {
+                savedStateHandle.get<String>(KEY_DRAFT_UID)
+                    ?: uidGenerator.newUid().also { savedStateHandle[KEY_DRAFT_UID] = it }
+            } else {
+                ""
+            }
+
         private val draft = MutableStateFlow(restoreDraft(savedStateHandle) ?: initialDraft(key, zoneProvider))
-        private val flags = MutableStateFlow(EditorFlags())
+        private val flags =
+            MutableStateFlow(
+                EditorFlags(recurrenceResetNotice = savedStateHandle.get<Boolean>(KEY_RECURRENCE_RESET_NOTICE) == true),
+            )
         private val loading = MutableStateFlow(!isNew)
         private val notFound = MutableStateFlow(false)
         private val outbox = Channel<EventEditorEvent>(Channel.BUFFERED)
@@ -106,6 +121,29 @@ class EventEditorViewModel
                 }
             } else {
                 loadedDraft = draft.value
+            }
+            // ROADMAP R3: whenever the effective start makes the current "monthly (IFC)" choice
+            // impossible (Year Day or Leap Day belong to no month), reset it to "does not repeat"
+            // ourselves, visibly, instead of letting buildRecurrence silently save a one-off. Runs for
+            // every draft change and every ticker tick, so it also catches the case where the default
+            // "follows today" start rolls onto Year Day or Leap Day with no explicit setStartDate call.
+            viewModelScope.launch {
+                combine(dateTicker.today, draft) { today, current -> today to current }
+                    .collect { (today, current) -> resetRecurrenceIfInvalid(today, current) }
+            }
+        }
+
+        private fun resetRecurrenceIfInvalid(
+            today: LocalDate,
+            current: EventDraft,
+        ) {
+            val effectiveStart = current.startDate ?: today
+            if (current.recurrenceKind == RecurrenceKind.MONTHLY_IFC && !isMonthlyIfcAvailable(effectiveStart)) {
+                val corrected = current.copy(recurrenceKind = RecurrenceKind.NONE)
+                draft.value = corrected
+                corrected.saveTo(savedStateHandle)
+                savedStateHandle[KEY_RECURRENCE_RESET_NOTICE] = true
+                flags.update { it.copy(recurrenceResetNotice = true, saveFailed = false) }
             }
         }
 
@@ -204,6 +242,16 @@ class EventEditorViewModel
         fun dismissNotificationPermissionNotice() = flags.update { it.copy(notificationPermissionDenied = false) }
 
         /**
+         * Dismisses the "this event no longer repeats" notice (ROADMAP R3) without changing anything
+         * else. Persisted, so it stays dismissed across process death; it never reopens on its own —
+         * only another automatic reset shows it again.
+         */
+        fun dismissRecurrenceResetNotice() {
+            flags.update { it.copy(recurrenceResetNotice = false) }
+            savedStateHandle[KEY_RECURRENCE_RESET_NOTICE] = false
+        }
+
+        /**
          * Clears every exdate of the event being edited — "restore all" for occurrences individually
          * deleted from Day detail. The contract has no bulk clear, so this loops
          * [EventRepository.removeExdate] one date at a time, then refreshes the cached event and
@@ -220,20 +268,29 @@ class EventEditorViewModel
             }
         }
 
-        /** Opens the delete confirmation. No-op while creating a new event. */
+        /**
+         * Opens the delete confirmation. No-op while creating a new event or while
+         * [EditorFlags.isSaving] — the same in-flight guard as [save] (ROADMAP R2).
+         */
         fun requestDelete() {
-            if (!isNew) flags.update { it.copy(deleteConfirm = true, saveFailed = false) }
+            if (!isNew && !flags.value.isSaving) flags.update { it.copy(deleteConfirm = true, saveFailed = false) }
         }
 
         /** Dismisses the delete confirmation without deleting. */
         fun cancelDelete() = flags.update { it.copy(deleteConfirm = false) }
 
-        /** Deletes the event ("edit all / delete all" — per-occurrence delete is a later task) and signals [EventEditorEvent.Deleted]. */
+        /**
+         * Deletes the event ("edit all / delete all" — per-occurrence delete is a later task) and
+         * signals [EventEditorEvent.Deleted]. No-op while a save or an earlier delete is still in
+         * flight ([EditorFlags.isSaving], ROADMAP R2), so a second confirm tap cannot double-delete.
+         */
         fun confirmDelete() {
             val id = existingEvent?.id ?: return
-            flags.update { it.copy(deleteConfirm = false) }
+            if (flags.value.isSaving) return
+            flags.update { it.copy(deleteConfirm = false, isSaving = true) }
             viewModelScope.launch {
                 eventRepository.deleteEvent(id)
+                flags.update { it.copy(isSaving = false) }
                 outbox.send(EventEditorEvent.Deleted)
             }
         }
@@ -259,20 +316,33 @@ class EventEditorViewModel
 
         /**
          * Builds and saves the event ([buildEvent]); no-op while [EventEditorUiState.Loaded.canSave] is
-         * `false`. Signals [EventEditorEvent.Saved] on success; a broken precondition (the event, or its
-         * calendar, was deleted elsewhere) fails soft — the draft is kept and [EditorFlags.saveFailed] is
-         * set instead of crashing (`docs/contracts/Events.md` T4 guidance).
+         * `false` **or while a save or delete is already in flight** ([EditorFlags.isSaving], ROADMAP
+         * R2) — the guard is set synchronously, before the coroutine is even launched, so a second call
+         * made before the first has had a chance to run is a true no-op, not a second insert.
+         *
+         * A brand-new event always saves under the same [draftUid] (drawn once, ROADMAP R2), and on
+         * success [existingEvent] is set to the row as stored (with its real id): **at most one event is
+         * ever created per editor instance**, whatever happens after — every later call to [save] from
+         * this instance updates that same row.
+         *
+         * Signals [EventEditorEvent.Saved] on success; a broken precondition (the event or its calendar
+         * was deleted elsewhere, a duplicate uid, or [buildEvent] refusing an impossible recurrence)
+         * fails soft — the draft is kept, [EditorFlags.isSaving] is cleared and [EditorFlags.saveFailed]
+         * is set instead of crashing (`docs/contracts/Events.md` T4 guidance), so the user can retry.
          */
         fun save() {
             val state = uiState.value as? EventEditorUiState.Loaded ?: return
-            if (!state.canSave) return
+            if (!state.canSave || flags.value.isSaving) return
+            flags.update { it.copy(isSaving = true, saveFailed = false) }
             viewModelScope.launch {
                 try {
-                    val event = buildEvent(draft.value, state.startDate, existingEvent, uidGenerator)
-                    eventRepository.upsertEvent(event)
+                    val event = buildEvent(draft.value, state.startDate, existingEvent, draftUid)
+                    val savedId = eventRepository.upsertEvent(event)
+                    existingEvent = event.copy(id = savedId)
+                    flags.update { it.copy(isSaving = false) }
                     outbox.send(EventEditorEvent.Saved)
                 } catch (invalid: IllegalArgumentException) {
-                    flags.update { it.copy(saveFailed = true) }
+                    flags.update { it.copy(isSaving = false, saveFailed = true) }
                 }
             }
         }
@@ -308,14 +378,27 @@ sealed interface EventEditorEvent {
     data object RequestNotificationPermission : EventEditorEvent
 }
 
-/** Transient dialog and error flags, not part of [EventDraft] because they are never persisted. */
+/**
+ * Transient dialog and error flags, not part of [EventDraft]'s own primitive dump. Most are never
+ * persisted and reset to their defaults on process death; [recurrenceResetNotice] is the one exception
+ * (ROADMAP R3), kept under its own `SavedStateHandle` key so the notice survives a restart sensibly —
+ * still shown if it had not been dismissed yet, gone for good once it has.
+ *
+ * @property isSaving `true` while [EventEditorViewModel.save] or [EventEditorViewModel.confirmDelete]
+ *   has a write in flight (ROADMAP R2): both become a no-op while this holds. Never persisted — a
+ *   process death mid-write leaves nothing in flight to resume.
+ * @property recurrenceResetNotice `true` after the editor reset [EventDraft.recurrenceKind] from
+ *   [RecurrenceKind.MONTHLY_IFC] to [RecurrenceKind.NONE] on its own (ROADMAP R3).
+ */
 internal data class EditorFlags(
     val deleteConfirm: Boolean = false,
     val discardConfirm: Boolean = false,
     val saveFailed: Boolean = false,
+    val isSaving: Boolean = false,
     val notificationPermissionRequested: Boolean = false,
     val notificationPermissionDenied: Boolean = false,
     val exdateCount: Int = 0,
+    val recurrenceResetNotice: Boolean = false,
 )
 
 /** Builds the loaded state from [draft] against today's date, comparing with [loadedDraft] for [EventEditorUiState.Loaded.isDirty]. */
@@ -368,6 +451,10 @@ internal fun buildEventEditorUiState(
         showDiscardConfirm = flags.discardConfirm,
         exdateCount = flags.exdateCount,
         showNotificationPermissionNotice = flags.notificationPermissionDenied,
+        isSaving = flags.isSaving,
+        showRecurrenceResetNotice = flags.recurrenceResetNotice,
+        yearlyIfcGregorianShifts = yearlyIfcGregorianShifts(startDate),
+        yearlyGregorianIfcShifts = yearlyGregorianIfcShifts(startDate),
     )
 }
 
@@ -419,6 +506,11 @@ private const val KEY_RECURRENCE_END_KIND = "events.editor.recurrenceEndKind"
 private const val KEY_UNTIL_DATE = "events.editor.untilDate"
 private const val KEY_COUNT = "events.editor.count"
 private const val KEY_REMINDERS = "events.editor.reminders"
+
+// Not part of EventDraft.saveTo/restoreDraft: draftUid is drawn once, outside the field-by-field form
+// dump, and recurrenceResetNotice is an EditorFlags value (ROADMAP R2, R3).
+private const val KEY_DRAFT_UID = "events.editor.draftUid"
+private const val KEY_RECURRENCE_RESET_NOTICE = "events.editor.recurrenceResetNotice"
 
 private fun EventDraft.saveTo(handle: SavedStateHandle) {
     handle[KEY_TITLE] = title

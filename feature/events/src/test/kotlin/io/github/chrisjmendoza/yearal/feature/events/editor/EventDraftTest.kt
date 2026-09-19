@@ -1,6 +1,8 @@
 package io.github.chrisjmendoza.yearal.feature.events.editor
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
+import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.domain.event.Event
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCalendar
 import io.github.chrisjmendoza.yearal.core.domain.event.EventTiming
@@ -11,7 +13,7 @@ import io.github.chrisjmendoza.yearal.core.domain.event.Recurrence
 import io.github.chrisjmendoza.yearal.core.domain.event.RecurrenceEnd
 import io.github.chrisjmendoza.yearal.core.testing.EventFixtures
 import io.github.chrisjmendoza.yearal.core.testing.FakeEventRepository
-import io.github.chrisjmendoza.yearal.core.testing.FakeEventUidGenerator
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -27,7 +29,9 @@ import java.time.ZoneId
  */
 @RunWith(AndroidJUnit4::class)
 class EventDraftTest {
-    private val uid = FakeEventUidGenerator()
+    // A new event's uid: buildEvent no longer draws it, since the ViewModel now draws it once per draft
+    // and passes the same string on every call (ROADMAP R2) — see EventEditorViewModelTest for that.
+    private val uid = "uid-1"
 
     // ----- Round-trip: loading an existing event and saving it unchanged reproduces it exactly -----
 
@@ -80,7 +84,7 @@ class EventDraftTest {
                 startDate = LocalDate.of(2026, 6, 30),
                 fixedZoneId = ZoneId.of("UTC"),
             )
-        val event = buildEvent(draft, LocalDate.of(2026, 6, 30), existing = null, newUid = uid)
+        val event = buildEvent(draft, LocalDate.of(2026, 6, 30), existing = null, draftUid = uid)
 
         event.id shouldBe 0L
         event.uid shouldBe "uid-1"
@@ -101,7 +105,7 @@ class EventDraftTest {
                 endMinuteOfDay = 10 * 60 + 15,
                 fixedZoneId = ZoneId.of("UTC"),
             )
-        val event = buildEvent(draft, LocalDate.of(2026, 3, 8), existing = null, newUid = uid)
+        val event = buildEvent(draft, LocalDate.of(2026, 3, 8), existing = null, draftUid = uid)
 
         event.timing shouldBe
             EventTiming.Timed(LocalDate.of(2026, 3, 8), 9 * 60 + 30, 45, zone = null)
@@ -118,7 +122,7 @@ class EventDraftTest {
                 zoneChoice = ZoneChoice.FIXED,
                 fixedZoneId = EventFixtures.NEW_YORK,
             )
-        val event = buildEvent(draft, LocalDate.of(2026, 3, 8), existing = null, newUid = uid)
+        val event = buildEvent(draft, LocalDate.of(2026, 3, 8), existing = null, draftUid = uid)
 
         (event.timing as EventTiming.Timed).zone shouldBe EventFixtures.NEW_YORK
     }
@@ -134,7 +138,7 @@ class EventDraftTest {
                 allDayEndDate = LocalDate.of(2027, 1, 1),
                 fixedZoneId = ZoneId.of("UTC"),
             )
-        val event = buildEvent(draft, LocalDate.of(2026, 12, 30), existing = null, newUid = uid)
+        val event = buildEvent(draft, LocalDate.of(2026, 12, 30), existing = null, draftUid = uid)
 
         event.timing shouldBe EventTiming.AllDay(LocalDate.of(2026, 12, 30), 3)
     }
@@ -183,12 +187,60 @@ class EventDraftTest {
     }
 
     @Test
-    fun `monthly IFC is null-safe and falls back to None on an intercalary start`() {
+    fun `monthly IFC builds normally on a regular day`() {
         val draft = EventDraft(recurrenceKind = RecurrenceKind.MONTHLY_IFC, fixedZoneId = ZoneId.of("UTC"))
         buildRecurrence(draft, EventFixtures.SOL_13_2026) shouldBe IfcRecurrence.MonthlyOnDay(13)
-        // The editor hides "monthly" on Year Day and Leap Day (isMonthlyIfcAvailable), but the builder
-        // itself must never crash if it is reached anyway.
-        buildRecurrence(draft, EventFixtures.YEAR_DAY_2026) shouldBe Recurrence.None
+    }
+
+    // ----- ROADMAP R3: MONTHLY_IFC on Year Day or Leap Day must never silently become Recurrence.None
+    // (the bug the external review found: the option disappears from the UI, but a stale MONTHLY_IFC
+    // choice quietly saved as a one-off). The editor now resets the choice before this is ever reached
+    // (EventEditorViewModelTest), so this only fires for a caller that bypasses the ViewModel — and it
+    // must fail loudly, not guess.
+    @Test
+    fun `monthly IFC on Year Day throws instead of silently becoming a one-off`() {
+        val draft = EventDraft(recurrenceKind = RecurrenceKind.MONTHLY_IFC, fixedZoneId = ZoneId.of("UTC"))
+        shouldThrow<IllegalArgumentException> { buildRecurrence(draft, EventFixtures.YEAR_DAY_2026) }
+    }
+
+    @Test
+    fun `monthly IFC on Leap Day throws instead of silently becoming a one-off`() {
+        val draft = EventDraft(recurrenceKind = RecurrenceKind.MONTHLY_IFC, fixedZoneId = ZoneId.of("UTC"))
+        shouldThrow<IllegalArgumentException> { buildRecurrence(draft, EventFixtures.LEAP_DAY_2024) }
+    }
+
+    // ----- ROADMAP R3 sibling case: a Leap Day yearly-IFC rule re-derives cleanly when the start moves
+    // off Leap Day — confirmed correct, not a coercion bug: IfcRecurrence.yearlyOn never returns null,
+    // it just switches shape (YearlyOnIntercalary(LeapDay) -> YearlyOnDate) to match the new anchor.
+    @Test
+    fun `yearly IFC on Leap Day re-derives as YearlyOnDate when the start moves to a regular day`() {
+        val draft =
+            EventDraft(
+                recurrenceKind = RecurrenceKind.YEARLY_IFC,
+                leapDayPolicy = LeapDayPolicy.SKIP,
+                fixedZoneId = ZoneId.of("UTC"),
+            )
+        buildRecurrence(draft, EventFixtures.LEAP_DAY_2024) shouldBe
+            IfcRecurrence.YearlyOnIntercalary(IntercalaryDay.LeapDay(LeapDayPolicy.SKIP))
+
+        buildRecurrence(draft, EventFixtures.SOL_13_2026) shouldBe IfcRecurrence.yearlyOn(EventFixtures.SOL_13_2026)
+    }
+
+    // ----- ROADMAP R3 sibling case: the end condition (kind, until date, count) is untouched by a
+    // recurrence-kind change; only the recurrence itself is rebuilt.
+    @Test
+    fun `the end condition is kept when the recurrence kind changes`() {
+        val draft =
+            EventDraft(
+                recurrenceKind = RecurrenceKind.YEARLY_IFC,
+                recurrenceEndKind = RecurrenceEndKind.UNTIL,
+                untilDate = LocalDate.of(2030, 6, 30),
+                fixedZoneId = ZoneId.of("UTC"),
+            )
+        val changed = draft.copy(recurrenceKind = RecurrenceKind.WEEKLY)
+
+        val rule = buildRecurrence(changed, EventFixtures.SOL_13_2026) as Recurrence.Gregorian
+        rule shouldBe Recurrence.Gregorian("FREQ=WEEKLY;UNTIL=20300630")
     }
 
     @Test
@@ -363,5 +415,43 @@ class EventDraftTest {
     @Test
     fun `a fresh EventDraft's date is null, meaning it follows today`() {
         EventDraft(fixedZoneId = ZoneId.of("UTC")).startDate shouldBe null
+    }
+
+    // ----- ROADMAP R4: the recurrence explainers' shift claims, checked against `:core:calendar`
+    // itself (never a literal date) so the boundary is provably right, not just plausible-looking.
+
+    @Test
+    fun `yearlyIfcGregorianShifts matches the spec's IFC March 4 to June 28 shifting range`() {
+        // Just inside the range (docs/calendar-spec.md section 7 dot 7): the Gregorian date these IFC
+        // positions fall on is one day earlier in a leap year than in a common year.
+        yearlyIfcGregorianShifts(IfcDate.of(2026, IfcMonth.MARCH.number, 4).toLocalDate()) shouldBe true
+        yearlyIfcGregorianShifts(IfcDate.of(2026, IfcMonth.JUNE.number, 28).toLocalDate()) shouldBe true
+        // Just outside it: January, February and the start of March are identical in both tables, and
+        // Sol always starts Gregorian June 18 whichever year it is.
+        yearlyIfcGregorianShifts(IfcDate.of(2026, IfcMonth.MARCH.number, 3).toLocalDate()) shouldBe false
+        yearlyIfcGregorianShifts(IfcDate.of(2026, IfcMonth.SOL.number, 1).toLocalDate()) shouldBe false
+        yearlyIfcGregorianShifts(IfcDate.of(2026, IfcMonth.JANUARY.number, 1).toLocalDate()) shouldBe false
+        // Year Day and Leap Day are always Gregorian December 31 and June 17: never a shift.
+        yearlyIfcGregorianShifts(EventFixtures.YEAR_DAY_2026) shouldBe false
+        yearlyIfcGregorianShifts(EventFixtures.LEAP_DAY_2024) shouldBe false
+    }
+
+    @Test
+    fun `yearlyGregorianIfcShifts matches the spec's Gregorian February 29 to June 17 shifting range`() {
+        // February 29 has no common-year analogue: the claim is withheld, not guessed (WORKFLOW section 5).
+        yearlyGregorianIfcShifts(LocalDate.of(REFERENCE_LEAP_YEAR, 2, 29)) shouldBe false
+        // Just inside the range.
+        yearlyGregorianIfcShifts(LocalDate.of(2026, 3, 1)) shouldBe true
+        yearlyGregorianIfcShifts(LocalDate.of(2026, 6, 17)) shouldBe true
+        // Just outside it: Sol 1 is always Gregorian June 18 (IfcMonth.SOL KDoc), and January/February
+        // are identical in both tables.
+        yearlyGregorianIfcShifts(LocalDate.of(2026, 6, 18)) shouldBe false
+        yearlyGregorianIfcShifts(LocalDate.of(2026, 2, 28)) shouldBe false
+        // Sol 13, 2026 (June 30) is well outside the range.
+        yearlyGregorianIfcShifts(EventFixtures.SOL_13_2026) shouldBe false
+    }
+
+    private companion object {
+        const val REFERENCE_LEAP_YEAR = 2024
     }
 }

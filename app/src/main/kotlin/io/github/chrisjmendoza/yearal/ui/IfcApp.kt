@@ -5,6 +5,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -65,7 +66,12 @@ fun IfcApp(viewModel: MainViewModel = hiltViewModel()) {
                                 }
                         if (root != null) tabs.select(destination, root)
                     },
-                    icon = { Icon(destination.icon, contentDescription = null) },
+                    icon = {
+                        when (val icon = destination.icon) {
+                            is TabIcon.Vector -> Icon(icon.imageVector, contentDescription = null)
+                            is TabIcon.Resource -> Icon(painterResource(icon.id), contentDescription = null)
+                        }
+                    },
                     label = { Text(stringResource(destination.labelRes)) },
                 )
             }

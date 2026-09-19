@@ -46,4 +46,11 @@ dependencies {
 
     testImplementation(project(":core:testing"))
     testImplementation(libs.findLibrary("kotlinx-coroutines-test").get())
+    // Robolectric tests that boot the real IfcApplication reach Room through AppStartup's reminder
+    // task (IfcApplication.onCreate -> AlarmReminderScheduler.reschedule -> RoomEventRepository), so
+    // this module needs the same desktop sqliteJni natives ifc.room already gives :core:data — see
+    // that convention plugin's own comment. Pre-existing tests that boot IfcApplication without a
+    // kotlinx-coroutines-test runTest (DayRolloverWiringTest) never surfaced the missing natives
+    // because nothing was watching for the resulting uncaught background exception.
+    testImplementation(libs.findLibrary("androidx-sqlite-bundled-jvm").get())
 }

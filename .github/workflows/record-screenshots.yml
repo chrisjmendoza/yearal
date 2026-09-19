@@ -39,25 +39,46 @@ jobs:
           validate-wrappers: true
 
       # Runs recordRoborazziDebug in every module that has the task (Gradle's unqualified-task-name
-      # aggregation), the same way `./gradlew check` runs per module. As of 2026-09-18 no module has a
-      # captureRoboImage test yet (M2 T4/T7/T8/T9 shipped without screenshot coverage), so this step
-      # currently records zero images — it lands now so the first screenshot test in a future push has a
-      # working recorder immediately.
+      # aggregation), the same way `./gradlew check` runs per module. As of the R6 / M2 T10 push, only
+      # :core:designsystem has a screenshot test (its preview-scanner-generated
+      # RoborazziPreviewParameterizedTests, one test per @Preview); other Compose modules record zero
+      # images until they get their own screenshot tests.
       - name: Record screenshots
         run: ./gradlew recordRoborazziDebug --console=plain
 
-      # Roborazzi's default output directory is <module>/build/outputs/roborazzi (verified against the
-      # 1.74.0 plugin, the version pinned in gradle/libs.versions.toml); no module configures a different
-      # `roborazzi { outputDir.set(...) }`. That default is under the gitignored build/ directory, so the
-      # first screenshot task must point goldens at a tracked directory (docs/ARCHITECTURE.md §6
-      # "Goldens") and broaden this glob to match.
+      # `ifc.android.compose` points `roborazzi { outputDir }` at the tracked <module>/src/test/screenshots/
+      # directory, not Roborazzi's gitignored build/ default (docs/ARCHITECTURE.md §6 "Goldens"), so this
+      # glob must match that path with its module-relative structure preserved: the owner unzips the
+      # artifact at the repo root and `git add`s the result directly.
       - name: Upload recorded goldens
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: roborazzi-goldens
-          path: "**/build/outputs/roborazzi/**"
+          path: "**/src/test/screenshots/**"
           if-no-files-found: warn
           retention-days: 14
+
+      # Human-readable count per module in the run summary, so the owner knows what to expect before
+      # downloading the artifact (docs/screenshots.md "How to record").
+      - name: Summarize recorded images
+        if: always()
+        run: |
+          {
+            echo "## Recorded screenshot goldens"
+            echo
+            echo "| Module | Images |"
+            echo "|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          shopt -s globstar nullglob
+          total=0
+          for dir in */src/test/screenshots/ */*/src/test/screenshots/; do
+            [ -d "$dir" ] || continue
+            module="${dir%/src/test/screenshots/}"
+            count=$(find "$dir" -name '*.png' | wc -l)
+            total=$((total + count))
+            echo "| \`$module\` | $count |" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "| **Total** | **$total** |" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Roborazzi HTML report
         if: always()

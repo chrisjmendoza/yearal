@@ -6,6 +6,7 @@ import io.github.chrisjmendoza.yearal.core.domain.holiday.ifcSet
 import io.github.chrisjmendoza.yearal.core.testing.EventFixtures
 import io.github.chrisjmendoza.yearal.core.testing.FakeEventRepository
 import io.github.chrisjmendoza.yearal.core.testing.FakeHolidaySetProvider
+import io.github.chrisjmendoza.yearal.core.testing.FakeTimeChangeSignal
 import io.github.chrisjmendoza.yearal.core.testing.FakeZoneProvider
 import io.kotest.assertions.assertSoftly
 import io.kotest.matchers.collections.shouldContainExactly
@@ -16,7 +17,9 @@ import io.kotest.matchers.maps.shouldContainKey
 import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 import java.time.LocalDate
@@ -39,12 +42,14 @@ class DefaultObserveAgendaUseCaseTest {
         repository: FakeEventRepository,
         holidaySets: List<HolidaySet> = emptyList(),
         zoneProvider: FakeZoneProvider = FakeZoneProvider(utc),
+        timeChangeSignal: FakeTimeChangeSignal = FakeTimeChangeSignal(),
     ) = DefaultObserveAgendaUseCase(
         eventRepository = repository,
         recurrenceExpander = DefaultRecurrenceExpander(),
         holidayEngine = HolidayEngine(),
         holidaySetProvider = FakeHolidaySetProvider(holidaySets),
         zoneProvider = zoneProvider,
+        timeChangeSignal = timeChangeSignal,
     )
 
     // --- Year Day and Leap Day (CLAUDE.md rule 6) ---------------------------------------------------
@@ -230,6 +235,52 @@ class DefaultObserveAgendaUseCaseTest {
             // read the zone again rather than reuse whatever was current when the use case was built.
             zoneProvider.set(tokyo)
             useCase.invoke(range).first().keys shouldContainExactly setOf(LocalDate.of(2026, 1, 6))
+        }
+
+    @Test
+    fun `a zone change with the signal fired re-buckets a live occurrence, with nothing changed in the repository`() =
+        runTest {
+            val repository = FakeEventRepository()
+            // 22:00-23:00 America/New_York (EST) on Jan 5 is 12:00-13:00 in Tokyo the next day.
+            val event =
+                Event(
+                    uid = "zoned-live",
+                    title = "Late call",
+                    timing = EventTiming.Timed(LocalDate.of(2026, 1, 5), 22 * 60, 60, newYork),
+                )
+            repository.seed(listOf(event))
+            val zoneProvider = FakeZoneProvider(newYork)
+            val signal = FakeTimeChangeSignal()
+            val useCase = useCase(repository, zoneProvider = zoneProvider, timeChangeSignal = signal)
+            val range = LocalDate.of(2026, 1, 5)..LocalDate.of(2026, 1, 6)
+
+            // Both invoke() and presence() stay subscribed for the whole test — the same live
+            // collection the signal is meant to wake up, never a fresh subscription — and both flows
+            // genuinely run on Dispatchers.Default (see the KDoc on invoke()/presence()), so the test
+            // waits on real channels rather than on runCurrent(), which only drives virtual time on
+            // the test dispatcher and cannot observe work on a different, real dispatcher.
+            val agendaKeys = Channel<Set<LocalDate>>(Channel.UNLIMITED)
+            val presenceKeys = Channel<Set<LocalDate>>(Channel.UNLIMITED)
+            val liveAgenda = launch { useCase.invoke(range).collect { agendaKeys.send(it.keys) } }
+            val livePresence = launch { useCase.presence(range).collect { presenceKeys.send(it) } }
+
+            assertSoftly {
+                agendaKeys.receive() shouldBe setOf(LocalDate.of(2026, 1, 5))
+                presenceKeys.receive() shouldBe setOf(LocalDate.of(2026, 1, 5))
+            }
+
+            // Nothing in the repository changes — only the device zone and the invalidation signal,
+            // exactly what a real TIMEZONE_CHANGED broadcast on an already-open screen looks like.
+            zoneProvider.set(tokyo)
+            signal.fire()
+
+            assertSoftly {
+                agendaKeys.receive() shouldBe setOf(LocalDate.of(2026, 1, 6))
+                presenceKeys.receive() shouldBe setOf(LocalDate.of(2026, 1, 6))
+            }
+
+            liveAgenda.cancel()
+            livePresence.cancel()
         }
 
     @Test

@@ -59,6 +59,21 @@ sealed interface EventEditorUiState {
      * @property showNotificationPermissionNotice `true` after the user denied the in-context
      *   `POST_NOTIFICATIONS` request (FEATURES E4, P2): a quiet, dismissible explanation that
      *   reminders are still saved but notifications are off. Saving is never blocked by this.
+     * @property isSaving `true` while [EventEditorViewModel.save] or
+     *   [EventEditorViewModel.confirmDelete] has a write in flight (ROADMAP R2): the Save and Delete
+     *   actions are disabled and a progress indicator shows, so a second tap before the first write
+     *   lands is a no-op instead of a second insert. Cleared on both success and failure.
+     * @property showRecurrenceResetNotice `true` right after the editor reset [recurrenceKind] from
+     *   [RecurrenceKind.MONTHLY_IFC] to [RecurrenceKind.NONE] on its own (ROADMAP R3), because the start
+     *   moved to Year Day or Leap Day — which belong to no month — while "monthly (IFC)" was chosen. A
+     *   dismissible, TalkBack-announced explanation; dismissing it never reopens on its own.
+     * @property yearlyIfcGregorianShifts `true` when [RecurrenceKind.YEARLY_IFC] anchored on [startDate]
+     *   lands on a different Gregorian date in leap years than in common years (ROADMAP R4;
+     *   `docs/calendar-spec.md` §7.7). Always `false` for Year Day and Leap Day.
+     * @property yearlyGregorianIfcShifts `true` when [RecurrenceKind.YEARLY_GREGORIAN] anchored on
+     *   [startDate] lands on a different IFC date in leap years than in common years (ROADMAP R4;
+     *   `docs/calendar-spec.md` §7.7). `false` for February 29, which has no common-year analogue to
+     *   compare against.
      */
     data class Loaded(
         val isNew: Boolean,
@@ -94,5 +109,9 @@ sealed interface EventEditorUiState {
         val showDiscardConfirm: Boolean,
         val exdateCount: Int = 0,
         val showNotificationPermissionNotice: Boolean = false,
+        val isSaving: Boolean = false,
+        val showRecurrenceResetNotice: Boolean = false,
+        val yearlyIfcGregorianShifts: Boolean = false,
+        val yearlyGregorianIfcShifts: Boolean = false,
     ) : EventEditorUiState
 }

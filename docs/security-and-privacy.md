@@ -1,6 +1,6 @@
 # Security & Privacy Plan
 
-Status: **current as of M5 T2** (2026-09-18) — the plan below is implemented wherever a milestone/task is
+Status: **current as of M6 T1/T3** (2026-09-19) — the plan below is implemented wherever a milestone/task is
 cited inline (permissions declared, backup rules, the manifest-permission CI gate, the in-app Privacy
 screen); sections with no milestone citation (app lock, widget privacy mode, `.ics` import/export, URL
 subscriptions) are still planning, for a later release. Last verified against Android / Google Play / GitHub

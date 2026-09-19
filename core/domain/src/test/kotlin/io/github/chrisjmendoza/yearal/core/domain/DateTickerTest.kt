@@ -1,5 +1,6 @@
 package io.github.chrisjmendoza.yearal.core.domain
 
+import io.github.chrisjmendoza.yearal.core.testing.FakeTimeChangeSignal
 import io.github.chrisjmendoza.yearal.core.testing.FakeZoneProvider
 import io.github.chrisjmendoza.yearal.core.testing.MutableClock
 import io.kotest.assertions.assertSoftly
@@ -153,6 +154,97 @@ class DateTickerTest {
             advanceTimeBy(Duration.ofDays(1).plusSeconds(1).toMillis())
             runCurrent()
             emissions shouldBe listOf(LocalDate.of(2026, 6, 15), LocalDate.of(2026, 6, 16))
+
+            collector.cancel()
+        }
+
+    // --- TimeChangeSignal: the invalidation input an Android layer drives (docs/ROADMAP.md R1) --------
+
+    @Test
+    fun `a signal after a zone change crossing a date boundary emits immediately and re-arms midnight`() =
+        runTest {
+            val la = ZoneId.of("America/Los_Angeles")
+            val kiritimati = ZoneId.of("Pacific/Kiritimati") // UTC+14
+            // 2026-09-18T03:00Z is 2026-09-17T20:00 PDT (UTC-7) in LA, but already 2026-09-18T17:00 in
+            // Kiritimati (UTC+14) — a full day ahead, without any time passing.
+            val instant = Instant.parse("2026-09-18T03:00:00Z")
+            val clock = MutableClock(instant, la)
+            val zoneProvider = FakeZoneProvider(la)
+            val signal = FakeTimeChangeSignal()
+            val ticker = RealDateTicker(clock, zoneProvider, signal)
+            val emissions = mutableListOf<LocalDate>()
+            val collector = launch { ticker.today.toList(emissions) }
+            runCurrent()
+            emissions shouldBe listOf(LocalDate.of(2026, 9, 17))
+
+            // LA's own midnight (about 4h away) is never reached: the signal preempts it.
+            zoneProvider.set(kiritimati)
+            signal.fire()
+            runCurrent()
+            emissions shouldBe listOf(LocalDate.of(2026, 9, 17), LocalDate.of(2026, 9, 18))
+
+            // The old LA-midnight delay (~4h out from the start) must not leave a stale emission
+            // behind now that the ticker has re-armed for Kiritimati's own, much later, midnight
+            // (7h out from the start): advancing virtual time past the old instant alone, with the
+            // fake clock left untouched, must emit nothing — a stale timer firing here would be the
+            // bug this test exists to catch.
+            advanceTimeBy(Duration.ofHours(5).toMillis())
+            runCurrent()
+            emissions shouldBe listOf(LocalDate.of(2026, 9, 17), LocalDate.of(2026, 9, 18))
+
+            // Let real time actually reach the freshly computed Kiritimati midnight (7h after the
+            // signal, so 2h + 1s beyond the 5h already advanced): the fake clock has to be moved
+            // forward too, the same way every other rollover test in this file does.
+            clock.set(Instant.parse("2026-09-18T10:00:01Z"))
+            advanceTimeBy(Duration.ofHours(2).plusSeconds(1).toMillis())
+            runCurrent()
+            emissions shouldBe
+                listOf(LocalDate.of(2026, 9, 17), LocalDate.of(2026, 9, 18), LocalDate.of(2026, 9, 19))
+
+            collector.cancel()
+        }
+
+    @Test
+    fun `a signal that changes nothing produces no duplicate emission`() =
+        runTest {
+            val zone = ZoneOffset.UTC
+            val clock = MutableClock(Instant.parse("2026-09-17T10:00:00Z"), zone)
+            val zoneProvider = FakeZoneProvider(zone)
+            val signal = FakeTimeChangeSignal()
+            val ticker = RealDateTicker(clock, zoneProvider, signal)
+            val emissions = mutableListOf<LocalDate>()
+            val collector = launch { ticker.today.toList(emissions) }
+            runCurrent()
+            emissions shouldBe listOf(LocalDate.of(2026, 9, 17))
+
+            // A spurious TIME_SET / a resume with nothing actually different about the clock or zone.
+            signal.fire()
+            runCurrent()
+            signal.fire()
+            runCurrent()
+            emissions shouldBe listOf(LocalDate.of(2026, 9, 17))
+
+            collector.cancel()
+        }
+
+    @Test
+    fun `the clock set backwards across midnight and signalled emits the earlier date`() =
+        runTest {
+            val zone = ZoneOffset.UTC
+            val clock = MutableClock(Instant.parse("2026-09-18T00:30:00Z"), zone)
+            val zoneProvider = FakeZoneProvider(zone)
+            val signal = FakeTimeChangeSignal()
+            val ticker = RealDateTicker(clock, zoneProvider, signal)
+            val emissions = mutableListOf<LocalDate>()
+            val collector = launch { ticker.today.toList(emissions) }
+            runCurrent()
+            emissions shouldBe listOf(LocalDate.of(2026, 9, 18))
+
+            // The user sets the clock back an hour, into the 17th (an ACTION_TIME_CHANGED case).
+            clock.set(Instant.parse("2026-09-17T23:30:00Z"))
+            signal.fire()
+            runCurrent()
+            emissions shouldBe listOf(LocalDate.of(2026, 9, 18), LocalDate.of(2026, 9, 17))
 
             collector.cancel()
         }

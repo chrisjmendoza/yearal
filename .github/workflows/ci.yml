@@ -38,6 +38,25 @@ jobs:
       - name: Gate
         run: ./gradlew check :app:assembleDebug --console=plain
 
+      # ROADMAP R6 / M2 T10: `check` never runs verifyRoborazziDebug itself (the Roborazzi Gradle
+      # plugin does not hook it into `check`), and goldens only exist in the tracked
+      # src/test/screenshots/ directories once the owner has committed a recorded baseline
+      # (docs/ARCHITECTURE.md §6 "Goldens"). Until then verifyRoborazziDebug has nothing to compare
+      # against and would fail every preview as "missing golden", so it is skipped rather than run
+      # and ignored — a real regression must still fail the build once goldens exist.
+      - name: Check for recorded screenshot goldens
+        id: goldens
+        run: |
+          if git ls-files '**/src/test/screenshots/*.png' | head -1 | grep -q .; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify screenshot goldens
+        if: steps.goldens.outputs.present == 'true'
+        run: ./gradlew verifyRoborazziDebug --console=plain
+
       - name: Manifest permission allow-list self-test
         run: python3 scripts/check_manifest_permissions.py --self-test
 
@@ -51,7 +70,7 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
-      - name: Upload test and lint reports
+      - name: Upload test, lint and Roborazzi diff reports
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -59,4 +78,6 @@ jobs:
           path: |
             **/build/reports/tests/
             **/build/reports/lint-results-*.html
+            **/build/reports/roborazzi/**
+            **/build/outputs/roborazzi/**
           retention-days: 7

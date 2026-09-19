@@ -91,6 +91,28 @@
     <string name="events_recurrence_option_monthly_ifc">Monthly on this IFC day</string>
     <string name="events_recurrence_option_weekly">Weekly</string>
 
+    <!-- Recurrence explainers (ROADMAP R4): a one-line supporting text under each recurrence option,
+         concrete for the chosen start date, checked against docs/calendar-spec.md section 7 dot 7. -->
+    <!-- %1$s = the IFC day named in its month, e.g. "Sol 13". -->
+    <string name="events_editor_recurrence_explainer_yearly_ifc_shift">Every %1$s — the Gregorian date shifts by a day in leap years.</string>
+    <string name="events_editor_recurrence_explainer_yearly_ifc_stable">Every %1$s, the same Gregorian date every year.</string>
+    <string name="events_editor_recurrence_explainer_yearly_ifc_year_day">Always Gregorian December 31.</string>
+    <!-- %1$s = the Gregorian month and day, e.g. "Jun 30". -->
+    <string name="events_editor_recurrence_explainer_yearly_gregorian_shift">Every %1$s — the IFC date shifts in leap years.</string>
+    <string name="events_editor_recurrence_explainer_yearly_gregorian_stable">Every %1$s, the same IFC date every year.</string>
+    <!-- %1$d = day of the IFC month, 1..28. -->
+    <string name="events_editor_recurrence_explainer_monthly_ifc">IFC day %1$d of every month, 13 times a year.</string>
+    <string name="events_editor_recurrence_explainer_weekly">Every 7 real days. IFC weekdays shift after Year Day and Leap Day, so this will not stay on the same IFC weekday.</string>
+
+    <!-- ROADMAP R3: shown after the editor reset "monthly (IFC)" to "does not repeat" on its own because
+         the start moved to Year Day or Leap Day, which belong to no month. Announced to TalkBack as a
+         polite live region. -->
+    <string name="events_editor_recurrence_reset_notice">Year Day and Leap Day belong to no month, so a monthly IFC repeat cannot start there. This event no longer repeats — choose another repeat if you want one.</string>
+    <string name="events_editor_recurrence_reset_dismiss">Dismiss recurrence notice</string>
+
+    <!-- ROADMAP R2: shown next to the disabled Save action while a save or delete is in flight. -->
+    <string name="events_editor_saving">Saving…</string>
+
     <string name="events_editor_leap_day_policy_heading">In years with no Leap Day</string>
     <string name="events_editor_leap_day_policy_explainer">Leap Day only exists in leap years. Choose what happens the rest of the time.</string>
     <string name="events_editor_leap_day_policy_june28">Move to June 28 (the Gregorian date, June 17, stays the same)</string>

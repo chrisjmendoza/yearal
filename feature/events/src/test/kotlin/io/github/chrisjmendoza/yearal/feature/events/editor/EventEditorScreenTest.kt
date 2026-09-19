@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -62,6 +63,7 @@ class EventEditorScreenTest {
     private var restoreAllOccurrences = 0
     private var notificationNoticeDismissed = 0
     private var notificationSettingsOpened = 0
+    private var recurrenceResetNoticeDismissed = 0
 
     private var uiState: EventEditorUiState by mutableStateOf(EventEditorUiState.Loading)
 
@@ -92,6 +94,7 @@ class EventEditorScreenTest {
             onRestoreAllOccurrences = { restoreAllOccurrences++ },
             onDismissNotificationPermissionNotice = { notificationNoticeDismissed++ },
             onOpenNotificationSettings = { notificationSettingsOpened++ },
+            onDismissRecurrenceResetNotice = { recurrenceResetNoticeDismissed++ },
         )
 
     private fun baseState(
@@ -108,6 +111,10 @@ class EventEditorScreenTest {
         reminders: Set<Int> = emptySet(),
         exdateCount: Int = 0,
         showNotificationPermissionNotice: Boolean = false,
+        isSaving: Boolean = false,
+        showRecurrenceResetNotice: Boolean = false,
+        yearlyIfcGregorianShifts: Boolean = false,
+        yearlyGregorianIfcShifts: Boolean = false,
     ) = EventEditorUiState.Loaded(
         isNew = isNew,
         title = "",
@@ -142,6 +149,10 @@ class EventEditorScreenTest {
         showDiscardConfirm = showDiscardConfirm,
         exdateCount = exdateCount,
         showNotificationPermissionNotice = showNotificationPermissionNotice,
+        isSaving = isSaving,
+        showRecurrenceResetNotice = showRecurrenceResetNotice,
+        yearlyIfcGregorianShifts = yearlyIfcGregorianShifts,
+        yearlyGregorianIfcShifts = yearlyGregorianIfcShifts,
     )
 
     /** Sets the initial state and composes the screen once; later state changes assign [uiState] directly. */
@@ -348,5 +359,93 @@ class EventEditorScreenTest {
             SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton).and(hasText("Does not repeat"))
         compose.onNode(recurrenceOption).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("At the time").performScrollTo().assertIsDisplayed()
+    }
+
+    // ----- ROADMAP R2: Save is disabled and shows progress while a save or delete is in flight -----
+
+    @Test
+    fun `Save is disabled and a progress indicator shows while saving`() {
+        show(baseState(isSaving = true))
+
+        compose.onNodeWithContentDescription("Save").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Saving…").assertIsDisplayed()
+    }
+
+    // ----- ROADMAP R3: the automatic recurrence reset shows a dismissible, TalkBack-announced notice -----
+
+    @Test
+    fun `the recurrence reset notice is dismissible and announced as a polite live region`() {
+        show(baseState(showRecurrenceResetNotice = true))
+
+        compose
+            .onNodeWithText(
+                "Year Day and Leap Day belong to no month, so a monthly IFC repeat cannot start there. " +
+                    "This event no longer repeats — choose another repeat if you want one.",
+            ).performScrollTo()
+            .assertIsDisplayed()
+        compose
+            .onNode(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
+            .assertIsDisplayed()
+
+        compose.onNodeWithContentDescription("Dismiss recurrence notice").performScrollTo().performClick()
+        recurrenceResetNoticeDismissed shouldBe 1
+    }
+
+    @Test
+    fun `no recurrence reset notice shows when nothing was reset`() {
+        show(baseState(showRecurrenceResetNotice = false))
+
+        compose
+            .onAllNodesWithText("This event no longer repeats", substring = true)
+            .assertCountEquals(0)
+    }
+
+    // ----- ROADMAP R4: a one-line, start-date-specific explainer under each recurrence option -----
+
+    @Test
+    fun `the yearly IFC option explains whether the Gregorian date shifts in leap years`() {
+        show(baseState(yearlyIfcGregorianShifts = false))
+        compose
+            .onNodeWithText(
+                "Every Sol 13, the same Gregorian date every year.",
+            ).performScrollTo()
+            .assertIsDisplayed()
+
+        uiState = baseState(yearlyIfcGregorianShifts = true)
+        compose
+            .onNodeWithText("Every Sol 13 — the Gregorian date shifts by a day in leap years.")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `the yearly Gregorian option explains whether the IFC date shifts in leap years`() {
+        show(baseState(yearlyGregorianIfcShifts = false))
+        compose.onNodeWithText("Every Jun 30, the same IFC date every year.").performScrollTo().assertIsDisplayed()
+
+        uiState = baseState(yearlyGregorianIfcShifts = true)
+        compose
+            .onNodeWithText("Every Jun 30 — the IFC date shifts in leap years.")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `the monthly IFC option names the day and says it happens 13 times a year`() {
+        show(baseState(monthlyIfcAvailable = true))
+
+        compose.onNodeWithText("IFC day 13 of every month, 13 times a year.").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun `the weekly option explains it will not stay on the same IFC weekday`() {
+        show(baseState())
+
+        compose
+            .onNodeWithText(
+                "Every 7 real days. IFC weekdays shift after Year Day and Leap Day, so this will not stay " +
+                    "on the same IFC weekday.",
+            ).performScrollTo()
+            .assertIsDisplayed()
     }
 }

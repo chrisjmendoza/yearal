@@ -41,6 +41,9 @@ fun Project.configureIfcAndroid(extension: CommonExtension) {
             // Robolectric 4.17's API 37 runtime reaches into jdk.internal.access, which JDK 17+
             // encapsulates; without this every Robolectric test fails in setUpApplicationState.
             test.jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
+            // Roborazzi's own setup check recommends hardware PixelCopy rendering for screenshot
+            // fidelity (ROADMAP R6 / M2 T10); harmless on modules with no Roborazzi captures.
+            test.systemProperty("robolectric.pixelCopyRenderMode", "hardware")
         }
     }
 

@@ -52,7 +52,9 @@ python scripts\check_docs.py # doc link and reference check
 | `testDebugUnitTest` | Android modules: JUnit4 + Robolectric (+ Roborazzi `compare`, never `verify`, locally) **[gate]** |
 
 CI (`.github/workflows/ci.yml`) runs the same gate on every branch plus `:app:assembleDebug`, and uploads
-the debug APK as an artifact. `verifyRoborazziDebug` joins once the first goldens are recorded (M2 T10).
+the debug APK as an artifact. It also runs `verifyRoborazziDebug`, but only when at least one golden PNG
+is tracked in git (a `git ls-files '**/src/test/screenshots/*.png'` check gates the step) — see
+[screenshots.md](screenshots.md) for how the owner records that first baseline (ROADMAP R6 / M2 T10).
 A Kotest `checkAll` inside an expression-bodied test (`fun x() = runBlocking { checkAll(...) }`) returns a
 non-`Unit` value and Jupiter silently skips it — use a block body and check the test-results XML counts.
 

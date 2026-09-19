@@ -3,7 +3,7 @@
 **Yearal** — Android app for the International Fixed Calendar (IFC; the owner also says "FC"): 13 months × 28 days,
 the month Sol, plus Year Day and Leap Day. Solo developer working with AI agents.
 
-**Status:** M0 and M1 done; M2–M5 in progress (M3 T1–T3, M4 T1–T9, M5 T1–T3 and T5–T6, M6 T1 and T3 done). Pure-JVM: `:core:calendar`,
+**Status:** M0 and M1 done; M2–M5 in progress (M3 T1–T3, M4 T1–T9, M5 T1–T3 and T5–T6, M6 T1 and T3, review fixes R1–R5 done). Pure-JVM: `:core:calendar`,
 `:core:domain` (clock/ticker, holiday engine, the events contract, `DayRolloverListener`), `:core:holidays`
 (JSON packs), `:core:testing`. Android: `:app` (Hilt, 5-tab Nav3 shell), `:core:designsystem` (theme,
 `MonthGrid`, date pickers), `:core:navigation`, `:core:data` (settings DataStore, Room 3 event storage), `:core:scheduling`

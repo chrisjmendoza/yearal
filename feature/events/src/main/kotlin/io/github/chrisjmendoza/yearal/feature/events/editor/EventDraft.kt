@@ -5,7 +5,6 @@ import io.github.chrisjmendoza.yearal.core.domain.event.Event
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCalendar
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.EventTiming
-import io.github.chrisjmendoza.yearal.core.domain.event.EventUidGenerator
 import io.github.chrisjmendoza.yearal.core.domain.event.IfcRecurrence
 import io.github.chrisjmendoza.yearal.core.domain.event.IntercalaryDay
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
@@ -262,6 +261,19 @@ internal fun recurrenceEndFrom(
  * this editor's own canonical text (`FREQ=YEARLY` or `FREQ=WEEKLY`, no `BYDAY`), which drops any extra
  * qualifier an imported rule might have carried — out of scope for the 1.0 editor (`docs/contracts/Events.md`
  * §6: no import in 1.0).
+ *
+ * **[RecurrenceKind.MONTHLY_IFC] is never silently coerced to [Recurrence.None].** Before ROADMAP R3,
+ * moving the start to Year Day or Leap Day while "monthly (IFC)" was chosen made this function fall
+ * back to a one-off `Recurrence.None` with no trace of the original choice — the event still saved,
+ * just wrong. [EventEditorViewModel][io.github.chrisjmendoza.yearal.feature.events.editor.EventEditorViewModel]
+ * now resets [EventDraft.recurrenceKind] to [RecurrenceKind.NONE] itself, visibly, the moment the start
+ * makes it invalid, so the UI can never reach this function in that state. If it is reached anyway —
+ * a future caller that bypasses the ViewModel — this throws instead of guessing, and
+ * [EventEditorViewModel.save] turns that into a blocked, fail-soft save exactly like any other broken
+ * precondition (`docs/contracts/Events.md` T4 guidance).
+ *
+ * @throws IllegalArgumentException if [draft].[EventDraft.recurrenceKind] is [RecurrenceKind.MONTHLY_IFC]
+ *   and [startDate] is Year Day or Leap Day ([IfcRecurrence.monthlyOn] returns `null`).
  */
 internal fun buildRecurrence(
     draft: EventDraft,
@@ -269,11 +281,28 @@ internal fun buildRecurrence(
 ): Recurrence {
     val end = recurrenceEndFrom(draft, startDate)
     return when (draft.recurrenceKind) {
-        RecurrenceKind.NONE -> Recurrence.None
-        RecurrenceKind.YEARLY_IFC -> IfcRecurrence.yearlyOn(startDate, draft.leapDayPolicy, end = end)
-        RecurrenceKind.MONTHLY_IFC -> IfcRecurrence.monthlyOn(startDate, end = end) ?: Recurrence.None
-        RecurrenceKind.YEARLY_GREGORIAN -> Recurrence.Gregorian(gregorianRrule(RecurrenceKind.YEARLY_GREGORIAN, end))
-        RecurrenceKind.WEEKLY -> Recurrence.Gregorian(gregorianRrule(RecurrenceKind.WEEKLY, end))
+        RecurrenceKind.NONE -> {
+            Recurrence.None
+        }
+
+        RecurrenceKind.YEARLY_IFC -> {
+            IfcRecurrence.yearlyOn(startDate, draft.leapDayPolicy, end = end)
+        }
+
+        RecurrenceKind.MONTHLY_IFC -> {
+            IfcRecurrence.monthlyOn(startDate, end = end) ?: throw IllegalArgumentException(
+                "MONTHLY_IFC cannot start on $startDate (Year Day or Leap Day belong to no month); " +
+                    "the editor must reset the recurrence choice before this is reached",
+            )
+        }
+
+        RecurrenceKind.YEARLY_GREGORIAN -> {
+            Recurrence.Gregorian(gregorianRrule(RecurrenceKind.YEARLY_GREGORIAN, end))
+        }
+
+        RecurrenceKind.WEEKLY -> {
+            Recurrence.Gregorian(gregorianRrule(RecurrenceKind.WEEKLY, end))
+        }
     }
 }
 
@@ -311,14 +340,25 @@ private const val SECONDS_PER_MINUTE = 60
  * The [Event] [draft] describes, anchored on the effective [startDate] (today when
  * [EventDraft.startDate] is `null`). Exdates are kept only when neither the start date nor the
  * recurrence changed from [existing] (`docs/contracts/Events.md` T4: "drop exdates before saving when
- * the start or rule changes"); a brand-new event gets its uid from [newUid], called only when
- * [existing] is `null`.
+ * the start or rule changes").
+ *
+ * **Identity, not a fresh uid per call (ROADMAP R2):** a brand-new event (`existing == null`) takes its
+ * uid from [draftUid], the *same* string on every call for the life of one draft — drawn once by
+ * [EventEditorViewModel][io.github.chrisjmendoza.yearal.feature.events.editor.EventEditorViewModel] and
+ * persisted in its `SavedStateHandle` — rather than a fresh [EventUidGenerator][io.github.chrisjmendoza.yearal.core.domain.event.EventUidGenerator]
+ * draw. Before R2 this function called the generator itself, so two overlapping saves of the same new
+ * draft minted two uids and stored two events; calling this function twice with the same [draftUid] now
+ * builds the same identity both times, and [EventEditorViewModel.save] additionally never launches a
+ * second save while one is in flight.
+ *
+ * @throws IllegalArgumentException if [buildRecurrence] cannot represent [draft]'s recurrence at
+ *   [startDate] (see its KDoc) — never silently coerced to a one-off.
  */
 internal fun buildEvent(
     draft: EventDraft,
     startDate: LocalDate,
     existing: Event?,
-    newUid: EventUidGenerator,
+    draftUid: String,
 ): Event {
     val recurrence = buildRecurrence(draft, startDate)
     val timing = buildTiming(draft, startDate)
@@ -327,7 +367,7 @@ internal fun buildEvent(
     val exdates = if (existing != null && !startChanged && !recurrenceChanged) existing.exdates else emptySet()
     return Event(
         id = existing?.id ?: Event.NEW_ID,
-        uid = existing?.uid ?: newUid.newUid(),
+        uid = existing?.uid ?: draftUid,
         calendarId = existing?.calendarId ?: EventCalendar.DEFAULT_ID,
         title = draft.title,
         description = draft.description,
@@ -346,3 +386,46 @@ internal fun isLeapDayAnchor(startDate: LocalDate): Boolean = IfcDate.from(start
 
 /** Whether "monthly (IFC)" is offered for [startDate] — hidden on Year Day and Leap Day. */
 internal fun isMonthlyIfcAvailable(startDate: LocalDate): Boolean = IfcRecurrence.monthlyOn(startDate) != null
+
+// ----- ROADMAP R4: "yearly on the IFC date" / "yearly on the Gregorian date" — does the *other*
+// calendar's date move by a day in leap years, for the one-line explainers under each recurrence
+// option (docs/calendar-spec.md §5, §7.7)? Answered by converting through :core:calendar itself
+// (CLAUDE.md rule 1) for one confirmed leap year and one confirmed common year, rather than by
+// hard-coding the "March 4 – June 28" / "February 29 – June 17" boundary here: the leap-day insertion
+// point is a structural property of the calendar (IfcDate.from depends only on whether the year is
+// leap, never on which specific year), so any such pair generalizes to every year.
+
+private const val REFERENCE_LEAP_YEAR = 2024
+private const val REFERENCE_COMMON_YEAR = 2026
+
+/**
+ * `true` when a yearly-IFC recurrence anchored on [startDate] falls on a different Gregorian date in
+ * leap years than in common years (`docs/calendar-spec.md` §7.7: IFC March 4 – June 28 inclusive).
+ * Always `false` for Year Day and Leap Day, whose Gregorian dates (December 31 and June 17) never move.
+ */
+internal fun yearlyIfcGregorianShifts(startDate: LocalDate): Boolean {
+    val ifc = IfcDate.from(startDate)
+    if (ifc !is IfcDate.Regular) return false
+    val leap = IfcDate.Regular(REFERENCE_LEAP_YEAR, ifc.month, ifc.dayOfMonth).toLocalDate()
+    val common = IfcDate.Regular(REFERENCE_COMMON_YEAR, ifc.month, ifc.dayOfMonth).toLocalDate()
+    return leap.monthValue != common.monthValue || leap.dayOfMonth != common.dayOfMonth
+}
+
+/**
+ * `true` when a yearly-Gregorian recurrence anchored on [startDate] falls on a different IFC date in
+ * leap years than in common years (`docs/calendar-spec.md` §7.7: Gregorian February 29 – June 17
+ * inclusive). **`false` for February 29 itself**: it has no common-year Gregorian analogue to compare
+ * against, so the claim is withheld rather than guessed (`docs/WORKFLOW.md` §5) — the editor shows the
+ * plain, non-shift explainer for it instead.
+ */
+internal fun yearlyGregorianIfcShifts(startDate: LocalDate): Boolean {
+    val month = startDate.monthValue
+    val day = startDate.dayOfMonth
+    if (month == FEBRUARY && day == FEBRUARY_29) return false
+    val leap = IfcDate.from(LocalDate.of(REFERENCE_LEAP_YEAR, month, day))
+    val common = IfcDate.from(LocalDate.of(REFERENCE_COMMON_YEAR, month, day))
+    return leap.monthNumber != common.monthNumber || leap.dayOfMonth != common.dayOfMonth
+}
+
+private const val FEBRUARY = 2
+private const val FEBRUARY_29 = 29

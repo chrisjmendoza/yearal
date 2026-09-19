@@ -162,8 +162,18 @@ Architecture, tooling and CI:
   previews for every supported Android version (M5 T5).
 - `docs/contracts/Calendar.md`, the frozen public API of `:core:calendar`; `README.md` rewritten to describe
   the app as it is; `scripts/check_docs.py` fails if the README regresses to known-stale statements.
+- The event editor explains what each repeat option means for the chosen date — whether the Gregorian or the
+  IFC date shifts in leap years, that a monthly IFC repeat happens 13 times a year, and that a weekly repeat
+  does not stay on the same IFC weekday (R4).
+- Screenshot-testing pipeline (R6, M2 T10): goldens live in a tracked `src/test/screenshots/` directory per
+  module, `:core:designsystem` generates 56 captures from its previews, the record workflow uploads them with
+  repo-relative paths, and CI verifies them automatically once the first goldens are committed
+  ([docs/screenshots.md](docs/screenshots.md)).
+- `docs/reviews/`: an external review of the project and our written response to it.
 
 ### Changed
+
+- The Convert tab uses a swap-arrows icon instead of one that read as "refresh" (R5).
 
 - The daily midnight refresh now uses the same exact alarm as reminders, with the previous 10-minute
   windowed alarm as the fallback.
@@ -173,6 +183,12 @@ Architecture, tooling and CI:
 
 ### Fixed
 
+- An open Today, Month, Year or Day screen no longer shows a stale date, stale event times or events on the
+  wrong day after the device clock or time zone changes, or after the app returns from the background (R1).
+- Rapid taps on Save or Delete in the event editor could create a duplicate event; both are now disabled
+  while a write is in flight, and a new event keeps one identity for its whole editor session (R2).
+- Moving an event's start to Year Day or Leap Day while "monthly (IFC)" was selected silently saved it as
+  non-repeating; the editor now resets the choice itself and says why (R3).
 - The Privacy screen no longer says that nothing stored could leave the device while also describing Android's
   encrypted backup; it now says the app itself sends nothing and the backup is the one copy that can.
 - Day detail no longer crashes on an out-of-range day key (for example from a malformed widget or
