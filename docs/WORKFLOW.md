@@ -17,14 +17,25 @@ goes, and the docs stay true. These rules bind every contributor — human or LL
 **Where commits go depends on who made them.**
 
 - **Local work** (an agent running on the owner's machine): work on a branch named `local/<task>` in
-  small, signed commits, and push the branch. **Nothing is merged to `main` until the owner says so** —
+  small, signed commits, and push the branch. **The branch is created before the first commit**, and
+  **every** change goes on one — features, fixes, refactors, and docs-only edits alike. There is no
+  "too small for a branch": the owner steps away mid-task, and work sitting on `main` is what causes
+  trouble then (owner, 2026-09-19). Moving commits off `main` afterwards means a `reset --hard` that
+  churns the working tree for nothing. **Nothing is merged to `main` until the owner says so** —
   either "merge" for a specific branch, or a blanket permission for the current session. No pull request
   is needed (this is a two-person project); the owner reviews the branch and the completion report (§6)
-  in the conversation, then the agent fast-forwards or squashes it onto `main` and deletes the branch.
+  in the conversation, then the agent fast-forwards it onto `main` and deletes the branch.
   The gate is run **before every push**, so every branch tip and `main` are always green; CI runs on
-  every branch as the backstop, and a red CI run is fixed before anything else. Merges are
-  fast-forwards, so the commit that reaches `main` is the same one CI already passed. Parallel local agents use separate git
+  every branch as the backstop, and a red CI run is fixed before anything else. Parallel local agents use separate git
   worktrees, one branch each.
+- **The merge is a fast-forward, never a squash, and never a direct push of unpushed commits.** The
+  repository's `protect-main` ruleset requires the CI check "Gate (build, tests, ktlint, KDoc, docs)" to
+  have passed on the *exact SHA* being pushed to `main`. A fast-forward moves `main` to a commit CI has
+  already signed off. A squash builds a new commit CI has never seen, and pushing commits straight from a
+  clean working tree does the same — both are rejected with `GH013: Repository rule violations found`.
+  So the merge order is: push the branch, wait for its tip to go green (`gh run watch`), then
+  `git push origin main` as a fast-forward, then delete the branch. Any new commit on the branch — even a
+  one-line doc fix — restarts that wait, because the SHA changed.
 - **Cloud work** (scheduled routines and any agent the owner cannot watch): work on a branch named
   `cloud/<task>` and **open a pull request** so the owner can review it before it reaches `main`. Never
   push to `main` from the cloud. The PR description is the completion report (§6). The reviewer runs the
