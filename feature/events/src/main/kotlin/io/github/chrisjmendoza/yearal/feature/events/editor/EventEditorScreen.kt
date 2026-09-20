@@ -10,8 +10,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -65,6 +65,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -88,6 +89,21 @@ private val SectionSpacing = 16.dp
 private val FieldSpacing = 8.dp
 private val MinTouchTarget = 48.dp
 private val ChipSpacing = 8.dp
+
+/**
+ * Reminder chips per row. Two keeps every chip wide enough for the longest preset label
+ * ("30 minutes before") at ordinary text sizes while still reading as a grid rather than a ragged
+ * pile; the five presets fall 2 / 2 / 1, and the short last row is padded so its chip keeps the same
+ * width as the others rather than stretching across.
+ */
+private const val REMINDER_CHIPS_PER_ROW = 2
+
+/**
+ * Lines a reminder chip's label may take. Two, not one: at large font scales a half-width chip cannot
+ * fit "30 minutes before" on one line, and wrapping keeps the label readable where a single line would
+ * ellipsise it (docs/ARCHITECTURE.md §4 "Accessibility", 200% font scale).
+ */
+private const val REMINDER_LABEL_MAX_LINES = 2
 private val ProgressIndicatorSize = 24.dp
 private val ProgressIndicatorStroke = 2.dp
 
@@ -848,14 +864,32 @@ private fun ReminderSection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(FieldSpacing / 2)) {
         Text(stringResource(R.string.events_editor_reminders_heading), style = MaterialTheme.typography.titleSmall)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(ChipSpacing)) {
-            for (minutes in EventDraft.REMINDER_PRESETS) {
-                FilterChip(
-                    selected = minutes in reminders,
-                    onClick = { onToggle(minutes) },
-                    label = { Text(reminderLabel(minutes)) },
-                    modifier = Modifier.heightIn(min = MinTouchTarget),
-                )
+        // A fixed grid of equal-width chips rather than a FlowRow. A FlowRow packs each row until the
+        // next chip will not fit, so the chips came out ragged (five presets of five different label
+        // lengths) and, with no verticalArrangement, the wrapped rows touched each other. Chunking into
+        // REMINDER_CHIPS_PER_ROW and giving every chip weight(1f) makes each row's chips identical in
+        // width; the Spacer pads the last, short row so its chips keep that width instead of stretching.
+        Column(verticalArrangement = Arrangement.spacedBy(ChipSpacing)) {
+            EventDraft.REMINDER_PRESETS.chunked(REMINDER_CHIPS_PER_ROW).forEach { rowPresets ->
+                Row(horizontalArrangement = Arrangement.spacedBy(ChipSpacing)) {
+                    for (minutes in rowPresets) {
+                        FilterChip(
+                            selected = minutes in reminders,
+                            onClick = { onToggle(minutes) },
+                            label = {
+                                Text(
+                                    text = reminderLabel(minutes),
+                                    maxLines = REMINDER_LABEL_MAX_LINES,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget),
+                        )
+                    }
+                    repeat(REMINDER_CHIPS_PER_ROW - rowPresets.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
         }
     }

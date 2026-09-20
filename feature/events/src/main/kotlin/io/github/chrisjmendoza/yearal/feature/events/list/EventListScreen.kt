@@ -196,7 +196,11 @@ fun EventListScreen(
                     } else {
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
                             items(state.items, key = EventListItem::eventId) { item ->
-                                EventRow(item = item, onClick = { onOpenEvent(item.eventId) })
+                                EventRow(
+                                    item = item,
+                                    showCalendarName = state.showCalendarNames,
+                                    onClick = { onOpenEvent(item.eventId) },
+                                )
                             }
                         }
                     }
@@ -251,6 +255,7 @@ private fun EmptyState(
 @Composable
 private fun EventRow(
     item: EventListItem,
+    showCalendarName: Boolean,
     onClick: () -> Unit,
 ) {
     val title = item.title.ifBlank { stringResource(R.string.events_no_title) }
@@ -299,7 +304,9 @@ private fun EventRow(
         )
         Column(verticalArrangement = Arrangement.spacedBy(RowSpacing)) {
             Text(text = title, style = MaterialTheme.typography.titleMedium)
-            Text(text = calendarName, style = MaterialTheme.typography.bodySmall)
+            if (showCalendarName) {
+                Text(text = calendarName, style = MaterialTheme.typography.bodySmall)
+            }
             Text(text = item.ifcLong, style = MaterialTheme.typography.bodyMedium)
             Text(
                 text = item.ifcNumeric,

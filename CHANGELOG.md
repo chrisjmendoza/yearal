@@ -206,6 +206,18 @@ Architecture, tooling and CI:
 
 - The Convert tab uses a swap-arrows icon instead of one that read as "refresh" (R5).
 
+- The Year overview's Year Day tile is drawn like the mini-month tiles beside it — same container, same
+  heading style, same today border — instead of the full-width filled pill the month grid uses. It is
+  still marked out as no ordinary month by the intercalary icon and its Gregorian date beneath.
+
+- The events list no longer prints "Default calendar" under every event. The calendar's name appears
+  only once a second calendar exists to tell it apart from; the colour swatch and the hidden-calendar
+  warning are unchanged.
+
+- The event editor's reminder chips are laid out as an even grid — two per row, all the same width, with
+  space between the rows — instead of a ragged flow whose wrapped rows touched each other. Long labels
+  wrap to a second line rather than being cut off at large text sizes.
+
 - The Month widget draws its grid as a grid: thin rule lines around every day cell, and a mark under any
   day that has something on it — a diamond for a holiday, a dot for an event, the same shapes and order
   the app's own month grid uses. Holidays come from the packs enabled in Settings; neither mark ever

@@ -226,3 +226,77 @@ private fun LeapDayIndicator(
         DayMarks(eventCount = if (hasEvent) 1 else 0, hasHoliday = false)
     }
 }
+
+/**
+ * The Year overview's fourteenth tile: Year Day, the day that belongs to no month (spec §2.4;
+ * FEATURES C6). A sibling of [YearMiniMonthTile] rather than a reuse of [IntercalaryBand] — the band is
+ * built to span a month grid's seven columns, and dropping that full-width, filled pill into the year's
+ * tile grid put a shape and a colour on screen that nothing around it shared (owner feedback,
+ * 2026-09-19). This tile borrows the mini-month's own vocabulary instead: the same [MaterialTheme.shapes]
+ * container with no fill, the same `titleSmall` heading, the same today border, and the same
+ * [DayMarks] row, so the year reads as one grid.
+ *
+ * It is still visibly *not* a month. The intercalary icon in [colors.tertiary][ColorScheme.tertiary] —
+ * the same icon and tint [LeapDayIndicator] already uses inside June's tile — carries that, and the
+ * Gregorian date beneath says which real day it is. Shape and glyph, never colour alone (CLAUDE.md
+ * rule 3).
+ *
+ * @param yearDay the year's [IfcDate.YearDay].
+ * @param isToday whether the real today is Year Day, matched on its Gregorian date (CLAUDE.md rule 4).
+ * @param hasEvent whether Year Day carries at least one event.
+ * @param onClick invoked when the tile is tapped; the Year screen opens December with it.
+ * @param modifier applied to the tile.
+ * @param formatter formats the label and the Gregorian subtitle.
+ */
+@Composable
+fun YearDayTile(
+    yearDay: IfcDate.YearDay,
+    isToday: Boolean,
+    hasEvent: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    formatter: IfcDateFormatter = rememberIfcDateFormatter(),
+) {
+    val colors = MaterialTheme.colorScheme
+    val shape = MaterialTheme.shapes.medium
+    val description = formatter.dayDescription(yearDay, isToday, if (hasEvent) 1 else 0, null)
+
+    Column(
+        modifier =
+            modifier
+                .clip(shape)
+                .then(if (isToday) Modifier.border(TileBorderWidth, colors.primary, shape) else Modifier)
+                .selectable(selected = false, role = Role.Button, onClick = onClick)
+                .semantics { contentDescription = description }
+                .padding(TilePadding),
+        verticalArrangement = Arrangement.spacedBy(TileContentSpacing),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(IntercalaryRowSpacing),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_intercalary),
+                contentDescription = null,
+                tint = colors.tertiary,
+                modifier = Modifier.size(IntercalaryIconSize),
+            )
+            Text(
+                text = formatter.formatDay(yearDay),
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            text = formatter.intercalarySubtitle(yearDay),
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+            maxLines = YEAR_DAY_SUBTITLE_MAX_LINES,
+            overflow = TextOverflow.Ellipsis,
+        )
+        DayMarks(eventCount = if (hasEvent) 1 else 0, hasHoliday = false)
+    }
+}
+
+/** Lines the Year Day tile's Gregorian subtitle may take before it ellipsises. */
+private const val YEAR_DAY_SUBTITLE_MAX_LINES = 2

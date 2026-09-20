@@ -127,7 +127,14 @@ internal fun buildEventListUiState(
         events
             .filter { matchesQuery(it, query) }
             .map { event -> buildEventListItem(event, calendarsById[event.calendarId], formatter) }
-    return EventListUiState.Loaded(items = items, query = query, hasAnyEvents = events.isNotEmpty())
+    return EventListUiState.Loaded(
+        items = items,
+        query = query,
+        hasAnyEvents = events.isNotEmpty(),
+        // Counted from the calendars that exist, not from the ones these rows happen to use: a row's
+        // name only earns its place once there is a second calendar it could have belonged to.
+        showCalendarNames = calendars.size > 1,
+    )
 }
 
 /** Case-insensitive substring match on the title, notes and location — the fields a user searches by. */

@@ -24,7 +24,9 @@ import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
+import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.floats.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import org.junit.Rule
 import org.junit.Test
@@ -232,6 +234,53 @@ class EventEditorScreenTest {
         compose.onNodeWithText("1 day before").performScrollTo().performClick()
 
         reminders shouldContainExactly listOf(0, 1440)
+    }
+
+    /**
+     * The chips are laid out as a grid of equal-width cells, not a ragged flow (owner feedback,
+     * 2026-09-19). Checked by geometry rather than by eye: every chip in a row is the same width, the
+     * short last row's chip keeps that width instead of stretching, and consecutive rows are separated
+     * rather than touching.
+     */
+    private fun assertReminderChipsFormAnEvenGrid(fontScale: Float) {
+        val labels = listOf("At the time", "10 minutes before", "30 minutes before", "1 hour before", "1 day before")
+        // Scroll once, to the last chip, and only then measure: performScrollTo moves every other node
+        // too, so measuring between scrolls compares bounds taken at different scroll offsets.
+        compose.onNodeWithText(labels.last(), substring = true).performScrollTo()
+        val bounds =
+            labels.map { label ->
+                compose.onNodeWithText(label, substring = true).fetchSemanticsNode().boundsInRoot
+            }
+
+        val widths = bounds.map { it.width }
+        withClue("every reminder chip should be the same width at font scale $fontScale, got $widths") {
+            widths.distinct().size shouldBe 1
+        }
+        // Five presets at two per row: the last row holds one chip, which must not stretch to fill.
+        val rowTops = bounds.map { it.top }.distinct().sorted()
+        withClue("five chips two per row should make three rows at font scale $fontScale, tops were $rowTops") {
+            rowTops.size shouldBe 3
+        }
+        withClue("rows should be separated, not touching, at font scale $fontScale") {
+            val firstRowBottom = bounds.first { it.top == rowTops[0] }.bottom
+            (rowTops[1] - firstRowBottom) shouldBeGreaterThan 0f
+        }
+    }
+
+    @Test
+    fun `the reminder chips form an even, spaced grid`() {
+        show(baseState())
+
+        assertReminderChipsFormAnEvenGrid(fontScale = 1f)
+    }
+
+    // docs/ARCHITECTURE.md §4 "Accessibility": the grid must not collapse or clip at 200% font scale,
+    // which is the case a fixed two-column layout is most at risk of getting wrong.
+    @Test
+    fun `the reminder chips stay an even, spaced grid at 200 percent font scale`() {
+        show(baseState(), fontScale = 2f)
+
+        assertReminderChipsFormAnEvenGrid(fontScale = 2f)
     }
 
     // The M6 T1 real scheduler lands in this wave, so the editor no longer claims notifications are

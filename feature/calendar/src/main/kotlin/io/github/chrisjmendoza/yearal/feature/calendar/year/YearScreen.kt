@@ -29,7 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
-import io.github.chrisjmendoza.yearal.core.designsystem.calendar.IntercalaryBand
+import io.github.chrisjmendoza.yearal.core.designsystem.calendar.YearDayTile
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.YearMiniMonthTile
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
@@ -88,7 +88,7 @@ fun YearRoute(
  * The stateless Year screen — the unit for previews, screenshot and Compose tests
  * (docs/ARCHITECTURE.md §4 "State management").
  *
- * Thirteen [YearMiniMonthTile]s (Sol between June and July) plus a fourteenth [IntercalaryBand] tile
+ * Thirteen [YearMiniMonthTile]s (Sol between June and July) plus a fourteenth [YearDayTile]
  * for Year Day, in a `LazyVerticalGrid(GridCells.Adaptive(160.dp))` — two columns of seven rows on a
  * typical phone, exactly matching docs/ARCHITECTURE.md §4's "Year Day takes the 14th slot". Neither
  * tile builds 28 heavyweight day cells; see [YearMiniMonthTile]'s KDoc for why. The app bar holds the
@@ -163,14 +163,13 @@ fun YearScreen(
             item(key = YEAR_DAY_ITEM_KEY) {
                 val yearDay = IfcDate.YearDay(state.year)
                 val yearDayGregorian = yearDay.toLocalDate()
-                IntercalaryBand(
-                    day = yearDay,
+                YearDayTile(
+                    yearDay = yearDay,
                     isToday = state.today == yearDayGregorian,
-                    isSelected = false,
-                    eventCount = if (yearDayGregorian in state.eventDates) 1 else 0,
-                    holidayName = null,
+                    hasEvent = yearDayGregorian in state.eventDates,
                     onClick = onYearDayClick,
                     modifier = Modifier.testTag(YEAR_DAY_TILE_TEST_TAG),
+                    formatter = formatter,
                 )
             }
         }

@@ -190,6 +190,7 @@ Strategy and licensing: [holidays-and-import.md](holidays-and-import.md). No And
 |:---:|---|---|---|
 | 🟠 | W1 | Weekday display: both (default) / actual only / nominal IFC only | To be validated with testers. |
 | 🟠 | W2 | Theme: system / light / dark; dynamic colour on/off | The incumbent has a single red theme. |
+| 🟠 | W6 | **Colour through the UI, not just in the accents** | Owner, 2026-09-19, on a device: "the black and white view everywhere is draining my soul." The palette exists (`IfcTheme`, teal / cream / amber) but the screens spend it almost nowhere — in dark mode nearly every surface lands on near-black with white text, so the app reads as monochrome even though the theme is not. Wants colour in the surfaces themselves: tinted containers for cards and tiles, a coloured Today hero, the intercalary days given a consistent accent, and the Year and Month grids using more than one grey. Constraint: it has to survive both dynamic colour (where the palette is the wallpaper's, not ours) and the non-dynamic brand fallback, and it can never make colour the *only* signal (Q4). Delivered by ROADMAP M2 T13, whose note (1) carries the same feedback — this row is the catalog entry for it. |
 | 🟠 | W6 | "Delete all data" | |
 | 🟡 | W3 | Primary-calendar emphasis (IFC-first or Gregorian-first labels) | |
 | 🟡 | W4 | Custom month names; optional numeric months ("Month 7") | 3 reviewer requests. |

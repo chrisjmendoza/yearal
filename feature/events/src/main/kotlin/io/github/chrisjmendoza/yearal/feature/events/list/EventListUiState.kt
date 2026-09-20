@@ -18,11 +18,19 @@ sealed interface EventListUiState {
      * @property query the search text as typed; empty means "no filter".
      * @property hasAnyEvents `false` only when the repository has no events at all — distinguishes the
      * "create your first event" empty state from "no matches" for [query].
+     * @property showCalendarNames whether a row names the calendar it belongs to. `false` while the
+     * database holds a single calendar, which is every install until M7 adds one per imported `.ics`
+     * file or device calendar: naming "Default calendar" on every row then is a label that can only ever
+     * say one thing, and it reads as though the user is supposed to have set calendars up (owner
+     * feedback, 2026-09-19). It turns itself on as soon as a second calendar exists, because that is
+     * when the name starts distinguishing rows. The name is *only* suppressed in this row; the colour
+     * swatch, the hidden-calendar warning and the spoken description are unchanged.
      */
     data class Loaded(
         val items: List<EventListItem>,
         val query: String,
         val hasAnyEvents: Boolean,
+        val showCalendarNames: Boolean = false,
     ) : EventListUiState
 }
 
