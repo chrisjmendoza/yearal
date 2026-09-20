@@ -192,6 +192,49 @@ class MonthWidgetStateTest {
             (1..28).toList() - listOf(3, 8)
     }
 
+    // -- Holiday marks --------------------------------------------------------------------------------
+
+    @Test
+    fun `only the dates in the holiday set are marked, and holidays are independent of events`() {
+        val today = TodayDate(IfcDate.from(LocalDate.of(2026, 9, 17)), LocalDate.of(2026, 9, 17))
+        // Gregorian September 12 is IFC September 3; September 24 is IFC September 15.
+        val holidayDates = setOf(LocalDate.of(2026, 9, 24))
+        val eventDates = setOf(LocalDate.of(2026, 9, 12))
+
+        val state =
+            buildMonthWidgetState(today, formatter, tapHint, eventDates = eventDates, holidayDates = holidayDates)
+
+        state.days.filter { it.hasHoliday }.map { it.dayOfMonth } shouldBe listOf(15)
+        state.days.filter { it.hasEvent }.map { it.dayOfMonth } shouldBe listOf(3)
+        // The two marks never imply each other: a holiday is not an event and vice versa.
+        state.days.none { it.hasHoliday && it.hasEvent } shouldBe true
+    }
+
+    @Test
+    fun `a day can carry both marks at once`() {
+        val both = LocalDate.of(2026, 9, 24)
+        val today = TodayDate(IfcDate.from(LocalDate.of(2026, 9, 17)), LocalDate.of(2026, 9, 17))
+
+        val state =
+            buildMonthWidgetState(today, formatter, tapHint, eventDates = setOf(both), holidayDates = setOf(both))
+
+        val cell = state.days.single { it.dayOfMonth == 15 }
+        cell.hasHoliday shouldBe true
+        cell.hasEvent shouldBe true
+    }
+
+    @Test
+    fun `a holiday on Year Day marks the intercalary band, not a grid cell`() {
+        // CLAUDE.md rule 6: the floating days carry holidays like any other date (IFC New Year's Day).
+        val yearDay = LocalDate.of(2026, 12, 31)
+        val today = TodayDate(IfcDate.from(yearDay), yearDay)
+
+        val state = buildMonthWidgetState(today, formatter, tapHint, holidayDates = setOf(yearDay))
+
+        state.days.none { it.hasHoliday } shouldBe true
+        checkNotNull(state.intercalary).hasHoliday shouldBe true
+    }
+
     @Test
     fun `an event on Leap Day marks the intercalary band, not a grid cell`() {
         val leapDay = LocalDate.of(2028, 6, 17)

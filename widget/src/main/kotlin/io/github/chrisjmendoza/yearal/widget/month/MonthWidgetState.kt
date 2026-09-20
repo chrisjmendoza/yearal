@@ -25,12 +25,18 @@ import java.time.LocalDate
  *   `docs/contracts/Events.md` §5 "`ObserveAgendaUseCase.presence`"). Holidays are never counted, per
  *   the same contract. Carries no event content (CLAUDE.md rule 8) -- a plain boolean, never a count or
  *   a title.
+ * @property hasHoliday whether at least one holiday of an enabled set falls on this day
+ *   ([fetchMonthHolidays]). Separate from [hasEvent] because the two are drawn as different marks, the
+ *   same distinction the app's own `DayMarks` makes (FEATURES C4): shape, never colour alone
+ *   (CLAUDE.md rule 3). Also a plain boolean and never a name -- a holiday's label is screen content,
+ *   not home-screen content.
  */
 data class MonthDayCellState(
     val dayOfMonth: Int,
     val gregorianDate: LocalDate,
     val isToday: Boolean,
     val hasEvent: Boolean = false,
+    val hasHoliday: Boolean = false,
 )
 
 /**
@@ -58,6 +64,7 @@ data class MonthIntercalaryState(
     val gregorianDate: LocalDate,
     val isToday: Boolean,
     val hasEvent: Boolean = false,
+    val hasHoliday: Boolean = false,
 )
 
 /**
@@ -113,6 +120,9 @@ data class MonthWidgetState(
  * @param hasEventsLabel the localized "has events" hint appended to [MonthWidgetState.contentDescription]
  *   when today has an event; the empty default appends nothing, which also keeps every existing caller
  *   that does not pass one byte-for-byte unchanged.
+ * @param holidayDates the Gregorian dates in this month carrying a holiday from an enabled set
+ *   ([fetchMonthHolidays]). Defaults to empty, which renders every day without a holiday mark -- the
+ *   same "absent rather than wrong" fallback a timed-out snapshot produces.
  */
 fun buildMonthWidgetState(
     today: TodayDate,
@@ -120,6 +130,7 @@ fun buildMonthWidgetState(
     tapHint: String,
     eventDates: Set<LocalDate> = emptySet(),
     hasEventsLabel: String = "",
+    holidayDates: Set<LocalDate> = emptySet(),
 ): MonthWidgetState {
     val month = IfcYearMonth.from(today.ifcDate)
 
@@ -132,6 +143,7 @@ fun buildMonthWidgetState(
                 gregorianDate = gregorianDate,
                 isToday = gregorianDate == today.gregorianDate,
                 hasEvent = gregorianDate in eventDates,
+                hasHoliday = gregorianDate in holidayDates,
             )
         }
 
@@ -144,6 +156,7 @@ fun buildMonthWidgetState(
                 gregorianDate = gregorianDate,
                 isToday = gregorianDate == today.gregorianDate,
                 hasEvent = gregorianDate in eventDates,
+                hasHoliday = gregorianDate in holidayDates,
             )
         }
 

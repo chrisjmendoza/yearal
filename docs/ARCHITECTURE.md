@@ -785,6 +785,28 @@ package `widget.month`) is the second widget in `:widget`, built the same way as
   there is always a size above the largest one.
 - The Gregorian span sits directly under the month title rather than below the grid: it names the whole
   month, so it belongs with the month's heading, and at the bottom it competed with the grid's last row.
+- **Rule lines without extra views.** The grid container is filled with the outline colour; each cell
+  insets itself by 1dp and paints the widget background over the rest, so what shows through the inset
+  is a hairline between and around the cells. Glance 1.2.0 has no border modifier (the same gap that
+  makes the today mark a filled pill rather than the app's ring), and interleaving divider views is not
+  an option either — Glance's generated layouts cap a `Row`'s children, and seven cells plus six
+  dividers would exceed it.
+- **Marks: holiday first, then event**, the same order and the same shape-not-colour distinction the
+  app's `DayMarks` uses (FEATURES C4; CLAUDE.md rule 3) — a diamond for a holiday, a round dot for an
+  event. Every cell renders the marks line even when empty, so a mark appearing never changes a row's
+  height. The widget shows at most one event dot where the app's cell shows up to three: its snapshot is
+  `ObserveAgendaUseCase.presence`, a boolean per day, because a count is closer to event content than a
+  home screen should carry (CLAUDE.md rule 8). Holidays are likewise presence-only and never named.
+- **Where the holiday marks come from.** `fetchMonthHolidays` takes one bounded snapshot per render,
+  the same shape and the same never-hang/never-crash guarantee as `fetchMonthEventPresence` beside it:
+  `HolidaySetProvider.enabledSets()` for which packs are on, then `HolidayEngine.occurrences` for the
+  month's dates. Both are `:core:domain` types, so `:widget` takes **no new module dependency** and
+  never touches `:core:holidays`, settings or resources. Only the Hilt bindings had to move: they were
+  in `:feature:calendar`, whose own KDoc said to relocate them to `:app` the moment a second module
+  needed them, so `HolidayModule`/`HolidaySetProviderModule` now live in `:app`'s `di` package — the
+  same move `FormatterModule` records for `IfcDateFormatter`, and the one CLAUDE.md rule 10 requires
+  since no module may depend on a feature. `PackHolidaySetProvider` stays in `:feature:calendar` and is
+  injected across that boundary, exactly as `HolidayCatalog` already is.
 - Today is marked by shape and weight, never colour alone (CLAUDE.md rule 3; FEATURES Q4): a rounded,
   filled pill behind a bold day number, or — when today is the intercalary day — the band itself switches
   from the tertiary container to the primary container plus bold text. Glance 1.2.0 has no border/outline

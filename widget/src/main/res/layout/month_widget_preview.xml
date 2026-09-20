@@ -10,7 +10,8 @@
   MonthWidgetStateTest, real-world Thursday). September has no trailing Leap Day / Year Day band, so
   nothing here can misrepresent one (CLAUDE.md rule 6's concern for a *static* mock-up, same reasoning as
   the Today preview). Day 8 (today) and day 21 (illustrative only, not real data) carry the event-dot
-  glyph to show ROADMAP M5 T6's feature; day numbers are plain digits, not language content, so
+  glyph, and days 15 and 21 the holiday diamond, to show both kinds of mark; day numbers are plain
+  digits, not language content, so
   `tools:ignore="HardcodedText"` applies to them alone (CLAUDE.md rule 9 covers translatable text; digits
   are not that).
 
@@ -18,7 +19,9 @@
   lines of one TextView, the same three lines MonthGlanceWidget's own cell stacks at its larger size.
   One TextView rather than a nested layout per cell keeps this inside RemoteViews' view budget; the one
   visible consequence is that the "today" pill background covers the whole cell here, where the real
-  widget draws it around the IFC number alone. September 2026 runs Gregorian Sep 10 - Oct 7, so IFC day 1
+  widget draws it around the IFC number alone. This mock-up also leaves out the real widget's grid rule
+  lines, which come from a cell background painted inside a 1dp inset and would fight that pill here;
+  a picker thumbnail does not need them. September 2026 runs Gregorian Sep 10 - Oct 7, so IFC day 1
   is Gregorian September 10 and IFC day 8 (today) is September 17.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -114,13 +117,13 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal">
 
-        <TextView style="@style/WidgetPreviewDayCell" android:text="15\n24" tools:ignore="HardcodedText" />
+        <TextView style="@style/WidgetPreviewDayCell" android:text="15\n24\n◆" tools:ignore="HardcodedText" />
         <TextView style="@style/WidgetPreviewDayCell" android:text="16\n25" tools:ignore="HardcodedText" />
         <TextView style="@style/WidgetPreviewDayCell" android:text="17\n26" tools:ignore="HardcodedText" />
         <TextView style="@style/WidgetPreviewDayCell" android:text="18\n27" tools:ignore="HardcodedText" />
         <TextView style="@style/WidgetPreviewDayCell" android:text="19\n28" tools:ignore="HardcodedText" />
         <TextView style="@style/WidgetPreviewDayCell" android:text="20\n29" tools:ignore="HardcodedText" />
-        <TextView style="@style/WidgetPreviewDayCell" android:text="21\n30\n•" tools:ignore="HardcodedText" />
+        <TextView style="@style/WidgetPreviewDayCell" android:text="21\n30\n◆•" tools:ignore="HardcodedText" />
     </LinearLayout>
 
     <LinearLayout

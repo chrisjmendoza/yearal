@@ -1,4 +1,4 @@
-package io.github.chrisjmendoza.yearal.feature.calendar.di
+package io.github.chrisjmendoza.yearal.di
 
 import dagger.Binds
 import dagger.Module
@@ -11,16 +11,21 @@ import io.github.chrisjmendoza.yearal.feature.calendar.holiday.PackHolidaySetPro
 import javax.inject.Singleton
 
 /**
- * Hilt wiring for holiday evaluation in the calendar feature: the one [HolidayEngine] of the process,
- * and the [HolidaySetProvider] binding for [PackHolidaySetProvider].
+ * Hilt wiring for holiday evaluation: the one [HolidayEngine] of the process, and the
+ * [HolidaySetProvider] binding for [PackHolidaySetProvider].
  *
  * The engine memoises per (set, year), so a single instance is what makes repeated month renders a map
- * lookup (docs/ARCHITECTURE.md §3.3). `:core:domain` is a pure-JVM module with no Hilt, hence both
- * bindings live in this feature, their first consumer; the `HolidayPackLoader` binding is in
- * `:feature:settings` for the same reason, and [PackHolidaySetProvider] is injected across that
- * boundary the same way [io.github.chrisjmendoza.yearal.feature.calendar.holiday.HolidayCatalog]
- * already is. **If a further module needs the engine or the provider, move these to `:app`** rather
- * than duplicating them — Hilt rejects two bindings of the same type.
+ * lookup (docs/ARCHITECTURE.md §3.3). `:core:domain` is a pure-JVM module with no Hilt, so both
+ * bindings have to live in an Android module.
+ *
+ * **These moved here from `:feature:calendar` when `:widget` became a second consumer** — the Month
+ * widget's holiday marks resolve [HolidaySetProvider] and [HolidayEngine] through
+ * `io.github.chrisjmendoza.yearal.widget.di.WidgetEntryPoint`. Both bindings' own KDoc said to move
+ * them to `:app` rather than duplicate them the moment a further module needed them, since Hilt
+ * rejects two bindings of the same type, and features never depend on each other (CLAUDE.md rule 10).
+ * It is the same move [FormatterModule] records for `IfcDateFormatter`. [PackHolidaySetProvider] itself
+ * stays in `:feature:calendar`: it is an implementation, injected across the module boundary from here,
+ * exactly as `HolidayCatalog` already is.
  */
 @Module
 @InstallIn(SingletonComponent::class)

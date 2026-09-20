@@ -111,8 +111,9 @@ class MonthGlanceWidget : GlanceAppWidget() {
         val today = todayDate(clock, zoneProvider)
         val monthRange = IfcYearMonth.from(today.ifcDate).gregorianRange
         val eventDates = fetchMonthEventPresence(entryPoint.observeAgendaUseCase(), monthRange)
+        val holidayDates = fetchMonthHolidays(entryPoint.holidaySetProvider(), entryPoint.holidayEngine(), monthRange)
         provideContent {
-            MonthWidgetContent(clock, zoneProvider, formatter, tapHint, eventDates, hasEventsLabel)
+            MonthWidgetContent(clock, zoneProvider, formatter, tapHint, eventDates, hasEventsLabel, holidayDates)
         }
     }
 
@@ -139,6 +140,7 @@ class MonthGlanceWidget : GlanceAppWidget() {
                 tapHint,
                 PREVIEW_EVENT_DATES,
                 hasEventsLabel,
+                PREVIEW_HOLIDAY_DATES,
             )
         }
     }
@@ -172,6 +174,15 @@ class MonthGlanceWidget : GlanceAppWidget() {
          * picker preview must not depend on the database (see [providePreview]'s KDoc).
          */
         internal val PREVIEW_EVENT_DATES = setOf(LocalDate.of(2026, 9, 17), LocalDate.of(2026, 9, 30))
+
+        /**
+         * Illustrative holiday dates only, never the user's enabled packs (a picker preview must not
+         * depend on settings or the database, [providePreview]'s KDoc). Gregorian September 24, 2026 is
+         * IFC day 15 and carries a holiday alone; September 30 is IFC day 21 and is deliberately also in
+         * [PREVIEW_EVENT_DATES], so the preview shows a day with both marks, which is the case the two
+         * glyphs have to stay distinguishable in. Matches `res/layout/month_widget_preview.xml`.
+         */
+        internal val PREVIEW_HOLIDAY_DATES = setOf(LocalDate.of(2026, 9, 24), LocalDate.of(2026, 9, 30))
     }
 }
 
@@ -195,6 +206,7 @@ private fun MonthWidgetContent(
     tapHint: String,
     eventDates: Set<LocalDate>,
     hasEventsLabel: String,
+    holidayDates: Set<LocalDate>,
 ) {
     val colors =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -209,7 +221,7 @@ private fun MonthWidgetContent(
         // Read fresh on every composition, per CLAUDE.md rule 2 -- never `remember`, never a value
         // computed once outside this function and passed down.
         val today = todayDate(clock, zoneProvider)
-        val state = buildMonthWidgetState(today, formatter, tapHint, eventDates, hasEventsLabel)
+        val state = buildMonthWidgetState(today, formatter, tapHint, eventDates, hasEventsLabel, holidayDates)
         val size = LocalSize.current
         val isFull = size.width >= MonthGlanceWidget.FULL.width && size.height >= MonthGlanceWidget.FULL.height
 
@@ -257,16 +269,31 @@ private fun MonthWidgetContent(
                 WeekdayHeaderRow(state.nominalWeekdayHeaders, GlanceTheme.colors.onSurface)
             }
             WeekdayHeaderRow(state.actualWeekdayHeaders, GlanceTheme.colors.onSurfaceVariant)
-            for (row in 0 until GRID_ROWS) {
-                // defaultWeight() in a Column is a *vertical* weight: the four grid rows share whatever
-                // height is left after the title, headers, span and band, so the grid grows with the
-                // widget instead of sitting at the top of a stretched RemoteViews. Without this every
-                // child is wrap_content and a tall widget is mostly empty (owner device feedback,
-                // 2026-09-19); SizeMode.Responsive cannot help, because the launcher stretches the
-                // largest matching breakpoint rather than adding one.
-                Row(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
-                    for (column in 0 until GRID_COLUMNS) {
-                        DayNumberCell(state.days[row * GRID_COLUMNS + column], showGregorianDay = isFull)
+            // The grid's rule lines, without a single extra view: this container is filled with the
+            // line colour, every cell insets itself by GRID_LINE and paints the widget background over
+            // the rest, so what shows through the inset is a hairline between and around the cells.
+            // Glance 1.2.0 has no border modifier (the same gap that makes the today mark a filled pill
+            // rather than the app's ring), and interleaving divider views is not an option either --
+            // Glance's generated layouts cap a Row's children, and seven cells plus six dividers would
+            // exceed it.
+            //
+            // defaultWeight() in a Column is a *vertical* weight: the grid takes whatever height is left
+            // after the title, headers, span and band, so it grows with the widget instead of sitting at
+            // the top of a stretched RemoteViews. Without it every child is wrap_content and a tall
+            // widget is mostly empty (owner device feedback, 2026-09-19); SizeMode.Responsive cannot
+            // help, because the launcher stretches the largest matching breakpoint rather than adding one.
+            Column(
+                modifier =
+                    GlanceModifier
+                        .fillMaxWidth()
+                        .defaultWeight()
+                        .background(GlanceTheme.colors.outline),
+            ) {
+                for (row in 0 until GRID_ROWS) {
+                    Row(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
+                        for (column in 0 until GRID_COLUMNS) {
+                            DayNumberCell(state.days[row * GRID_COLUMNS + column], isFull = isFull)
+                        }
                     }
                 }
             }
@@ -301,13 +328,18 @@ private fun WeekdayHeaderRow(
  * like the day number beside it (docs/ARCHITECTURE.md §5, "not the app's full-grid pattern of one rich
  * description per cell").
  *
- * When [showGregorianDay] is set the cell also shows the day of [dayCell.gregorianDate] in a smaller,
+ * When [isFull] is set the cell also shows the day of [dayCell.gregorianDate] in a smaller,
  * secondary style beneath the IFC number, the same "IFC day large, Gregorian day small" pairing the
  * app's own `MonthGrid` cells use (FEATURES C1). It is on only at the larger responsive size: at
  * [MonthGlanceWidget.FULL] the widget already shows both weekday header rows, and a header that names
  * an IFC weekday *and* a real one while the cells carry a single number promises a second date the grid
  * never delivers (owner device feedback, 2026-09-19). The smaller size shows one header row and one
- * number, which is consistent on its own terms.
+ * number, which is consistent on its own terms. [isFull] also sizes the type: the numbers are set
+ * larger there so they fill the taller cells instead of floating in them.
+ *
+ * The cell insets itself by [GRID_LINE] and paints [GlanceTheme] `widgetBackground` inside that inset,
+ * which is what turns the grid container's own background into the rule lines around this cell -- see
+ * the grid's comment in `MonthWidgetContent`.
  *
  * Its own tap target (ROADMAP M3 T5; FEATURES S5) opens [dayCell.gregorianDate] specifically, through
  * [dayLaunchIntent] -- overriding the whole-widget [monthLaunchIntent] fallback for this cell's own
@@ -317,64 +349,66 @@ private fun WeekdayHeaderRow(
 @Composable
 private fun RowScope.DayNumberCell(
     dayCell: MonthDayCellState,
-    showGregorianDay: Boolean,
+    isFull: Boolean,
 ) {
     val colors = GlanceTheme.colors
     val context = LocalContext.current
-    var cellModifier = GlanceModifier.defaultWeight().fillMaxHeight().padding(1.dp)
+    var cellModifier = GlanceModifier.defaultWeight().fillMaxHeight().padding(GRID_LINE)
     dayLaunchIntent(context, dayCell.gregorianDate.toEpochDay())?.let { intent ->
         cellModifier = cellModifier.clickable(actionStartActivity(intent))
     }
-    Box(
-        modifier = cellModifier,
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
-            Text(
-                text = dayCell.dayOfMonth.toString(),
-                style =
-                    TextStyle(
-                        fontSize = 12.sp,
-                        fontWeight = if (dayCell.isToday) FontWeight.Bold else FontWeight.Normal,
-                        color = if (dayCell.isToday) colors.onPrimary else colors.onSurface,
-                        textAlign = TextAlign.Center,
-                    ),
-                modifier =
-                    GlanceModifier
-                        .fillMaxWidth()
-                        .let { base ->
-                            if (dayCell.isToday) {
-                                base.background(colors.primary).cornerRadius(6.dp)
-                            } else {
-                                base
-                            }
-                        },
-            )
-            if (showGregorianDay) {
+    Box(modifier = cellModifier) {
+        Box(
+            modifier = GlanceModifier.fillMaxSize().background(colors.widgetBackground),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
                 Text(
-                    text = dayCell.gregorianDate.dayOfMonth.toString(),
+                    text = dayCell.dayOfMonth.toString(),
                     style =
                         TextStyle(
-                            fontSize = 9.sp,
+                            fontSize = if (isFull) 15.sp else 12.sp,
+                            fontWeight = if (dayCell.isToday) FontWeight.Bold else FontWeight.Normal,
+                            color = if (dayCell.isToday) colors.onPrimary else colors.onSurface,
+                            textAlign = TextAlign.Center,
+                        ),
+                    modifier =
+                        GlanceModifier
+                            .fillMaxWidth()
+                            .let { base ->
+                                if (dayCell.isToday) {
+                                    base.background(colors.primary).cornerRadius(6.dp)
+                                } else {
+                                    base
+                                }
+                            },
+                )
+                if (isFull) {
+                    Text(
+                        text = dayCell.gregorianDate.dayOfMonth.toString(),
+                        style =
+                            TextStyle(
+                                fontSize = 10.sp,
+                                color = colors.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                            ),
+                        modifier = GlanceModifier.fillMaxWidth(),
+                    )
+                }
+                Text(
+                    text = dayMarks(dayCell.hasHoliday, dayCell.hasEvent),
+                    style =
+                        TextStyle(
+                            fontSize = if (isFull) 9.sp else 8.sp,
+                            // onSurfaceVariant even on today: the pill's background stops at the number
+                            // above, so this line sits on the cell background whatever the day is, and
+                            // onPrimary here would be near-invisible against it.
                             color = colors.onSurfaceVariant,
                             textAlign = TextAlign.Center,
                         ),
                     modifier = GlanceModifier.fillMaxWidth(),
                 )
             }
-            Text(
-                text = if (dayCell.hasEvent) EVENT_DOT_GLYPH else "",
-                style =
-                    TextStyle(
-                        fontSize = 8.sp,
-                        // onSurfaceVariant even on today: the pill's background stops at the number
-                        // above, so this line sits on the widget background whatever the day is, and
-                        // onPrimary here would be near-invisible against it.
-                        color = colors.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                    ),
-                modifier = GlanceModifier.fillMaxWidth(),
-            )
         }
     }
 }
@@ -385,6 +419,36 @@ private fun RowScope.DayNumberCell(
  * given to the punctuation joining [MonthWidgetState.contentDescription]'s sentences).
  */
 private const val EVENT_DOT_GLYPH: String = "•"
+
+/**
+ * The holiday mark, a diamond so it is distinguishable from the round [EVENT_DOT_GLYPH] by **shape**
+ * rather than colour (CLAUDE.md rule 3) -- the same distinction, and the same order, the app's own
+ * `DayMarks` draws (FEATURES C4). Also not language content.
+ */
+private const val HOLIDAY_MARK_GLYPH: String = "◆"
+
+/** The hairline a day cell insets itself by, which the grid container's background shows through. */
+private val GRID_LINE = 1.dp
+
+/**
+ * The marks line under a day: the holiday diamond first, then the event dot, matching the app's own
+ * `DayMarks` order. Every cell renders this line even when it is empty, so a mark appearing never
+ * shifts the grid's row height.
+ *
+ * The widget shows *presence*, so at most one event dot, where the app's cell shows up to three: the
+ * widget's snapshot (`ObserveAgendaUseCase.presence`) is deliberately a boolean per day and carries no
+ * count, because a count is closer to event content than a home screen should hold (CLAUDE.md rule 8).
+ */
+private fun dayMarks(
+    hasHoliday: Boolean,
+    hasEvent: Boolean,
+): String =
+    when {
+        hasHoliday && hasEvent -> "$HOLIDAY_MARK_GLYPH$EVENT_DOT_GLYPH"
+        hasHoliday -> HOLIDAY_MARK_GLYPH
+        hasEvent -> EVENT_DOT_GLYPH
+        else -> ""
+    }
 
 /**
  * The full-width Leap Day / Year Day band, [intercalary]. Uses the tertiary-container colour, matching
@@ -414,7 +478,9 @@ private fun IntercalaryRow(intercalary: MonthIntercalaryState) {
     }
     Column(modifier = bandModifier) {
         Text(
-            text = if (intercalary.hasEvent) "${intercalary.label} $EVENT_DOT_GLYPH" else intercalary.label,
+            text =
+                dayMarks(intercalary.hasHoliday, intercalary.hasEvent)
+                    .let { marks -> if (marks.isEmpty()) intercalary.label else "${intercalary.label} $marks" },
             style =
                 TextStyle(
                     fontSize = 12.sp,

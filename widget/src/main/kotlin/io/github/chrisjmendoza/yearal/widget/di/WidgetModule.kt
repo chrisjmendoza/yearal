@@ -9,6 +9,8 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import io.github.chrisjmendoza.yearal.core.domain.ZoneProvider
 import io.github.chrisjmendoza.yearal.core.domain.event.ObserveAgendaUseCase
+import io.github.chrisjmendoza.yearal.core.domain.holiday.HolidayEngine
+import io.github.chrisjmendoza.yearal.core.domain.holiday.HolidaySetProvider
 import io.github.chrisjmendoza.yearal.core.domain.rollover.DayRolloverListener
 import io.github.chrisjmendoza.yearal.core.domain.widget.WidgetUpdater
 import io.github.chrisjmendoza.yearal.widget.DebouncedWidgetUpdater
@@ -101,4 +103,22 @@ interface WidgetEntryPoint {
      * "Data").
      */
     fun observeAgendaUseCase(): ObserveAgendaUseCase
+
+    /**
+     * The holiday sets the user has enabled, for the Month widget's holiday marks. Read as a single
+     * bounded snapshot per render ([io.github.chrisjmendoza.yearal.widget.month.fetchMonthHolidays]),
+     * never collected continuously, exactly like [observeAgendaUseCase] above.
+     *
+     * Both this and [holidayEngine] are `:core:domain` types, so the widget takes no new module
+     * dependency to draw holidays; only the Hilt bindings are elsewhere, in `:app`'s `HolidayModule`.
+     * They were moved there from `:feature:calendar` when this widget became their second consumer,
+     * since a feature is never depended on by another module (CLAUDE.md rule 10).
+     */
+    fun holidaySetProvider(): HolidaySetProvider
+
+    /**
+     * The memoising holiday evaluator shared with the app, so the widget's per-render evaluation of the
+     * shown month is a map lookup rather than a fresh computation (docs/ARCHITECTURE.md §3.3).
+     */
+    fun holidayEngine(): HolidayEngine
 }

@@ -76,9 +76,13 @@ class MonthWidgetPreviewLayoutTest {
     }
 
     @Test
-    fun `today (day 8) and the illustrative day 21 carry the event-dot glyph on a third line`() {
+    fun `the illustrative marks match MonthGlanceWidget's own preview sample`() {
         val allCellText = gridCells(root())
 
-        allCellText.filter { it.contains('•') } shouldBe listOf("8\n17\n•", "21\n30\n•")
+        // PREVIEW_EVENT_DATES is Gregorian Sep 17 and Sep 30 (IFC days 8 and 21);
+        // PREVIEW_HOLIDAY_DATES is Sep 24 and Sep 30 (IFC days 15 and 21). Day 21 therefore carries
+        // both marks, holiday diamond first, which is the pairing the two glyphs must stay legible in.
+        allCellText.filter { it.contains('•') } shouldBe listOf("8\n17\n•", "21\n30\n◆•")
+        allCellText.filter { it.contains('◆') } shouldBe listOf("15\n24\n◆", "21\n30\n◆•")
     }
 }

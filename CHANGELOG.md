@@ -206,6 +206,12 @@ Architecture, tooling and CI:
 
 - The Convert tab uses a swap-arrows icon instead of one that read as "refresh" (R5).
 
+- The Month widget draws its grid as a grid: thin rule lines around every day cell, and a mark under any
+  day that has something on it — a diamond for a holiday, a dot for an event, the same shapes and order
+  the app's own month grid uses. Holidays come from the packs enabled in Settings; neither mark ever
+  carries a name or a count. Day numbers are set larger at the bigger widget size so they fill their
+  cells rather than floating in them.
+
 - The Month widget fills the space it is given: the grid now stretches to the widget's full height instead
   of sitting in the top third of a tall one, and each day cell's tap target grows with it. At the larger
   size every cell also shows its Gregorian day under the IFC day, matching the app's own month grid — the
