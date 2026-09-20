@@ -23,6 +23,7 @@ import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.RowScope
+import androidx.glance.layout.fillMaxHeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
@@ -56,8 +57,13 @@ import java.util.Locale
 /**
  * The perpetual Month-grid home-screen widget (FEATURES S2-S5; docs/ARCHITECTURE.md §5 "Widget types"
  * item 2; ROADMAP M5 T3): the current IFC month as a 4x7 grid with today highlighted, the trailing
- * Leap Day / Year Day band, and, at the larger responsive size, both weekday header rows and the
- * month's Gregorian span.
+ * Leap Day / Year Day band, and, at the larger responsive size, both weekday header rows, a Gregorian
+ * day number in every cell, and the month's Gregorian span beneath the title.
+ *
+ * The four grid rows carry a vertical weight, so the grid grows into whatever height the launcher gives
+ * the widget rather than sitting at the top of a stretched RemoteViews: a widget taller than [FULL] is
+ * still rendered from [FULL]'s layout, since `SizeMode.Responsive` stretches the largest matching
+ * breakpoint instead of adding one.
  *
  * Every [provideGlance] call -- the initial placement,
  * [androidx.glance.appwidget.GlanceAppWidget.updateAll] from
@@ -79,9 +85,11 @@ import java.util.Locale
 class MonthGlanceWidget : GlanceAppWidget() {
     /**
      * Two breakpoints (task requires at least two; docs/ARCHITECTURE.md §5 "All widgets use
-     * `SizeMode.Responsive`"): [COMPACT] shows the grid with a single actual-weekday header row and no
-     * Gregorian span line; [FULL] adds the nominal weekday header row too (`BOTH`, the app default when
-     * space allows -- ARCHITECTURE "Reconciled decisions" #7) and the Gregorian span line.
+     * `SizeMode.Responsive`"): [COMPACT] shows the grid with a single actual-weekday header row, one
+     * number per cell and no Gregorian span line; [FULL] adds the nominal weekday header row too
+     * (`BOTH`, the app default when space allows -- ARCHITECTURE "Reconciled decisions" #7), the
+     * Gregorian span line, and the Gregorian day number in each cell, so that the two header rows and
+     * the cells agree about how many dates are on show.
      */
     override val sizeMode: SizeMode = SizeMode.Responsive(setOf(COMPACT, FULL))
 
@@ -142,7 +150,8 @@ class MonthGlanceWidget : GlanceAppWidget() {
          * actual-weekday header row. */
         val COMPACT: DpSize = DpSize(250.dp, 180.dp)
 
-        /** About 5 columns x 5 rows. Adds the nominal weekday header row and the Gregorian span line. */
+        /** About 5 columns x 5 rows. Adds the nominal weekday header row, the Gregorian span line and
+         * a Gregorian day number in every cell. Also the layout a *larger* widget is stretched from. */
         val FULL: DpSize = DpSize(320.dp, 320.dp)
 
         /**
@@ -232,18 +241,9 @@ private fun MonthWidgetContent(
                 modifier = GlanceModifier.fillMaxWidth().padding(bottom = 2.dp),
             )
             if (isFull) {
-                WeekdayHeaderRow(state.nominalWeekdayHeaders, GlanceTheme.colors.onSurface)
-            }
-            WeekdayHeaderRow(state.actualWeekdayHeaders, GlanceTheme.colors.onSurfaceVariant)
-            for (row in 0 until GRID_ROWS) {
-                Row(modifier = GlanceModifier.fillMaxWidth()) {
-                    for (column in 0 until GRID_COLUMNS) {
-                        DayNumberCell(state.days[row * GRID_COLUMNS + column])
-                    }
-                }
-            }
-            state.intercalary?.let { IntercalaryRow(it) }
-            if (isFull) {
+                // Directly under the title rather than after the grid: it names the whole month, so it
+                // belongs with the month's heading, and putting it last left the grid's final row and the
+                // span competing for the eye at the bottom edge (owner device feedback, 2026-09-19).
                 Text(
                     text = state.gregorianSpanLabel,
                     style =
@@ -252,9 +252,25 @@ private fun MonthWidgetContent(
                             color = GlanceTheme.colors.onSurfaceVariant,
                             textAlign = TextAlign.Center,
                         ),
-                    modifier = GlanceModifier.fillMaxWidth().padding(top = 2.dp),
+                    modifier = GlanceModifier.fillMaxWidth().padding(bottom = 4.dp),
                 )
+                WeekdayHeaderRow(state.nominalWeekdayHeaders, GlanceTheme.colors.onSurface)
             }
+            WeekdayHeaderRow(state.actualWeekdayHeaders, GlanceTheme.colors.onSurfaceVariant)
+            for (row in 0 until GRID_ROWS) {
+                // defaultWeight() in a Column is a *vertical* weight: the four grid rows share whatever
+                // height is left after the title, headers, span and band, so the grid grows with the
+                // widget instead of sitting at the top of a stretched RemoteViews. Without this every
+                // child is wrap_content and a tall widget is mostly empty (owner device feedback,
+                // 2026-09-19); SizeMode.Responsive cannot help, because the launcher stretches the
+                // largest matching breakpoint rather than adding one.
+                Row(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
+                    for (column in 0 until GRID_COLUMNS) {
+                        DayNumberCell(state.days[row * GRID_COLUMNS + column], showGregorianDay = isFull)
+                    }
+                }
+            }
+            state.intercalary?.let { IntercalaryRow(it) }
         }
     }
 }
@@ -285,15 +301,27 @@ private fun WeekdayHeaderRow(
  * like the day number beside it (docs/ARCHITECTURE.md §5, "not the app's full-grid pattern of one rich
  * description per cell").
  *
+ * When [showGregorianDay] is set the cell also shows the day of [dayCell.gregorianDate] in a smaller,
+ * secondary style beneath the IFC number, the same "IFC day large, Gregorian day small" pairing the
+ * app's own `MonthGrid` cells use (FEATURES C1). It is on only at the larger responsive size: at
+ * [MonthGlanceWidget.FULL] the widget already shows both weekday header rows, and a header that names
+ * an IFC weekday *and* a real one while the cells carry a single number promises a second date the grid
+ * never delivers (owner device feedback, 2026-09-19). The smaller size shows one header row and one
+ * number, which is consistent on its own terms.
+ *
  * Its own tap target (ROADMAP M3 T5; FEATURES S5) opens [dayCell.gregorianDate] specifically, through
  * [dayLaunchIntent] -- overriding the whole-widget [monthLaunchIntent] fallback for this cell's own
- * bounds, the same nested-clickable pattern `RemoteViews` gives any calendar-style widget.
+ * bounds, the same nested-clickable pattern `RemoteViews` gives any calendar-style widget. The cell
+ * fills its row's full height so that target grows with the widget too.
  */
 @Composable
-private fun RowScope.DayNumberCell(dayCell: MonthDayCellState) {
+private fun RowScope.DayNumberCell(
+    dayCell: MonthDayCellState,
+    showGregorianDay: Boolean,
+) {
     val colors = GlanceTheme.colors
     val context = LocalContext.current
-    var cellModifier = GlanceModifier.defaultWeight().padding(1.dp)
+    var cellModifier = GlanceModifier.defaultWeight().fillMaxHeight().padding(1.dp)
     dayLaunchIntent(context, dayCell.gregorianDate.toEpochDay())?.let { intent ->
         cellModifier = cellModifier.clickable(actionStartActivity(intent))
     }
@@ -322,12 +350,27 @@ private fun RowScope.DayNumberCell(dayCell: MonthDayCellState) {
                             }
                         },
             )
+            if (showGregorianDay) {
+                Text(
+                    text = dayCell.gregorianDate.dayOfMonth.toString(),
+                    style =
+                        TextStyle(
+                            fontSize = 9.sp,
+                            color = colors.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        ),
+                    modifier = GlanceModifier.fillMaxWidth(),
+                )
+            }
             Text(
                 text = if (dayCell.hasEvent) EVENT_DOT_GLYPH else "",
                 style =
                     TextStyle(
                         fontSize = 8.sp,
-                        color = if (dayCell.isToday) colors.onPrimary else colors.onSurfaceVariant,
+                        // onSurfaceVariant even on today: the pill's background stops at the number
+                        // above, so this line sits on the widget background whatever the day is, and
+                        // onPrimary here would be near-invisible against it.
+                        color = colors.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     ),
                 modifier = GlanceModifier.fillMaxWidth(),

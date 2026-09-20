@@ -206,6 +206,13 @@ Architecture, tooling and CI:
 
 - The Convert tab uses a swap-arrows icon instead of one that read as "refresh" (R5).
 
+- The Month widget fills the space it is given: the grid now stretches to the widget's full height instead
+  of sitting in the top third of a tall one, and each day cell's tap target grows with it. At the larger
+  size every cell also shows its Gregorian day under the IFC day, matching the app's own month grid — the
+  widget's two weekday header rows name an IFC weekday and a real one, so a single number per cell was
+  promising a second date it never showed. The month's Gregorian span moved from below the grid to
+  directly under the month title.
+
 - The daily midnight refresh now uses the same exact alarm as reminders, with the previous 10-minute
   windowed alarm as the fallback.
 

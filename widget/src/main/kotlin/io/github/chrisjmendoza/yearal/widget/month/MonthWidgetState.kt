@@ -14,9 +14,10 @@ import java.time.LocalDate
  * itself is `:core:calendar`'s [IfcDate.Regular]; this only carries what the widget renders).
  *
  * @property dayOfMonth 1..28.
- * @property gregorianDate the real, Gregorian date of this cell (CLAUDE.md rule 4), used to build its
- *   tap target ([io.github.chrisjmendoza.yearal.widget.today.dayLaunchIntent], ROADMAP M3 T5) --
- *   never displayed itself.
+ * @property gregorianDate the real, Gregorian date of this cell (CLAUDE.md rule 4). It builds the
+ *   cell's tap target ([io.github.chrisjmendoza.yearal.widget.today.dayLaunchIntent], ROADMAP M3 T5),
+ *   and at the widget's larger responsive size its day of month is also shown under the IFC number,
+ *   the same pairing the app's own `MonthGrid` cell uses (FEATURES C1).
  * @property isToday whether this cell is the real today, matched by **Gregorian** date (CLAUDE.md
  *   rule 4 -- events, "today", and everything else tied to real life compare Gregorian dates, never
  *   IFC numeric fields).

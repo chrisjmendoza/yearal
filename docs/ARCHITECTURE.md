@@ -769,10 +769,22 @@ package `widget.month`) is the second widget in `:widget`, built the same way as
   band from `IfcYearMonth.trailingIntercalary`, and the Gregorian span.
 - Two `SizeMode.Responsive` breakpoints (the task's minimum): `COMPACT` (250x180dp, about 4x3 home-screen
   cells — `docs/ARCHITECTURE.md` §5's "Month grid: 4x3 and larger") shows the grid with one actual-weekday
-  header row and no Gregorian span line; `FULL` (320x320dp) adds the nominal weekday header row too — the
-  app's `BOTH` default (Reconciled decisions #7) — plus the Gregorian span line. `res/xml/month_widget_info.xml`
+  header row, one number per cell and no Gregorian span line; `FULL` (320x320dp) adds the nominal weekday
+  header row too — the app's `BOTH` default (Reconciled decisions #7) — the Gregorian span line, and a
+  Gregorian day number under the IFC one in every cell. That last pairing is the same "IFC day large,
+  Gregorian day small" the app's own `MonthGrid` cell uses (FEATURES C1), and it exists because the two
+  header rows name an IFC weekday *and* a real one: cells carrying a single number promise a second date
+  the grid never delivers (owner device feedback, 2026-09-19). `res/xml/month_widget_info.xml`
   and the `res/xml-v31` split mirror the Today widget's pattern exactly, with `targetCellWidth`/`Height` at
   4x3 and the same 4-hour `updatePeriodMillis` backstop.
+- **A widget larger than `FULL` is stretched, not re-laid-out.** `SizeMode.Responsive` picks the largest
+  breakpoint that fits and the launcher stretches that RemoteViews, so on a tall widget every
+  `wrap_content` child pins to the top and the rest is dead space. The four grid rows therefore carry a
+  vertical `defaultWeight()` and each day cell a `fillMaxHeight()`: the grid grows into the available
+  height at any size, and the day tap targets grow with it. Adding a third breakpoint would not fix this —
+  there is always a size above the largest one.
+- The Gregorian span sits directly under the month title rather than below the grid: it names the whole
+  month, so it belongs with the month's heading, and at the bottom it competed with the grid's last row.
 - Today is marked by shape and weight, never colour alone (CLAUDE.md rule 3; FEATURES Q4): a rounded,
   filled pill behind a bold day number, or — when today is the intercalary day — the band itself switches
   from the tertiary container to the primary container plus bold text. Glance 1.2.0 has no border/outline
