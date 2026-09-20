@@ -8,7 +8,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
@@ -16,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
+import io.github.chrisjmendoza.yearal.core.designsystem.R
+import io.github.chrisjmendoza.yearal.core.designsystem.explainer.ExplainerInfoButton
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
 import java.time.LocalDate
@@ -39,6 +44,17 @@ private val TitleBottomPadding = 8.dp
  *
  * The grid is a semantics traversal group; the cells are a plain `Column` of `Row`s, which keeps
  * screenshot and semantics tests simple.
+ *
+ * **Contextual explainers (FEATURES L3).** Two [ExplainerInfoButton]s answer the two beliefs
+ * `docs/FEATURES.md` Part 1 records as a steady source of "this is wrong" reviews. Neither sits
+ * *inside* the row it explains: the seven weekday headers and the 28 cells share one set of column
+ * widths, so a 48dp button among them would pull the headers out of alignment with the days beneath.
+ * The weekday explainer therefore goes at the end of the title row, immediately above the headers it
+ * describes, where the heading leaves the space free; the intercalary explainer goes beside the band,
+ * which spans all seven columns and so aligns to nothing. The band and its [IntercalaryPlaceholder]
+ * are wrapped in one full-width slot ([MonthGridTestTags.INTERCALARY_SLOT]) that is the same size in
+ * every month, which is what keeps a pager of months from jumping — the band itself is narrower than
+ * the placeholder by the width of the button beside it.
  *
  * @param month the month to show.
  * @param today the real today as a Gregorian date, or `null` to mark no cell.
@@ -79,14 +95,21 @@ fun MonthGrid(
             }
         }
     Column(modifier = modifier.fillMaxWidth().semantics { isTraversalGroup = true }) {
-        Text(
-            text = formatter.monthTitle(month),
-            style = MaterialTheme.typography.titleLarge,
-            modifier =
-                Modifier
-                    .padding(bottom = TitleBottomPadding)
-                    .semantics { heading() },
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = TitleBottomPadding),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = formatter.monthTitle(month),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
+            ExplainerInfoButton(
+                title = stringResource(R.string.weekday_explainer_title),
+                explanation = stringResource(R.string.weekday_explainer_body),
+                modifier = Modifier.testTag(MonthGridTestTags.WEEKDAY_EXPLAINER),
+            )
+        }
         WeekdayHeaders(month = month, display = weekdayDisplay)
         for (row in 0 until GRID_ROWS) {
             Row(modifier = Modifier.fillMaxWidth()) {
@@ -105,21 +128,32 @@ fun MonthGrid(
                 }
             }
         }
-        when (val intercalary = month.trailingIntercalary) {
-            null -> {
-                IntercalaryPlaceholder(month = month)
-            }
+        Row(
+            modifier = Modifier.fillMaxWidth().testTag(MonthGridTestTags.INTERCALARY_SLOT),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            when (val intercalary = month.trailingIntercalary) {
+                null -> {
+                    IntercalaryPlaceholder(month = month, modifier = Modifier.weight(1f))
+                }
 
-            else -> {
-                val gregorian = intercalary.toLocalDate()
-                IntercalaryBand(
-                    day = intercalary,
-                    isToday = gregorian == today,
-                    isSelected = gregorian == selected,
-                    eventCount = eventCounts[gregorian] ?: 0,
-                    holidayName = holidays[gregorian],
-                    onClick = { onDayClick(intercalary) },
-                )
+                else -> {
+                    val gregorian = intercalary.toLocalDate()
+                    IntercalaryBand(
+                        day = intercalary,
+                        isToday = gregorian == today,
+                        isSelected = gregorian == selected,
+                        eventCount = eventCounts[gregorian] ?: 0,
+                        holidayName = holidays[gregorian],
+                        onClick = { onDayClick(intercalary) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    ExplainerInfoButton(
+                        title = stringResource(R.string.intercalary_explainer_title),
+                        explanation = stringResource(R.string.intercalary_explainer_body),
+                        modifier = Modifier.testTag(MonthGridTestTags.INTERCALARY_EXPLAINER),
+                    )
+                }
             }
         }
     }

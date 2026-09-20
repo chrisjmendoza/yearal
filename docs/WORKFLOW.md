@@ -61,7 +61,14 @@ Robolectric pauses the main looper, and its clock does **not** follow real time.
 `Dispatchers.Main` — including `viewModelScope`, so most `stateIn` sharing — advances only when the test
 pumps the looper (`shadowOf(Looper.getMainLooper()).idle()`); `Thread.sleep` advances nothing. A test that
 reads `.value` once after a single pump passes on an idle machine and fails under load or on CI. Pump in a
-bounded loop until the value arrives, and fail with a message saying what never came. Separately, a flow
+bounded loop until the value arrives, and fail with a message saying what never came. **Bound that loop by
+elapsed time, not by a pump count.** A count is safe only when the whole chain is in-process coroutine
+hopping, where pumping as fast as possible drains it. If the state being awaited is fed by genuine
+background work — DataStore's or Room's own `Dispatchers.IO` — a tight loop of bare `idle()` calls with
+nothing queued returns almost instantly and can burn its entire budget before that thread is ever
+scheduled, failing a test that would have passed milliseconds later. Sleep a few milliseconds between
+attempts and use `System.nanoTime` for the deadline (rule 2 forbids `currentTimeMillis`, and a monotonic
+source is what a timeout wants anyway); `:app`'s `awaitOnMainLooper` is the shared version. Separately, a flow
 shared `WhileSubscribed` does not run at all unless something collects it: if the only subscriber is the
 Compose tree, subscribe in the test instead of resting on composition having produced a frame.
 

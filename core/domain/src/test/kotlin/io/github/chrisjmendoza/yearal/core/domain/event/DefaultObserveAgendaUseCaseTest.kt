@@ -17,9 +17,10 @@ import io.kotest.matchers.maps.shouldContainKey
 import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 import java.time.LocalDate
@@ -31,12 +32,20 @@ import java.time.ZoneId
  * colour resolution, holidays, bucketing) and the re-emission and empty-range guarantees of
  * `docs/contracts/Events.md` §5. Expected dates are hand-computed from the IFC recurrence semantics
  * documented on [IfcRecurrence] and worked in `docs/adr/0005-events-contract.md`.
+ *
+ * [dispatcher] is passed as [DefaultObserveAgendaUseCase]'s own `workDispatcher` (an `internal`
+ * constructor parameter, ROADMAP R9) and as `runTest`'s dispatcher in every test, so the `flowOn`
+ * inside `invoke`/`presence` shares this test's virtual-time scheduler instead of a real thread pool —
+ * exactly the trap `HolidaysViewModelTest` documents on its own `dispatcher`. Without this seam a live
+ * collector's second emission (see the zone-change test below) would race a real background thread
+ * rather than settle deterministically under `advanceUntilIdle`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultObserveAgendaUseCaseTest {
     private val utc = ZoneId.of("UTC")
     private val newYork = ZoneId.of("America/New_York")
     private val tokyo = ZoneId.of("Asia/Tokyo")
+    private val dispatcher = StandardTestDispatcher()
 
     private fun useCase(
         repository: FakeEventRepository,
@@ -50,13 +59,14 @@ class DefaultObserveAgendaUseCaseTest {
         holidaySetProvider = FakeHolidaySetProvider(holidaySets),
         zoneProvider = zoneProvider,
         timeChangeSignal = timeChangeSignal,
+        workDispatcher = dispatcher,
     )
 
     // --- Year Day and Leap Day (CLAUDE.md rule 6) ---------------------------------------------------
 
     @Test
     fun `an every-Year-Day event appears on Year Day and nowhere else in the range`() =
-        runTest {
+        runTest(dispatcher) {
             val repository = FakeEventRepository()
             repository.seed(listOf(EventFixtures.yearDayYearly()))
             val agendas =
@@ -76,7 +86,7 @@ class DefaultObserveAgendaUseCaseTest {
 
     @Test
     fun `each Leap Day common-year policy yields its own documented date in 2025`() =
-        runTest {
+        runTest(dispatcher) {
             val repository = FakeEventRepository()
             // 2025 is a common year: JUNE_28 falls on Gregorian June 17, SOL_1 on June 18, SKIP yields nothing.
             val june28 = repository.seed(listOf(EventFixtures.leapDayYearly(policy = LeapDayPolicy.JUNE_28)))[0]
@@ -98,7 +108,7 @@ class DefaultObserveAgendaUseCaseTest {
 
     @Test
     fun `Sol 13 lands on Gregorian June 30 in both a common and a leap year`() =
-        runTest {
+        runTest(dispatcher) {
             val repository = FakeEventRepository()
             repository.seed(listOf(EventFixtures.sol13Yearly()))
             val agendas =
@@ -114,7 +124,7 @@ class DefaultObserveAgendaUseCaseTest {
 
     @Test
     fun `a zoned occurrence is bucketed on its device-zone date, which can differ from its own date`() =
-        runTest {
+        runTest(dispatcher) {
             val repository = FakeEventRepository()
             // 22:00-23:00 America/New_York on Jan 5, 2026 (EST, UTC-5) is 12:00-13:00 the next day in Tokyo.
             val event =
@@ -142,7 +152,7 @@ class DefaultObserveAgendaUseCaseTest {
 
     @Test
     fun `a multi-day occurrence is clipped to the requested range but still found from either edge`() =
-        runTest {
+        runTest(dispatcher) {
             val repository = FakeEventRepository()
             repository.seed(listOf(EventFixtures.floatingMultiDay()))
             val useCase = useCase(repository)
@@ -161,7 +171,7 @@ class DefaultObserveAgendaUseCaseTest {
 
     @Test
     fun `events of a hidden calendar never appear`() =
-        runTest {
+        runTest(dispatcher) {
             val repository = FakeEventRepository()
             val hiddenCalendarId = repository.upsertCalendar(EventCalendar(name = "Hidden", visible = false))
             repository.seed(listOf(EventFixtures.allDay(calendarId = hiddenCalendarId)))
@@ -173,7 +183,7 @@ class DefaultObserveAgendaUseCaseTest {
 
     @Test
     fun `an exdate removes only that occurrence, other years remain`() =
-        runTest {
+        runTest(dispatcher) {
             val repository = FakeEventRepository()
             val stored = repository.seed(listOf(EventFixtures.sol13Yearly()))[0]
             repository.addExdate(stored.id, EventFixtures.SOL_13_2026)
@@ -191,7 +201,7 @@ class DefaultObserveAgendaUseCaseTest {
 
     @Test
     fun `a holiday and an event on the same date both appear, holidays separate from entries`() =
-        runTest {
+        runTest(dispatcher) {
             val repository = FakeEventRepository()
             repository.seed(listOf(EventFixtures.yearDayYearly()))
 
@@ -215,7 +225,7 @@ class DefaultObserveAgendaUseCaseTest {
 
     @Test
     fun `the zone is re-read at every recomputation, not cached from construction`() =
-        runTest {
+        runTest(dispatcher) {
             val repository = FakeEventRepository()
             // 22:00-23:00 America/New_York (EST) on Jan 5 is 12:00-13:00 in Tokyo the next day.
             val event =
@@ -239,7 +249,7 @@ class DefaultObserveAgendaUseCaseTest {
 
     @Test
     fun `a zone change with the signal fired re-buckets a live occurrence, with nothing changed in the repository`() =
-        runTest {
+        runTest(dispatcher) {
             val repository = FakeEventRepository()
             // 22:00-23:00 America/New_York (EST) on Jan 5 is 12:00-13:00 in Tokyo the next day.
             val event =
@@ -255,28 +265,30 @@ class DefaultObserveAgendaUseCaseTest {
             val range = LocalDate.of(2026, 1, 5)..LocalDate.of(2026, 1, 6)
 
             // Both invoke() and presence() stay subscribed for the whole test — the same live
-            // collection the signal is meant to wake up, never a fresh subscription — and both flows
-            // genuinely run on Dispatchers.Default (see the KDoc on invoke()/presence()), so the test
-            // waits on real channels rather than on runCurrent(), which only drives virtual time on
-            // the test dispatcher and cannot observe work on a different, real dispatcher.
-            val agendaKeys = Channel<Set<LocalDate>>(Channel.UNLIMITED)
-            val presenceKeys = Channel<Set<LocalDate>>(Channel.UNLIMITED)
-            val liveAgenda = launch { useCase.invoke(range).collect { agendaKeys.send(it.keys) } }
-            val livePresence = launch { useCase.presence(range).collect { presenceKeys.send(it) } }
+            // collection the signal is meant to wake up, never a fresh subscription. ROADMAP R9: now
+            // that the use case's workDispatcher is this test's own StandardTestDispatcher rather than
+            // a real Dispatchers.Default thread pool, advanceUntilIdle() alone drives both collectors
+            // to their latest emission — no real channel wait needed to avoid racing a background thread.
+            val agendaKeys = mutableListOf<Set<LocalDate>>()
+            val presenceKeys = mutableListOf<Set<LocalDate>>()
+            val liveAgenda = launch { useCase.invoke(range).collect { agendaKeys.add(it.keys) } }
+            val livePresence = launch { useCase.presence(range).collect { presenceKeys.add(it) } }
+            advanceUntilIdle()
 
             assertSoftly {
-                agendaKeys.receive() shouldBe setOf(LocalDate.of(2026, 1, 5))
-                presenceKeys.receive() shouldBe setOf(LocalDate.of(2026, 1, 5))
+                agendaKeys.last() shouldBe setOf(LocalDate.of(2026, 1, 5))
+                presenceKeys.last() shouldBe setOf(LocalDate.of(2026, 1, 5))
             }
 
             // Nothing in the repository changes — only the device zone and the invalidation signal,
             // exactly what a real TIMEZONE_CHANGED broadcast on an already-open screen looks like.
             zoneProvider.set(tokyo)
             signal.fire()
+            advanceUntilIdle()
 
             assertSoftly {
-                agendaKeys.receive() shouldBe setOf(LocalDate.of(2026, 1, 6))
-                presenceKeys.receive() shouldBe setOf(LocalDate.of(2026, 1, 6))
+                agendaKeys.last() shouldBe setOf(LocalDate.of(2026, 1, 6))
+                presenceKeys.last() shouldBe setOf(LocalDate.of(2026, 1, 6))
             }
 
             liveAgenda.cancel()
@@ -285,7 +297,7 @@ class DefaultObserveAgendaUseCaseTest {
 
     @Test
     fun `an empty range gives an empty result for both invoke and presence`() =
-        runTest {
+        runTest(dispatcher) {
             val repository = FakeEventRepository()
             repository.seed(listOf(EventFixtures.yearDayYearly()))
             val useCase = useCase(repository, holidaySets = listOf(ifcSet))
@@ -301,7 +313,7 @@ class DefaultObserveAgendaUseCaseTest {
 
     @Test
     fun `presence reports only the dates with an event occurrence, never a holiday-only date`() =
-        runTest {
+        runTest(dispatcher) {
             val repository = FakeEventRepository()
             repository.seed(listOf(EventFixtures.sol13Yearly()))
             val range = LocalDate.of(2026, 6, 1)..LocalDate.of(2026, 12, 31)

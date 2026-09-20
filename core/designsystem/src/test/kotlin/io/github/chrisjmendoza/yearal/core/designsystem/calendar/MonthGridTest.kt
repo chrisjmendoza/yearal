@@ -28,6 +28,7 @@ import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onChildAt
 import androidx.compose.ui.test.onChildren
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -36,6 +37,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
@@ -57,7 +59,8 @@ import java.util.Locale
  * [MonthGrid] under Robolectric, written from `docs/calendar-spec.md` §2.2–§2.3, §4.1, §7.2 and
  * `docs/ARCHITECTURE.md` §4 ("Intercalary days in a 7-column grid", "Accessibility"): the 4 × 7
  * cells with both numbers, the three header modes, the band and its same-height placeholder,
- * clicks, the today ring, the exact spoken description, the dot cap and RTL.
+ * clicks, the today ring, the exact spoken description, the dot cap, RTL, and the two contextual
+ * explainers (FEATURES L3).
  */
 @RunWith(AndroidJUnit4::class)
 // Native graphics: legacy mode fakes every text line at one height, which would hide any layout
@@ -65,6 +68,11 @@ import java.util.Locale
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w360dp-h900dp")
 class MonthGridTest {
+    private companion object {
+        /** Material 3's minimum touch target: the width an explainer button takes up in a row. */
+        private val MINIMUM_TOUCH_TARGET = 48.dp
+    }
+
     @get:Rule
     val compose = createComposeRule()
 
@@ -251,12 +259,97 @@ class MonthGridTest {
         }
     }
 
+    // What must match between a month with an intercalary day and one without is the whole slot: since
+    // FEATURES L3 the band shares its row with an explainer button, so the band alone is narrower than
+    // the placeholder by that button's width. The slot is what the pager sees.
     private fun assertSlotHeightsEqual() {
+        val slots = compose.onAllNodesWithTag(MonthGridTestTags.INTERCALARY_SLOT).fetchSemanticsNodes()
         val band = compose.onNodeWithTag(MonthGridTestTags.INTERCALARY_BAND).fetchSemanticsNode().size
         val placeholder = compose.onNodeWithTag(MonthGridTestTags.INTERCALARY_PLACEHOLDER).fetchSemanticsNode().size
+        // The room the explainer takes in the row is Material 3's minimum touch target, which
+        // ExplainerInfoButtonTest pins directly; the button's own node is the smaller state layer
+        // inside it, so it cannot be measured here. Font scale does not affect a dp-to-px conversion.
+        val explainerSpace = with(compose.density) { MINIMUM_TOUCH_TARGET.roundToPx() }
+
         band.height shouldBeGreaterThan 0
+        slots.size shouldBe 2
+        // The invariant: both slots are identical, so a pager between these two months never jumps.
+        slots[0].size shouldBe slots[1].size
         placeholder.height shouldBe band.height
-        placeholder.width shouldBe band.width
+        // Within the slot, the placeholder takes the full width and the band gives up the button's.
+        placeholder.width shouldBe slots[0].size.width
+        band.width shouldBe slots[0].size.width - explainerSpace
+    }
+
+    // Contextual explainers (FEATURES L3; docs/ARCHITECTURE.md §4 "Contextual explainers").
+
+    @Test
+    fun `the weekday explainer opens and dismisses a popup about the two kinds of weekday`() {
+        show(sol2026)
+
+        compose.onNodeWithTag(MonthGridTestTags.WEEKDAY_EXPLAINER).performClick()
+
+        compose.onNodeWithText("Two weekdays for every date").assertIsDisplayed()
+        compose.onNodeWithText("Got it").performClick()
+        compose.onAllNodesWithText("Two weekdays for every date").assertCountEquals(0)
+    }
+
+    @Test
+    fun `the weekday explainer is present whatever the header setting`() {
+        var display by mutableStateOf(WeekdayDisplay.BOTH)
+        compose.setContent {
+            IfcTheme(dynamicColor = false) {
+                MonthGrid(sol2026, null, null, display, onDayClick = {})
+            }
+        }
+
+        // The copy has to hold for a user who has hidden one of the two rows (FEATURES W1).
+        for (setting in WeekdayDisplay.entries) {
+            display = setting
+            compose.onNodeWithTag(MonthGridTestTags.WEEKDAY_EXPLAINER).assertIsDisplayed()
+        }
+    }
+
+    @Test
+    fun `only a month with an intercalary day has the band explainer`() {
+        var month by mutableStateOf(june2028)
+        compose.setContent {
+            IfcTheme(dynamicColor = false) {
+                MonthGrid(month, null, null, WeekdayDisplay.BOTH, onDayClick = {})
+            }
+        }
+        compose.onNodeWithTag(MonthGridTestTags.INTERCALARY_EXPLAINER).assertIsDisplayed()
+
+        month = june2027
+
+        compose.onAllNodesWithTag(MonthGridTestTags.INTERCALARY_EXPLAINER).assertCountEquals(0)
+        compose.onNodeWithTag(MonthGridTestTags.INTERCALARY_PLACEHOLDER).assertIsDisplayed()
+    }
+
+    @Test
+    fun `the band explainer opens a popup and never reports a day`() {
+        val clicks = mutableListOf<IfcDate>()
+        show(december2026, onDayClick = clicks::add)
+
+        compose.onNodeWithTag(MonthGridTestTags.INTERCALARY_EXPLAINER).performClick()
+
+        compose.onNodeWithText("A day outside the week").assertIsDisplayed()
+        // The button sits beside the band, not inside it: tapping it must not select Year Day.
+        clicks shouldBe emptyList()
+    }
+
+    @Test
+    fun `the explainers are buttons but not day cells`() {
+        show(december2026)
+
+        // The day-button count is unchanged by the two explainers (they are clickable, not selectable).
+        compose.onAllNodes(dayButtons).assertCountEquals(IfcMonth.DAYS_PER_MONTH + 1)
+        compose
+            .onNodeWithContentDescription("More information: Two weekdays for every date")
+            .assertIsDisplayed()
+        compose
+            .onNodeWithContentDescription("More information: A day outside the week")
+            .assertIsDisplayed()
     }
 
     // Clicks deliver the day, including the intercalary ones.

@@ -43,7 +43,9 @@ what's listed in [Privacy](#privacy).
   change, reboot, or app update — no per-minute polling. The Month widget marks days that have events
   (never their titles) and updates within a second or so of an edit.
 - **A first-run intro** — three skippable screens on what the IFC is, why the weekdays differ, and where
-  Year Day and Leap Day live; re-openable any time from Learn.
+  Year Day and Leap Day live; re-openable any time from Learn. On the month grid itself, an info button
+  beside the heading explains the two kinds of weekday, and one beside the Leap Day / Year Day band
+  explains why that row belongs to no week.
 - **Learn, Privacy and Settings screens** — an in-app explainer for the calendar's rules and quirks, a
   plain-language privacy statement, and controls for weekday-header style, theme, dynamic colour and
   holiday packs, plus "Delete all data".

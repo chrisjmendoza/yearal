@@ -117,6 +117,26 @@
          intercalary day (spec §7.2), e.g. "Jun 18 – Jul 15". %1$s = first day, %2$s = last day. -->
     <string name="gregorian_span">%1$s – %2$s</string>
 
+    <!-- ===== Month grid contextual explainers (FEATURES L3) =====
+         The copy the grid passes to ExplainerInfoButton. It addresses the two beliefs FEATURES Part 1
+         documents as a steady source of "this is wrong" reviews, so it must stay consistent with the
+         Learn screen (learn_weekday_intro, learn_floating_intro) without repeating it at length. Each
+         explanation is one short paragraph; the dialog scrolls, but a wall of text will not be read. -->
+
+    <!-- Title of the explainer next to the month heading, which explains the weekday header rows
+         beneath it. Mirrors the intro's wording (intro_weekday_heading) so the two teach the same
+         thing in the same words. -->
+    <string name="weekday_explainer_title">Two weekdays for every date</string>
+    <!-- Body of that explainer. Worded so it holds for all three header settings (IFC only, actual
+         only, both), because the user can show either row alone (FEATURES W1). -->
+    <string name="weekday_explainer_body">The IFC\'s weekdays are perpetual: the 1st of every month is always an IFC Sunday, in every month of every year. The real seven-day week keeps running underneath, because Year Day and Leap Day sit outside it — so the two rarely agree. Anything tied to actual life, including today\'s highlight, your events and your reminders, uses the real weekday.</string>
+
+    <!-- Title of the explainer next to the intercalary band, which explains why one row spans all
+         seven columns instead of sitting in a weekday column. -->
+    <string name="intercalary_explainer_title">A day outside the week</string>
+    <!-- Body of that explainer: why the floating days exist and why this row is drawn the way it is. -->
+    <string name="intercalary_explainer_body">13 months of 28 days come to 364 — one day short of a year, two short in a leap year. Year Day closes every year after December 28, and Leap Day follows June 28 in leap years. Neither belongs to a month or a week, and neither has an IFC weekday, so this row spans all seven columns instead of sitting under one.</string>
+
     <!-- ===== Date pickers (FEATURES D1, D2, E2; spec §7.1, §7.10) ===== -->
 
     <!-- Label of the year field of the IFC date picker. The IFC year equals the Gregorian year (§2.1). -->

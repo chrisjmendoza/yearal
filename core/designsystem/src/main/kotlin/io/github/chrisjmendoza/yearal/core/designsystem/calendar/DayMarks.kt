@@ -36,6 +36,19 @@ object MonthGridTestTags {
 
     /** The same-height placeholder shown in the band slot of months without an intercalary day. */
     const val INTERCALARY_PLACEHOLDER: String = "ifc:intercalaryPlaceholder"
+
+    /**
+     * The full-width row that holds either the band or its placeholder, plus — in the months that
+     * have an intercalary day — the explainer button beside it. This, not the band itself, is the
+     * slot whose size must match in every month so the pager never jumps.
+     */
+    const val INTERCALARY_SLOT: String = "ifc:intercalarySlot"
+
+    /** The explainer button beside the month heading, which explains the weekday header rows. */
+    const val WEEKDAY_EXPLAINER: String = "ifc:weekdayExplainer"
+
+    /** The explainer button beside the intercalary band. Absent in months without one. */
+    const val INTERCALARY_EXPLAINER: String = "ifc:intercalaryExplainer"
 }
 
 /** The most event dots a cell shows; the spoken description still gives the exact count (FEATURES C4). */

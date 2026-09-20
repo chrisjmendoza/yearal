@@ -189,8 +189,11 @@ Architecture, tooling and CI:
   weekday differ, and where Year Day and Leap Day live, ending with a "find my IFC birthday" jump into the
   converter. Re-openable from Learn. Every example date is computed by the conversion core, so the text
   cannot drift from the calendar.
-- `ExplainerInfoButton` in `:core:designsystem`, the reusable info-button and popup for FEATURES L3's
-  contextual explainers. **Not yet wired into the month grid** — tracked as ROADMAP R10's sibling R8.
+- Contextual explainers on the month grid (FEATURES L3): an info button beside the month heading explains
+  why the IFC weekday and the real weekday disagree, and one beside the Leap Day / Year Day band explains
+  why that row spans all seven columns. Both use `ExplainerInfoButton`, the reusable info-button and popup
+  in `:core:designsystem`. Neither button sits inside the row it explains, so the weekday headers stay
+  aligned with the day cells beneath them.
 
 ### Changed
 
@@ -208,6 +211,14 @@ Architecture, tooling and CI:
 
 - The `IfcDateFormatter` Hilt binding moved from `:feature:calendar` to `:app`, because a second feature
   injects it and features never depend on each other.
+
+- `DefaultObserveAgendaUseCase` takes its work dispatcher through an `internal` constructor, the same seam
+  `HolidaysViewModel` has, so its tests run under deterministic virtual time instead of racing a real
+  thread pool. An audit of the other twelve ViewModels found none that needs the seam (R9).
+
+- The first-run intro's "shown once" guarantee (FEATURES L1) now has an end-to-end proof rather than only
+  unit tests: `:app`'s first Compose test launches the real app twice against the same persisted settings
+  and confirms the intro appears on a first launch and never again once dismissed (R10).
 
 ### Fixed
 
