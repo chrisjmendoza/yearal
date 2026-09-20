@@ -42,6 +42,8 @@ what's listed in [Privacy](#privacy).
 - **Today and Month home-screen widgets**, refreshed at midnight and after a clock, time-zone or locale
   change, reboot, or app update — no per-minute polling. The Month widget marks days that have events
   (never their titles) and updates within a second or so of an edit.
+- **A first-run intro** — three skippable screens on what the IFC is, why the weekdays differ, and where
+  Year Day and Leap Day live; re-openable any time from Learn.
 - **Learn, Privacy and Settings screens** — an in-app explainer for the calendar's rules and quirks, a
   plain-language privacy statement, and controls for weekday-header style, theme, dynamic colour and
   holiday packs, plus "Delete all data".
@@ -53,8 +55,9 @@ what's listed in [Privacy](#privacy).
 - **Widget configuration** (per-widget options) and an agenda widget — M5/M7a.
 - **Device-calendar overlay, `.ics` import/export, and URL subscriptions** — releases 1.1–1.3
   ([docs/ROADMAP.md](docs/ROADMAP.md) release map).
-- **A Play Store listing.** There's no signed release yet; `main` is built feature by feature and a build
-  is cut for testers when one is wanted.
+- **A Play Store listing.** Release builds are signed and installable
+  ([docs/release-builds.md](docs/release-builds.md)), but no upload key has been generated and nothing has
+  been submitted; `main` is built feature by feature and a build is cut for testers when one is wanted.
 
 ## Documentation
 

@@ -439,12 +439,23 @@ Holidays are computed, never stored.
 
 The pager keeps three months warm with `beyondViewportPageCount = 1`: `MonthViewModel` calls `ObserveAgendaUseCase.invoke` once per warm month (its own page plus one neighbour on each side) and reads `DayAgenda.entries.size` for the grid's event-dot counts (FEATURES C4); Day detail and Today query it for exactly one day each. The Year view issues one range query for the whole year and returns only a presence bitmap (`ObserveAgendaUseCase.presence(range): Flow<Set<LocalDate>>`, event occurrences only).
 
+**Per-month subscriptions survive a single-page swipe (compose-perf pass).** "Once per warm month" is a
+standing subscription, not a per-page-change one: `MonthViewModel.agendaCountsFor` caches each warm
+month's `observeAgenda(range).shareIn(...)` flow, keyed by `IfcYearMonth`, and only trims the cache to
+the current three-month window after building the next combine. Moving the pager by one page keeps two
+of the three months warm, so only the month that newly enters the window issues a fresh
+`ObserveAgendaUseCase.invoke` (and, in the production implementation, a fresh Room query) — the naive
+`page.flatMapLatest { eventCountsAround(it) }` shape this replaced cancelled and re-issued all three on
+every page change, including the two that had not actually changed. A future simplification back to that
+shape would reintroduce that cost; `MonthViewModelTest`'s "paging keeps the agenda subscription for
+months that stay warm" pins the query count.
+
 ## 4. UI architecture
 
 ### Screens and navigation
 
 - **Bottom bar / rail:** the top-level destinations, via `NavigationSuiteScaffold`, are **Today | Calendar | Events | Convert | More**. "More" holds Holidays, Settings, Learn/About and Privacy.
-- **Nav keys** live in `:core:navigation`: `TodayKey`, `MonthKey(year, month)`, `YearKey(year)`, `DayKey(epochDay)`, `ConverterKey(prefillEpochDay?)`, `EventListKey`, `EventEditorKey(eventId?, prefillEpochDay?)`, `MoreKey` (the hub tab), `HolidaysKey`, `SettingsKey`, `LearnKey`, `PrivacyKey`.
+- **Nav keys** live in `:core:navigation`: `TodayKey`, `IntroKey`, `MonthKey(year, month)`, `YearKey(year)`, `DayKey(epochDay)`, `ConverterKey(prefillEpochDay?)`, `EventListKey`, `EventEditorKey(eventId?, prefillEpochDay?)`, `MoreKey` (the hub tab), `HolidaysKey`, `SettingsKey`, `LearnKey`, `PrivacyKey`.
 - **Per-tab back stacks** are `TabBackStacks` in `:app`: one `NavBackStack` per tab, the Today root prefixed when another tab is shown so that back from a tab root returns to Today; the Calendar tab's root `MonthKey` is resolved from `DateTicker` when the tab is first opened.
 - **Entry providers:** `:app` owns the per-tab back stacks (the Nav3 "top-level back stack" recipe), the single `NavDisplay`, and its `entryProvider` block, which registers one `entry<XKey> { XRoute(...) }` per nav key directly in [`ui/IfcApp.kt`](../app/src/main/kotlin/io/github/chrisjmendoza/yearal/ui/IfcApp.kt) — features do not expose their own `EntryProviderScope` extension; each just exports its `XRoute` composable(s) for `:app` to wire up.
 - **Intent routing — as built (ROADMAP M3 T5, M4 T10).** Widget and notification taps send explicit
@@ -513,8 +524,10 @@ The pager keeps three months warm with `beyondViewportPageCount = 1`: `MonthView
     §7.1 names); copy and `ACTION_SEND` text always carry the `IFC` marker and the Gregorian date.
   - **Day detail:** a bottom sheet on compact widths (done: a material3 `ModalBottomSheet` inside the Nav3 entry — Nav3 1.1.7 has no sheet scene, only `DialogSceneStrategy`) and a pane on expanded widths (M3 T4). It shows both dates, both weekdays and the day's events, with "Add event" and "Open in converter" actions. An agenda row's long-press (also a TalkBack custom action) opens a delete confirmation: "delete this occurrence" for a recurring event — an `EventRepository.addExdate` on the occurrence's own start date, never the day the sheet is showing (`docs/contracts/Events.md` §4) — with an undo snackbar, or a plain, permanent delete for a one-off event (M4 T8).
   - **Holidays** (done, M6 T2, `:feature:holidays`): two sections behind `HolidaysKey`. "Holiday sets" lists every bundled pack (`BundledHolidayPacks.all` via `HolidayPackLoader`) with its name, region, how many holidays it defines, its sources when the pack carries them, and a switch that writes through `SettingsRepository.enabledHolidaySets` — the only place that toggle lives now; Settings' own screen links here instead of duplicating it (`docs/FEATURES.md` H5). "Holidays this year" lists every occurrence of the enabled sets for a chosen IFC year (`HolidayEngine.occurrences`), grouped by IFC month — an intercalary day groups under the month it follows, so Leap Day needs no special case — each row showing the holiday's name, its IFC date in long and numeric (`IFC`-prefixed) form, and its Gregorian date with its real weekday; tapping a row pushes `DayKey`. The year defaults to and follows `DateTicker` (including across a December 31 → January 1 rollover) until the user pages away with the previous/next actions, which clamp to `DatePickerRange` (1583–9999). Every set disabled shows an explanatory empty state rather than nothing.
-  - **Learn** (done, M3 T3, `:feature:settings`): static sections (what the IFC is, the floating days, nominal-vs-actual weekdays, how dates are calculated, a brief history, an FAQ) plus an expandable-FAQ list. Every worked-example date is computed through `:core:calendar` (`LearnFacts`) and rendered with `IfcDateFormatter`, never typed as a literal.
+  - **Learn** (done, M3 T3, `:feature:settings`): static sections (what the IFC is, the floating days, nominal-vs-actual weekdays, how dates are calculated, a brief history, an FAQ) plus an expandable-FAQ list. Every worked-example date is computed through `:core:calendar` (`LearnFacts`) and rendered with `IfcDateFormatter`, never typed as a literal. Its first row, "Watch the intro again," pushes `IntroKey` — the re-open path FEATURES L1 requires for a user who skipped it.
   - **Privacy** (done, the in-app half of M2 T12, `:feature:settings`): a static, truthful statement of what the app stores and what its two declared permissions (`RECEIVE_BOOT_COMPLETED`, `WAKE_LOCK`) are for, sourced from `docs/security-and-privacy.md`'s allow-list; the hosted-policy URL is left blank until one exists.
+  - **First-run intro** (done, `:feature:settings`, package `intro`; FEATURES L1): three screens behind `IntroKey` — what the IFC is (calendar-spec §2.2 R4: 13 months of 28 days, Sol between June and July); the nominal-vs-actual weekday distinction, with the spec's own worked example (§4.1); Year Day and Leap Day (§2.4 R8, R9), ending with a "find my IFC birthday" button. Every worked example comes from `IntroFacts`, which reuses `LearnFacts`'s values directly (both objects are `internal`, so same-module visibility is enough) rather than recomputing them, so the two screens can never disagree. Plain Back/Next buttons, not a swipeable pager — a new visual language is exactly what M2 T13 owns, not this task. The birthday hook calls `navigator.navigate(ConverterKey())`, the same "push onto whatever tab is current" pattern `DayScreen`'s "Open in converter" action already uses; `ConverterKey`'s existing `prefillEpochDay = null` default ("follow today, but the user can pick any date") already is the "let me pick a date" behavior FEATURES D3 wants, so no new key shape was needed. `IfcApp` decides whether to show it: `IntroGateViewModel` (`:app`) maps `SettingsRepository.settings` to a `StateFlow<Boolean?>` of `hasSeenIntro` that starts `null` (deliberately distinct from the persisted `false` a fresh install also has) until the store has actually been read once, so a returning user is never shown a flash of the intro while `MainViewModel.settings` is still sitting at `UserSettings.DEFAULT`. The first time that flow resolves non-null and `false`, a `LaunchedEffect` in `IfcApp` pushes `IntroKey` onto the Today tab's stack — literally "over" `TodayKey`, the tab's static root — guarded by a `rememberSaveable` flag so it fires at most once per process. Skipping or finishing marks `UserSettings.hasSeenIntro = true` through `IntroViewModel.markSeen()` before popping back off; "Learn more" pushes `LearnKey` without marking it seen, so leaving the intro unfinished still shows it again on the next cold start. **Known edge case, not handled:** if the very first launch is also routed by a widget or notification intent (see "Intent routing" above), the intro's `LaunchedEffect` and the intent-routing `LaunchedEffect` both act on the tab back stacks independently; which one "wins" the Today tab's top slot is not deterministic. In practice a first launch cannot yet have an existing widget tap or event reminder (both require the app to have run once already), so this has not been given a specific ordering rule.
+  - **Contextual explainers** (FEATURES L3): `ExplainerInfoButton` (`:core:designsystem`, package `explainer`) is the reusable "info button + short `AlertDialog`" component — a 48dp `IconButton` with a hand-drawn `ic_info` glyph (material-icons-core is not a dependency of this module, the same reasoning as `ic_convert`/`ic_intercalary`) whose title and explanation are caller-supplied strings, so the component itself carries no calendar copy. It belongs in `:core:designsystem` rather than `:feature:settings` because its two call sites — the month grid's nominal-weekday header row and its intercalary band — are both rendered from `:core:designsystem`'s own `MonthGrid`/`calendar` package already (CLAUDE.md rule 10 forbids a `:feature:settings` → `:feature:calendar` dependency, and `:core:designsystem` is the module both would otherwise need). **Not yet wired into `MonthGrid`**: that edit belongs to whichever task next touches `:feature:calendar`'s grid (a different task's module ownership during this one) — it needs one `ExplainerInfoButton(title = …, explanation = …)` placed next to the nominal-weekday header row and one next to the intercalary band, both with feature-owned string resources describing what those two rows mean.
 
 ### State management
 
@@ -941,7 +954,13 @@ is tracked in git (guarded, not unconditional — see "Goldens" above).
 - **`nightly.yml`:** instrumented smoke tests on `reactivecircus/android-emulator-runner` (API 26, API 36, and API 37 when images exist), plus a dependency-updates report.
 - **`release.yml`:**
   - Trigger: a `v*` tag.
-  - Steps: run the full CI gate, build the **unsigned** release bundle to prove the tag builds, and create a GitHub Release with the changelog and the R8 mapping file.
+  - Steps: run the full CI gate, build the release bundle to prove the tag builds, and create a GitHub
+    Release with the changelog and the R8 mapping file. **Not yet implemented** — this workflow file
+    doesn't exist yet (M2 T11's remaining piece: the offline upload key and the Play Console app). Note
+    for whoever writes it: since M2 T11's signing half (below), a CI run with no keystore secrets no
+    longer produces an *unsigned* bundle — the `release` build type always has a signing config, so a
+    keyless CI run is **debug-signed** instead, same as any other machine without the upload key
+    (docs/release-builds.md).
   - For 1.0 the signed AAB is built and uploaded to Play from the owner's machine, because the upload key stays offline (security-and-privacy.md). Signing in CI from GitHub secrets, and automated upload to the internal track, are optional later steps; if adopted, use an upload action rather than Gradle Play Publisher, which has had open AGP 9 compatibility issues.
   - No APKs are attached to GitHub Releases. They would be signed with a different key than the Play build, so users could not cross-update. F-Droid, if pursued, builds from source with its own key.
   - Promotion between tracks happens in the Play Console.
@@ -949,6 +968,18 @@ is tracked in git (guarded, not unconditional — see "Goldens" above).
   - Use Play App Signing. Google holds the app key and you hold an upload key, which can be reset through Play Console if lost.
   - Keep the keystore out of the repo; `.gitignore` covers keystores, signing properties, and key material.
   - Use the debug keystore for local development.
+  - **As built (M2 T11, `:app`'s `release` build type, wired in `build-logic/convention/.../ifc.android.application.gradle.kts`):**
+    the `release` signing config is read from `keystore.properties` at the repo root (gitignored; keys
+    `storeFile`/`storePassword`/`keyAlias`/`keyPassword`, see [release-builds.md](release-builds.md)) or,
+    if that file is absent, from `YEARAL_RELEASE_STORE_FILE`/`_STORE_PASSWORD`/`_KEY_ALIAS`/`_KEY_PASSWORD`
+    environment variables — the file wins when both exist. When neither source is complete,
+    `:app:assembleRelease` falls back to the **debug** signing config and logs a one-line
+    configuration-time warning; no password is ever logged either way. This applies uniformly (a local
+    machine, a fork, CI) — see security-and-privacy.md §8.2 for why an unsigned release APK was rejected
+    in favour of this fallback. The `release` build type also sets `isProfileable = true` (not
+    `isDebuggable`) so the owner can attach Android Studio's profiler to the exact build they judge for
+    performance; `isMinifyEnabled` is untouched (R8 is ROADMAP M8 T2, once Hilt/Room3/kotlinx-serialization
+    keep rules exist).
 - **Dependencies and repo hygiene** (details in security-and-privacy.md):
   - Dependabot for the `gradle` and `github-actions` ecosystems with grouped PRs and a cooldown. Review AGP, Kotlin and KSP bumps manually.
   - GitHub Actions pinned by full commit SHA, read-only `GITHUB_TOKEN` by default, secret scanning with push protection, branch protection on `main`, private vulnerability reporting, and a `SECURITY.md`.

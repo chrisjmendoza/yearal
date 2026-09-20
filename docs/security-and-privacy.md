@@ -435,7 +435,19 @@ The highest-value control in this whole document: **2FA with passkeys/hardware k
 - **Play App Signing** (mandatory for new apps): Google holds the app signing key; we hold only an **upload key**, which can be reset through Play Console if lost or leaked ([Play Console Help](https://support.google.com/googleplay/android-developer/answer/9842756?hl=en)).
 - Upload keystore: generated locally, strong unique passwords in a password manager, one offline encrypted backup. **Never in the repo**, never in a cloud-synced project folder.
 - `.gitignore` already covers `*.jks`, `*.keystore`, `keystore.properties`, `signing.properties`, `local.properties`, `google-services.json`. Suggested additions when someone next touches it: `*.p12`, `*.pem`, `*.pepk`, `.env*`, `*.der`.
-- Signing config reads from environment variables / a properties file outside the repo; the build must succeed unsigned when they're absent (so forks and CI PR builds work).
+- Signing config reads from a `keystore.properties` file at the repo root (gitignored, never the keystore
+  itself) or, if that file is absent, from environment variables — the file wins when both are present.
+  **As built (M2 T11):** when neither source is complete, the build does not fail and does not produce an
+  *unsigned* APK either — an unsigned release APK cannot be installed on a device at all, which would
+  defeat the point of a release build for judging real performance. Instead `:app:assembleRelease` falls
+  back to the **debug** signing config and prints a one-line warning at configuration time that the APK is
+  debug-signed and must never be uploaded to Play. This is a deliberate revision of the "must succeed
+  unsigned" rule above: forks and CI PR builds still succeed and stay installable, they are just
+  debug-signed, exactly like every other build that has no release key. The fallback applies uniformly —
+  local machine, fork, or CI — because CI never holds the key either (reconciled decision 12) and there is
+  no reason its build should behave differently from a contributor's. See
+  [release-builds.md](release-builds.md) for the keystore.properties format, the `YEARAL_RELEASE_*` env
+  var names, and the owner's runbook for generating the real upload key.
 - **Release builds are signed locally and uploaded manually at first.** CI release signing is **later / optional**; if adopted: keystore + passwords as secrets in a protected GitHub **environment** with required approval, used only by a tag-triggered workflow, never reachable from `pull_request` (fork PRs get no secrets) and **never use `pull_request_target`** with checkout of PR code.
 - If APKs are published on GitHub Releases, note they are signed with a different key than Play-delivered builds unless the Play-signed universal APK is re-published; users cannot cross-update between the two. Decide the distribution story once, before the first public build.
 

@@ -18,6 +18,18 @@ import kotlinx.serialization.Serializable
 data object TodayKey : NavKey
 
 /**
+ * The first-run intro (`docs/FEATURES.md` L1): at most three screens covering what the IFC is, why the
+ * nominal and actual weekdays differ, and the two intercalary days, ending with a "find my IFC birthday"
+ * hook into [ConverterKey]. `:app` pushes this onto the Today tab's stack, over [TodayKey], the first
+ * time [io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings.hasSeenIntro] is confirmed
+ * `false` from the store (never before it has loaded, to avoid a returning user seeing a flash of the
+ * intro). Skipping or finishing marks it seen and pops it back to whatever it was pushed over; it carries
+ * no data so it can also be pushed again later from the Learn screen, without affecting the seen flag.
+ */
+@Serializable
+data object IntroKey : NavKey
+
+/**
  * One month of the calendar grid.
  *
  * @property year IFC year, 1583..9999 in the UI.

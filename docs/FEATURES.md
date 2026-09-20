@@ -177,9 +177,9 @@ Strategy and licensing: [holidays-and-import.md](holidays-and-import.md). No And
 
 | Pri | ID | Feature | Notes |
 |:---:|---|---|---|
-| 🟠 | L1 | First-run intro (≤3 screens, skippable): what the IFC is, why weekdays differ, where the floating days live | Ends with "find my IFC birthday". |
+| 🟠 | L1 | First-run intro (≤3 screens, skippable): what the IFC is, why weekdays differ, where the floating days live | **Done.** Ends with "find my IFC birthday". `:feature:settings` (`intro/`): three screens (what the IFC is; nominal vs. actual weekday, calendar-spec §4.1; Year Day and Leap Day, §2.4), Skip on every screen, a non-terminal "Learn more" link to `LearnKey`, and a closing hook that opens the converter (`ConverterKey()`, reusing its existing "no prefill = pick a date" default rather than a new key shape). `:app`'s `IfcApp` pushes `IntroKey` onto the Today tab's stack once `UserSettings.hasSeenIntro` is confirmed `false` from the store (never before it loads — see `IntroGateViewModel`), so it runs once, over Today. Re-openable from Learn ("Watch the intro again"). |
 | 🟠 | L2 | Learn / About: rules, history (Cotsworth, Eastman Kodak), how dates are calculated, FAQ | FAQ answers the documented confusions: not lunar, starts January 1, Sol vs Leap Day, other 13-month variants. Requested in iOS reviews too. |
-| 🟠 | L3 | Contextual explainers (info icon on the nominal-weekday header and on floating-day rows) | |
+| 🟠 | L3 | Contextual explainers (info icon on the nominal-weekday header and on floating-day rows) | **Reusable widget done, not yet wired into the grid.** `ExplainerInfoButton` (`:core:designsystem`, package `explainer`): a 48dp info button opening a short `AlertDialog`; title/explanation are caller-supplied strings, so it carries no calendar copy of its own. `:feature:calendar` (a different task) still needs to call it from the month grid's weekday header row and intercalary band — see `docs/ARCHITECTURE.md` §4 "Screens and navigation" → "Contextual explainers" for the exact call sites. |
 | 🟠 | L5 | Accurate, well-written Play listing naming IFC, Sol, Year Day, Leap Day | The incumbent's listing conflates Sol with Leap Day. A cheap differentiator. |
 | 🔵 | L4 | Printable / shareable year calendar (PDF or image) | A web competitor sells one for $9 — demand exists. |
 

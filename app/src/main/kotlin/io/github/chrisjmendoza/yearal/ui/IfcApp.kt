@@ -6,6 +6,9 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -24,6 +27,7 @@ import io.github.chrisjmendoza.yearal.core.navigation.DayKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventListKey
 import io.github.chrisjmendoza.yearal.core.navigation.HolidaysKey
+import io.github.chrisjmendoza.yearal.core.navigation.IntroKey
 import io.github.chrisjmendoza.yearal.core.navigation.LearnKey
 import io.github.chrisjmendoza.yearal.core.navigation.MonthKey
 import io.github.chrisjmendoza.yearal.core.navigation.MoreKey
@@ -39,6 +43,7 @@ import io.github.chrisjmendoza.yearal.feature.converter.ConverterRoute
 import io.github.chrisjmendoza.yearal.feature.events.editor.EventEditorRoute
 import io.github.chrisjmendoza.yearal.feature.events.list.EventListRoute
 import io.github.chrisjmendoza.yearal.feature.holidays.HolidaysRoute
+import io.github.chrisjmendoza.yearal.feature.settings.intro.IntroRoute
 import io.github.chrisjmendoza.yearal.feature.settings.learn.LearnRoute
 import io.github.chrisjmendoza.yearal.feature.settings.more.MoreRoute
 import io.github.chrisjmendoza.yearal.feature.settings.privacy.PrivacyRoute
@@ -50,9 +55,21 @@ import io.github.chrisjmendoza.yearal.ui.navigation.rememberTabBackStacks
  * The app shell: the five top-level tabs in a [NavigationSuiteScaffold] (bar on compact widths, rail
  * from medium up) and one [NavDisplay] over the selected tab's back stack
  * (docs/ARCHITECTURE.md §4 "Screens and navigation").
+ *
+ * **The first-run intro (`docs/FEATURES.md` L1).** [introGateViewModel] reports whether the store has
+ * confirmed the intro not yet seen; the moment it does, this pushes
+ * [io.github.chrisjmendoza.yearal.core.navigation.IntroKey] onto the Today tab's stack — "over" the
+ * Today screen the tab already starts on, exactly as the feature describes it — never before the real
+ * value has loaded (see [IntroGateViewModel]'s KDoc for why a returning user must not see a flash of it)
+ * and never more than once per app process ([introOffered]). Skipping or finishing the intro marks it
+ * seen and pops it back off, revealing Today underneath; the Learn screen can also push it again later
+ * for a user who skipped it.
  */
 @Composable
-fun IfcApp(viewModel: MainViewModel = hiltViewModel()) {
+fun IfcApp(
+    viewModel: MainViewModel = hiltViewModel(),
+    introGateViewModel: IntroGateViewModel = hiltViewModel(),
+) {
     val today by viewModel.today.collectAsStateWithLifecycle()
     val tabs = rememberTabBackStacks()
 
@@ -64,6 +81,16 @@ fun IfcApp(viewModel: MainViewModel = hiltViewModel()) {
     LaunchedEffect(pendingRoute, today) {
         val route = pendingRoute ?: return@LaunchedEffect
         if (tabs.applyRoute(route, today)) viewModel.consumeRoute()
+    }
+
+    val hasSeenIntro by introGateViewModel.hasSeenIntro.collectAsStateWithLifecycle()
+    var introOffered by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(hasSeenIntro) {
+        val seen = hasSeenIntro ?: return@LaunchedEffect
+        if (!introOffered && !seen) {
+            introOffered = true
+            tabs.navigate(IntroKey)
+        }
     }
 
     NavigationSuiteScaffold(
@@ -104,6 +131,7 @@ fun IfcApp(viewModel: MainViewModel = hiltViewModel()) {
             entryProvider =
                 entryProvider {
                     entry<TodayKey> { TodayRoute(navigator = tabs) }
+                    entry<IntroKey> { IntroRoute(navigator = tabs) }
                     entry<MonthKey> { key -> MonthRoute(key = key, navigator = tabs) }
                     entry<YearKey> { key -> YearRoute(key = key, navigator = tabs) }
                     entry<DayKey> { key -> DayRoute(key = key, navigator = tabs) }

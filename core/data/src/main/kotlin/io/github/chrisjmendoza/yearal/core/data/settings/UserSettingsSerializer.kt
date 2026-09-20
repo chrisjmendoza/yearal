@@ -24,6 +24,11 @@ internal data class UserSettingsDto(
     val themeMode: ThemeMode = UserSettings.DEFAULT.themeMode,
     val dynamicColor: Boolean = UserSettings.DEFAULT.dynamicColor,
     val enabledHolidaySets: Set<String> = UserSettings.DEFAULT.enabledHolidaySets,
+    // Added for the first-run intro (docs/FEATURES.md L1). Defaulting to false is what makes a file
+    // written before this field existed read as "intro not seen" instead of failing to parse — see
+    // UserSettings.hasSeenIntro's KDoc for why that default is correct for both a fresh install and a
+    // pre-intro install alike.
+    val hasSeenIntro: Boolean = UserSettings.DEFAULT.hasSeenIntro,
 ) {
     /** This DTO's fields as a [UserSettings]. */
     fun toDomain(): UserSettings =
@@ -32,6 +37,7 @@ internal data class UserSettingsDto(
             themeMode = themeMode,
             dynamicColor = dynamicColor,
             enabledHolidaySets = enabledHolidaySets,
+            hasSeenIntro = hasSeenIntro,
         )
 
     companion object {
@@ -42,6 +48,7 @@ internal data class UserSettingsDto(
                 themeMode = settings.themeMode,
                 dynamicColor = settings.dynamicColor,
                 enabledHolidaySets = settings.enabledHolidaySets,
+                hasSeenIntro = settings.hasSeenIntro,
             )
     }
 }

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Strings of the More hub, the Settings screen (docs/FEATURES.md W1, W2, H5), the Learn screen
-     (docs/FEATURES.md L2) and the Privacy screen (docs/FEATURES.md P5). One string per paragraph or
-     answer throughout, never built by concatenating strings in code, so every sentence can be
-     translated as a whole (CLAUDE.md rule 9). -->
-<resources>
+     (docs/FEATURES.md L2), the Privacy screen (docs/FEATURES.md P5) and the first-run intro
+     (docs/FEATURES.md L1). One string per paragraph or answer throughout, never built by concatenating
+     strings in code, so every sentence can be translated as a whole (CLAUDE.md rule 9). -->
+<resources xmlns:tools="http://schemas.android.com/tools">
 
     <!-- ===== More hub (the "More" tab) ===== -->
 
@@ -286,5 +286,82 @@
     <!-- Notes that this screen is the whole policy today and a web copy will follow, without inventing a
          URL that does not exist yet (docs/security-and-privacy.md §5.2). -->
     <string name="privacy_policy_body">This screen is the complete privacy policy for the app as it stands today. The same text will also be published on the web once the app is available to install, with a link added here.</string>
+
+    <!-- ===== Learn screen: link back into the first-run intro (docs/FEATURES.md L1) ===== -->
+
+    <!-- Row title: re-opens the intro (IntroKey) from the Learn screen, so a user who skipped it can
+         still find it. -->
+    <string name="learn_replay_intro_title">Watch the intro again</string>
+
+    <!-- Supporting line under that row. -->
+    <string name="learn_replay_intro_detail">The short walkthrough shown when you first opened the app</string>
+
+    <!-- ===== First-run intro (docs/FEATURES.md L1) ===== -->
+
+    <!-- Top app bar title: deliberately generic, not the app's own name (this module does not depend on
+         :app for its name resource). -->
+    <string name="intro_title">Welcome</string>
+
+    <!-- Skips the intro from any screen; marks it seen. -->
+    <string name="intro_skip">Skip</string>
+
+    <!-- Spoken description of the back arrow in the top app bar (learn_back / settings_back pattern),
+         shown only from the second screen onward. -->
+    <string name="intro_back">Back</string>
+
+    <!-- Advances to the next screen. -->
+    <string name="intro_next">Next</string>
+
+    <!-- Finishes the intro from the last screen without using the birthday hook; marks it seen. -->
+    <string name="intro_done">Done</string>
+
+    <!-- Announces which screen is showing, for TalkBack and for sighted users alike.
+         %1$d = current screen (1-based), %2$d = total screens (always 3). -->
+    <string name="intro_page_indicator">Screen %1$d of %2$d</string>
+
+    <!-- Opens the Learn screen without leaving the intro finished (does not mark it seen). -->
+    <string name="intro_learn_more">Learn more about the IFC</string>
+
+    <!-- Screen 1: what the IFC is (calendar-spec §2.2 R4) -->
+
+    <string name="intro_what_heading">What is the IFC?</string>
+
+    <!-- %1$d = the month count (13), %2$d = days per month (28), both read from :core:calendar, never
+         hard-coded (CLAUDE.md rule 1). Both are invariant facts of the calendar (they never vary per
+         install or locale), so there is no plural form to provide: tools:ignore suppresses lint's
+         quantity heuristic, which does not know that. -->
+    <string
+        name="intro_what_months"
+        tools:ignore="PluralsCandidate">The International Fixed Calendar reshapes the year into %1$d months of exactly %2$d days each — every month laid out exactly the same, forever.</string>
+
+    <string name="intro_what_sol">An extra month, Sol, sits between June and July.</string>
+
+    <!-- Screen 2: nominal vs. actual weekday (calendar-spec §4.1) -->
+
+    <string name="intro_weekday_heading">Two weekdays for every date</string>
+
+    <string name="intro_weekday_intro">The IFC has its own perpetual weekday for every date. The real, seven-day week keeps running underneath it, so the two do not always agree.</string>
+
+    <!-- The spec's own worked example. %1$s = Gregorian long form with weekday. %2$s = IFC long form.
+         %3$s = the IFC (nominal) weekday name. %4$s = the real (actual) weekday name. -->
+    <string name="intro_weekday_example">For example, %1$s is IFC %2$s. Its IFC weekday is %3$s — but its real weekday is %4$s.</string>
+
+    <string name="intro_weekday_warning">Always trust the real weekday for anything tied to actual life — meetings, events and reminders. This app shows both, everywhere.</string>
+
+    <!-- Screen 3: the two intercalary days (calendar-spec §2.4 R8, R9) -->
+
+    <string name="intro_floating_heading">Two days outside the week</string>
+
+    <!-- %1$s = Year Day's IFC long form, e.g. "Year Day, 2026". %2$s = its Gregorian long form. -->
+    <string name="intro_floating_year_day">%1$s happens every year. It is always Gregorian %2$s, and it belongs to no week.</string>
+
+    <!-- %1$s = Leap Day's IFC long form, e.g. "Leap Day, 2024". %2$s = its Gregorian long form. -->
+    <string name="intro_floating_leap_day">%1$s happens only in leap years. It is always Gregorian %2$s.</string>
+
+    <string name="intro_find_birthday_prompt">Curious what your birthday looks like on the IFC?</string>
+
+    <!-- The closing hook (docs/FEATURES.md L1, D3): opens the converter so the user can pick their own
+         birthday; marks the intro seen. -->
+    <string name="intro_find_birthday">Find my IFC birthday</string>
 
 </resources>

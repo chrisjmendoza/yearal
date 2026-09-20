@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 
@@ -63,6 +64,11 @@ class MonthViewModel
 
         private val page = MutableStateFlow(MonthPages.pageOf(initialMonth))
         private val selected = MutableStateFlow<LocalDate?>(null)
+
+        // Per-month event-count flows, shared and cached across page changes (see agendaCountsFor):
+        // without this, every page change tore down and rebuilt the ObserveAgendaUseCase subscription
+        // for all three warm months, including the two that stayed warm across a single-page swipe.
+        private val monthAgendaCache = mutableMapOf<IfcYearMonth, Flow<Map<LocalDate, Int>>>()
 
         private val eventCountsByPage: Flow<Map<IfcYearMonth, Map<LocalDate, Int>>> =
             page.flatMapLatest { p -> eventCountsAround(p) }
@@ -128,17 +134,40 @@ class MonthViewModel
         ): Map<IfcYearMonth, Map<LocalDate, String>> =
             warmMonths(page).associateWith { month -> catalog.gridLabels(enabledSetIds, month.gregorianRange) }
 
+        /**
+         * The current page's warm-month event counts (ARCHITECTURE §3.4): reuses [agendaCountsFor] for
+         * every warm month, so a month that stays warm across a page change keeps its existing
+         * [ObserveAgendaUseCase] subscription (and its underlying Room query) alive instead of
+         * cancelling and re-issuing it — moving one page forward keeps two of the three months
+         * unchanged. [monthAgendaCache] is trimmed to exactly the months still warm after building this
+         * flow, so it never holds more than three entries.
+         */
         private fun eventCountsAround(page: Int): Flow<Map<IfcYearMonth, Map<LocalDate, Int>>> {
             val months = warmMonths(page)
-            if (months.isEmpty()) return flowOf(emptyMap())
-            val perMonth =
-                months.map { month ->
-                    observeAgenda(month.gregorianRange).map { agendas ->
-                        month to agendas.mapValues { (_, agenda) -> agenda.entries.size }
-                    }
-                }
+            if (months.isEmpty()) {
+                monthAgendaCache.clear()
+                return flowOf(emptyMap())
+            }
+            val perMonth = months.map { month -> agendaCountsFor(month).map { counts -> month to counts } }
+            monthAgendaCache.keys.retainAll(months.toSet())
             return combine(perMonth) { pairs -> pairs.toMap() }
         }
+
+        /**
+         * [month]'s event counts, shared so every caller within the warm window (currently just
+         * [eventCountsAround], called once per page change) collects the same upstream
+         * [ObserveAgendaUseCase.invoke] subscription rather than starting a new one. `replay = 1` gives
+         * a subscriber that reattaches after a brief gap (the page moving away and back) the last known
+         * value immediately, matching the interface's own "emits the current value on collection"
+         * guarantee instead of forcing a fresh wait; [SharingStarted.WhileSubscribed] still lets the
+         * underlying query stop once nothing reads it for [STOP_TIMEOUT_MILLIS].
+         */
+        private fun agendaCountsFor(month: IfcYearMonth): Flow<Map<LocalDate, Int>> =
+            monthAgendaCache.getOrPut(month) {
+                observeAgenda(month.gregorianRange)
+                    .map { agendas -> agendas.mapValues { (_, agenda) -> agenda.entries.size } }
+                    .shareIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), replay = 1)
+            }
 
         private fun warmMonths(page: Int): List<IfcYearMonth> =
             ((page - 1)..(page + 1)).filter { it in 0..MonthPages.LAST_PAGE }.map(MonthPages::monthAt)

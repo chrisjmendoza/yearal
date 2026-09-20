@@ -36,13 +36,14 @@ class LearnScreenTest {
     val compose = createComposeRule()
 
     private var backPresses = 0
+    private var replayIntroTaps = 0
 
     private fun show(fontScale: Float = 1f) {
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
                 IfcTheme(dynamicColor = false) {
-                    LearnScreen(onBack = { backPresses++ })
+                    LearnScreen(onBack = { backPresses++ }, onReplayIntro = { replayIntroTaps++ })
                 }
             }
         }
@@ -159,6 +160,20 @@ class LearnScreenTest {
         compose.onNodeWithContentDescription("Back").assertHasClickAction().performClick()
 
         backPresses shouldBe 1
+    }
+
+    // docs/FEATURES.md L1: a user who skipped the intro must be able to find it again from Learn.
+    @Test
+    fun `the replay-intro row is shown first and calls onReplayIntro`() {
+        show()
+
+        compose
+            .onNodeWithText("Watch the intro again")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+
+        replayIntroTaps shouldBe 1
     }
 
     // docs/ARCHITECTURE.md §4 "Accessibility": 200% font scale never clips.

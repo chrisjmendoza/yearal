@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -16,6 +17,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -39,6 +41,7 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.navigation.IntroKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
 import io.github.chrisjmendoza.yearal.feature.settings.R
 
@@ -55,7 +58,11 @@ fun LearnRoute(
     navigator: Navigator,
     modifier: Modifier = Modifier,
 ) {
-    LearnScreen(onBack = navigator::goBack, modifier = modifier)
+    LearnScreen(
+        onBack = navigator::goBack,
+        onReplayIntro = { navigator.navigate(IntroKey) },
+        modifier = modifier,
+    )
 }
 
 /**
@@ -69,12 +76,18 @@ fun LearnRoute(
  * (`TopAppBarDefaults`) still carry it.
  *
  * @param onBack the top app bar's back arrow.
+ * @param onReplayIntro re-opens the first-run intro (`docs/FEATURES.md` L1): pushes
+ * [io.github.chrisjmendoza.yearal.core.navigation.IntroKey], the same screen shown once on first launch,
+ * for anyone who skipped it and wants to see it again — this row is where FEATURES L1 says a user who
+ * skipped the intro must be able to find it later. Reopening it here never marks it "seen" itself; only
+ * the intro's own skip/finish actions do that (the intro carries no data of its own either way).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LearnScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onReplayIntro: () -> Unit = {},
 ) {
     val formatter = rememberIfcDateFormatter()
     Scaffold(
@@ -101,6 +114,8 @@ fun LearnScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 24.dp),
         ) {
+            ReplayIntroSection(onReplayIntro)
+            HorizontalDivider()
             WhatIsIfcSection()
             HorizontalDivider()
             FloatingDaysSection(formatter)
@@ -114,6 +129,22 @@ fun LearnScreen(
             FaqSection()
         }
     }
+}
+
+/**
+ * The row that re-opens the first-run intro (`docs/FEATURES.md` L1): the "somewhere to find it later"
+ * this feature's brief asks for, for a user who skipped it on first launch.
+ */
+@Composable
+private fun ReplayIntroSection(onReplayIntro: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.learn_replay_intro_title)) },
+        supportingContent = { Text(stringResource(R.string.learn_replay_intro_detail)) },
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .selectable(selected = false, role = Role.Button, onClick = onReplayIntro),
+    )
 }
 
 /** What the IFC is: 13 months of 28 days, Sol, and the "every month is the same" identity. */

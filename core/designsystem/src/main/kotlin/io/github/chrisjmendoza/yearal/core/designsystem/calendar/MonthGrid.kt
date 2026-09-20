@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.isTraversalGroup
@@ -61,6 +62,22 @@ fun MonthGrid(
     holidays: Map<LocalDate, String> = emptyMap(),
 ) {
     val formatter = rememberIfcDateFormatter()
+    // The 28 (IfcDate, LocalDate) pairs depend only on `month`, but `today`, `selected`, `eventCounts`
+    // and `holidays` are also parameters of this composable — so a change to any one of them (e.g. a
+    // day tap changing `selected` while the pager keeps three months warm, ARCHITECTURE §3.4) recomposes
+    // this whole function, not just the affected DayCell. Without memoizing this list, that means
+    // reconstructing and re-validating all 28 IfcDate.Regular instances and their toLocalDate()
+    // conversions, on every warm page, for every unrelated state change — real per-recomposition cost
+    // that strong-skipping mode does not remove, because it lives in this function's own body rather
+    // than in a skippable child call (docs/ROADMAP.md compose-perf pass). `remember(month)` computes it
+    // once per page and reuses it across every other recomposition of the same month.
+    val cellDates =
+        remember(month) {
+            List(IfcMonth.DAYS_PER_MONTH) { index ->
+                val date = IfcDate.Regular(month.year, month.month, index + 1)
+                date to date.toLocalDate()
+            }
+        }
     Column(modifier = modifier.fillMaxWidth().semantics { isTraversalGroup = true }) {
         Text(
             text = formatter.monthTitle(month),
@@ -74,8 +91,7 @@ fun MonthGrid(
         for (row in 0 until GRID_ROWS) {
             Row(modifier = Modifier.fillMaxWidth()) {
                 for (column in 0 until GRID_COLUMNS) {
-                    val date = IfcDate.Regular(month.year, month.month, row * GRID_COLUMNS + column + 1)
-                    val gregorian = date.toLocalDate()
+                    val (date, gregorian) = cellDates[row * GRID_COLUMNS + column]
                     DayCell(
                         date = date,
                         gregorian = gregorian,

@@ -317,6 +317,40 @@ class MonthViewModelTest {
             }
         }
 
+    // Compose-perf pass: a page change used to tear down and re-issue observeAgenda for every warm
+    // month, including the two that stayed warm across a single-page swipe (docs/ARCHITECTURE.md §3.4
+    // "The pager keeps three months warm"). MonthViewModel now caches each month's shared flow
+    // (agendaCountsFor) so only the month that newly enters the window is queried again.
+
+    @Test
+    fun `paging keeps the agenda subscription for months that stay warm`() =
+        runTest(dispatcher) {
+            val agenda = FakeObserveAgendaUseCase()
+            val november2026 = IfcYearMonth(2026, IfcMonth.NOVEMBER)
+            val viewModel = viewModel(october2026, observeAgenda = agenda)
+            viewModel.uiState.test {
+                awaitItem()
+                awaitItem()
+                // The initial warm window {Sep, Oct, Nov} issues exactly one query per month.
+                agenda.requestedRanges shouldContainExactly
+                    listOf(september2026.gregorianRange, october2026.gregorianRange, november2026.gregorianRange)
+
+                viewModel.showPage(MonthPages.pageOf(november2026))
+                awaitItem()
+                awaitItem()
+
+                // The new warm window {Oct, Nov, Dec} adds only December: Oct and Nov are not
+                // re-requested, because their shared flows from the previous window are reused.
+                agenda.requestedRanges shouldContainExactly
+                    listOf(
+                        september2026.gregorianRange,
+                        october2026.gregorianRange,
+                        november2026.gregorianRange,
+                        december2026.gregorianRange,
+                    )
+            }
+        }
+
     @Test
     fun `an event's occurrence count reaches the grid for its page`() =
         runTest(dispatcher) {

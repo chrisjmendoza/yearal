@@ -37,12 +37,18 @@ public enum class ThemeMode {
  * @property dynamicColor use Material You wallpaper colours on API 31+ instead of the brand palette.
  * @property enabledHolidaySets ids of the holiday packs shown on grids and agendas (the pack `id`
  * field, e.g. `"ifc"`, `"us"`), default the IFC observances and the US pack (ROADMAP decision #8).
+ * @property hasSeenIntro whether the first-run intro (`docs/FEATURES.md` L1) has been shown and
+ * dismissed (skipped or finished) at least once. `false` for a fresh install **and** for an install
+ * whose stored file predates this field (`UserSettingsSerializer`'s backward-compatibility default) —
+ * both cases are indistinguishable and both mean "show the intro", which is the sensible fallback for
+ * either. Never set back to `false` by the app itself; only a fresh or pre-intro install starts `false`.
  */
 public data class UserSettings(
     val weekdayDisplay: WeekdayDisplay = WeekdayDisplay.BOTH,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
     val enabledHolidaySets: Set<String> = setOf("ifc", "us"),
+    val hasSeenIntro: Boolean = false,
 ) {
     /** Well-known values. */
     public companion object {

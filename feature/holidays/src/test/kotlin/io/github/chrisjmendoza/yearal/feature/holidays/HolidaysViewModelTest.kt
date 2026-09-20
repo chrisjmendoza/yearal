@@ -64,10 +64,13 @@ class HolidaysViewModelTest {
         Dispatchers.resetMain()
     }
 
+    // The last argument is the test's own dispatcher: in production the view model evaluates packs on
+    // Dispatchers.Default, which virtual time cannot control, so leaving it there made these tests race
+    // real threads — they passed alone and failed in a loaded full-suite run (docs/WORKFLOW.md §2).
     private fun viewModel(
         repository: FakeSettingsRepository = FakeSettingsRepository(),
         ticker: FakeDateTicker = FakeDateTicker(LocalDate.of(2026, 9, 17)),
-    ) = HolidaysViewModel(repository, loader, engine, ticker, formatter, context)
+    ) = HolidaysViewModel(repository, loader, engine, ticker, formatter, context, dispatcher)
 
     // ----- Browsing and toggling (task 1): agrees live with SettingsRepository.enabledHolidaySets -----
 

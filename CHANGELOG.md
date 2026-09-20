@@ -180,8 +180,23 @@ Architecture, tooling and CI:
   its event, a day on the Month widget opens that day, and the Today widget opens Today, instead of whichever
   tab happened to be showing. Everything arriving in an intent is validated and falls back to the normal start
   screen rather than trusting it; intents still carry nothing but IDs.
+- A release build you can install (M2 T11, signing half): `:app`'s release type signs from a gitignored
+  `keystore.properties` or `YEARAL_RELEASE_*` environment variables and falls back to the debug key with a
+  warning when neither is set, so the build is always installable and no secret is ever needed to compile.
+  It is also `profileable`, so Android Studio's profiler can attach to the exact build being judged.
+  R8 stays off until its keep rules land (M8 T2). See [docs/release-builds.md](docs/release-builds.md).
+- A skippable three-screen first-run intro (FEATURES L1): what the IFC is, why the nominal and the actual
+  weekday differ, and where Year Day and Leap Day live, ending with a "find my IFC birthday" jump into the
+  converter. Re-openable from Learn. Every example date is computed by the conversion core, so the text
+  cannot drift from the calendar.
+- `ExplainerInfoButton` in `:core:designsystem`, the reusable info-button and popup for FEATURES L3's
+  contextual explainers. **Not yet wired into the month grid** — tracked as ROADMAP R10's sibling R8.
 
 ### Changed
+
+- The month pager no longer re-queries the events of months that are already on screen: swiping one page
+  now issues one query for the month that came into view, instead of three for the whole warm window.
+  The month grid also stops rebuilding its 28 cell dates on every recomposition.
 
 - Holiday sets are switched on and off in the new Holidays screen rather than in Settings; Settings and the
   More hub both link to it, so there is a single place that owns the setting.
@@ -196,6 +211,9 @@ Architecture, tooling and CI:
 
 ### Fixed
 
+- `HolidaysViewModel`'s tests raced real threads: the view model evaluates packs on `Dispatchers.Default`,
+  which a test's virtual clock cannot control, so they passed alone and failed under a loaded full-suite
+  run. The dispatcher is now injectable for tests. Production behaviour is unchanged.
 - An open Today, Month, Year or Day screen no longer shows a stale date, stale event times or events on the
   wrong day after the device clock or time zone changes, or after the app returns from the background (R1).
 - Rapid taps on Save or Delete in the event editor could create a duplicate event; both are now disabled

@@ -32,6 +32,11 @@ data class YearUiState(
     /**
      * The 13 IFC months of [year] in calendar order (Sol between June and July), the grid's first 13
      * tiles; Year Day is the grid's 14th item, built separately by the screen since it is not a month.
+     *
+     * Computed once, at construction, rather than as a `get()`: [YearScreen] reads this every time it
+     * recomposes, which happens whenever any field of this state changes — including [today] on every
+     * midnight tick, which never changes the 13 months themselves. A stored property is built once per
+     * [YearUiState] instance instead of once per read.
      */
-    val months: List<IfcYearMonth> get() = IfcMonth.entries.map { month -> IfcYearMonth(year, month) }
+    val months: List<IfcYearMonth> = IfcMonth.entries.map { month -> IfcYearMonth(year, month) }
 }

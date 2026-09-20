@@ -25,6 +25,7 @@ class UserSettingsSerializerTest {
             themeMode = ThemeMode.DARK,
             dynamicColor = false,
             enabledHolidaySets = setOf("ifc", "us", "gb"),
+            hasSeenIntro = true,
         )
 
     private suspend fun write(settings: UserSettings): ByteArray =
@@ -51,7 +52,13 @@ class UserSettingsSerializerTest {
             val bytes = write(UserSettings.DEFAULT)
             UserSettingsSerializer.readFrom(ByteArrayInputStream(bytes)) shouldBe UserSettings.DEFAULT
             val text = bytes.decodeToString()
-            listOf("weekdayDisplay", "themeMode", "dynamicColor", "enabledHolidaySets").forEach {
+            listOf(
+                "weekdayDisplay",
+                "themeMode",
+                "dynamicColor",
+                "enabledHolidaySets",
+                "hasSeenIntro",
+            ).forEach {
                 text shouldContain
                     "\"$it\""
             }
@@ -89,6 +96,21 @@ class UserSettingsSerializerTest {
         runTest {
             read("""{"themeMode":"DARK"}""") shouldBe UserSettings.DEFAULT.copy(themeMode = ThemeMode.DARK)
             read("{}") shouldBe UserSettings.DEFAULT
+        }
+
+    @Test
+    fun `migration - a file written before the intro flag existed reads without crashing and as not seen`() =
+        runTest {
+            // The exact document shape UserSettingsSerializer wrote before `hasSeenIntro` was added:
+            // every field that already existed then, and nothing else.
+            val preIntroDocument =
+                """{"weekdayDisplay":"BOTH","themeMode":"SYSTEM","dynamicColor":true,""" +
+                    """"enabledHolidaySets":["ifc","us"]}"""
+
+            val settings = read(preIntroDocument)
+
+            settings shouldBe UserSettings.DEFAULT
+            settings.hasSeenIntro shouldBe false
         }
 
     @Test

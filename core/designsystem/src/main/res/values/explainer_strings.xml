@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings of ExplainerInfoButton (docs/FEATURES.md L3 "contextual explainers"). A separate file from
+     strings.xml so this new component adds a file rather than editing an existing one, in line with
+     this task's module-sharing rule for :core:designsystem. The button's title and explanation text are
+     always parameters supplied by the caller (CLAUDE.md rule 9); only this component's own generic
+     labels live here. -->
+<resources>
+
+    <!-- Spoken label of the info button itself. %1$s = the explainer's title, e.g. "More information:
+         Why weekdays differ", so two explainers on the same screen (docs/FEATURES.md L3) are
+         distinguishable to TalkBack. -->
+    <string name="explainer_info_content_description">More information: %1$s</string>
+
+    <!-- The explanation popup's only button, which dismisses it. -->
+    <string name="explainer_dismiss">Got it</string>
+
+</resources>

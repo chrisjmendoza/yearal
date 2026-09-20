@@ -19,6 +19,7 @@ import io.github.chrisjmendoza.yearal.core.domain.settings.SettingsRepository
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.holidays.BundledHolidayPacks
 import io.github.chrisjmendoza.yearal.core.holidays.HolidayPackLoader
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,15 +65,34 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class HolidaysViewModel
-    @Inject
-    constructor(
+    internal constructor(
         private val settingsRepository: SettingsRepository,
         private val loader: HolidayPackLoader,
         private val engine: HolidayEngine,
         dateTicker: DateTicker,
         private val formatter: IfcDateFormatter,
         @ApplicationContext context: Context,
+        /**
+         * Where pack parsing and holiday evaluation run, off the caller's thread.
+         *
+         * Injectable **only so a test can pass its own dispatcher**: with the hard-coded
+         * [Dispatchers.Default] the upstream work ran on a real thread pool while the test drove virtual
+         * time, so whether the state arrived before Turbine gave up was a real-time race — it passed
+         * alone and failed in a loaded full-suite run (docs/WORKFLOW.md §2). Hilt always supplies
+         * [Dispatchers.Default] through the [Inject] constructor below.
+         */
+        private val workDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
+        @Inject
+        constructor(
+            settingsRepository: SettingsRepository,
+            loader: HolidayPackLoader,
+            engine: HolidayEngine,
+            dateTicker: DateTicker,
+            formatter: IfcDateFormatter,
+            @ApplicationContext context: Context,
+        ) : this(settingsRepository, loader, engine, dateTicker, formatter, context, Dispatchers.Default)
+
         private val resources: Resources = context.resources
 
         // Loaded lazily, and once, so a process that never opens this screen never parses a pack
@@ -91,7 +111,7 @@ class HolidaysViewModel
         val uiState: StateFlow<HolidaysUiState> =
             combine(settingsRepository.settings, year) { settings, y -> settings to y }
                 .map { (settings, y) -> buildLoaded(settings, y) }
-                .flowOn(Dispatchers.Default)
+                .flowOn(workDispatcher)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HolidaysUiState.Loading)
 
         /**
