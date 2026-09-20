@@ -21,7 +21,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "intl-fixed-calendar"
+rootProject.name = "yearal"
 
 include(":app")
 include(":core:calendar")

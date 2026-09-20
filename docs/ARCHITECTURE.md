@@ -202,7 +202,7 @@ The original list is kept for the record:
 ## 2. Module structure
 
 ```
-D:\Dev\intl-fixed-calendar
+D:\Dev\yearal
 ├─ build-logic/convention        (included build; 6 small plugins)
 ├─ gradle/libs.versions.toml
 ├─ app                           Application, MainActivity, Hilt root, Nav3 back stacks + entryProvider assembly, IntentRouter
