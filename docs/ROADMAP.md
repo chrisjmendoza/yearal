@@ -285,6 +285,12 @@ None of this is in 1.0: the first Play review stays free of calendar and network
 - Bump targetSdk to 37 before Play's likely August 2027 deadline.
 - Move to Kotlin 2.4.x once KSP catches up, to AGP 9.4 or later once Studio is updated, and to Nav3 1.2 deep links.
 - Add per-occurrence edits (`event_overrides`).
+- Add the Day / Month / Year view-mode switcher ([FEATURES.md](FEATURES.md) C13), so the three scales are one
+  switchable view of a single selected date rather than three destinations reached different ways. All three
+  views already exist, so the new build is the switching itself, plus keeping the selected date fixed across a
+  mode change. A Week mode was considered and left out (C9 stays ⚪). Settle first whether the mode joins one
+  `CalendarKey` or stays separate `:core:navigation` keys — it changes the Calendar tab's navigation shape and
+  so wants an ADR.
 - Add translations.
 - Add more holiday sets (data-only changes).
 - Publish on F-Droid (it builds from source with its own key).

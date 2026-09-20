@@ -94,10 +94,11 @@ Counts are from the 51 incumbent reviews retrieved, plus the iOS app's review fe
 | 🟠 | C4 | Event dots / holiday markers in cells; today highlighted (never by colour alone) | |
 | 🟠 | C7 | Jump to date / jump to today | |
 | 🟡 | C8 | Agenda list (upcoming events, both dates on each row) | |
+| 🟡 | C13 | **View-mode switcher: Day / Month / Year**, for drilling down to a date quickly | Owner-requested 2026-09-19. Makes the three scales one switchable view of a single selected date instead of three destinations reached different ways. Month is C1 and Year is C6 (both built) and Day reuses C5's day detail rather than becoming a second day UI, so the new build is the switching itself, not the views. **Selection is the invariant:** switching mode never changes the selected date, and picking a date in a coarser mode drills into it — that is the whole point of the feature. A Week mode was considered and left out: C9 stays ⚪ for the reason given there. Three things to settle before building: (1) whether mode becomes part of one `CalendarKey` or stays separate `:core:navigation` keys — it changes the tab's navigation shape, so it is ADR-worthy; (2) whether the mode persists in `SettingsRepository` like the other display settings or resets each launch; (3) whether Day mode replaces the day-detail sheet on compact widths or coexists with it. This also subsumes the M2 T13 note that nothing signals the app-bar title opens the Year view — a switcher is that affordance. Overlaps C7 (jump to date) and the `IfcDatePicker`: those stay the *precise* path to a date, this is the *browsing* path. |
 | 🟡 | C10 | Gregorian month grid with IFC dates overlaid (the inverse view) | For planning around Gregorian-world deadlines. Owner-requested as an optional view (2026-09-19): the mirror of C1 — Gregorian day large, IFC date small; design it together with the M2 T13 polish pass. |
 | 🟡 | C11 | Tablet / foldable / landscape layouts (month + day side by side; year comparison) | Window size classes from day one, so this is additive. |
 | 🔵 | C12 | Optional moon-phase indicator | Off by default, with explainer. |
-| ⚪ | C9 | Week view | Every IFC week looks the same; the agenda covers the need. |
+| ⚪ | C9 | Week view | Every IFC week looks the same; the agenda covers the need. Reconsidered 2026-09-19 alongside C13 and deliberately left out. |
 
 ### 3. Converter & date tools
 
