@@ -17,6 +17,10 @@
     <string name="converter_direction_gregorian_to_ifc">Gregorian to IFC</string>
     <!-- Direction option: pick an IFC date, get the Gregorian date. -->
     <string name="converter_direction_ifc_to_gregorian">IFC to Gregorian</string>
+    <!-- Content description of the icon button beside the segmented direction control that swaps
+         Gregorian-to-IFC and IFC-to-Gregorian (docs/design-plan.md §4.6): the same action as tapping
+         the other segment. -->
+    <string name="converter_swap_direction">Swap direction</string>
 
     <!-- Heading above the button that opens the Gregorian date picker. -->
     <string name="converter_gregorian_input_heading">Gregorian date</string>
@@ -27,10 +31,19 @@
 
     <!-- Heading above the conversion result. -->
     <string name="converter_result_heading">Result</string>
-    <!-- The IFC side of the result, labelled because it stands next to a Gregorian date (spec §7.3).
-         %1$s = the long IFC date, e.g. "September 8, 2026" or "Year Day, 2026". -->
+    <!-- The result card's eyebrow caption over the IFC date, shown in small uppercase letters so a
+         newcomer sees which calendar the value below it is in (docs/design-plan.md §4.6). -->
+    <string name="converter_eyebrow_ifc">IFC</string>
+    <!-- The result card's eyebrow caption over the Gregorian date, the same treatment as
+         converter_eyebrow_ifc. -->
+    <string name="converter_eyebrow_gregorian">Gregorian</string>
+    <!-- The IFC side of the result, spoken because it stands next to a Gregorian date (spec §7.3); the
+         card shows the eyebrow and the value as separate lines, so this is used as the merged
+         accessibility description instead of on-screen text. %1$s = the long IFC date, e.g.
+         "September 8, 2026" or "Year Day, 2026". -->
     <string name="converter_result_ifc">IFC: %1$s</string>
-    <!-- The Gregorian side of the result. %1$s = the full Gregorian date with its weekday. -->
+    <!-- The Gregorian side of the result, spoken the same way as converter_result_ifc. %1$s = the full
+         Gregorian date with its weekday. -->
     <string name="converter_result_gregorian">Gregorian: %1$s</string>
     <!-- Shown instead of a result while the active input is not a date in the supported range
          (spec §7.1). %1$s = first year (1583), %2$s = last year (9999), already formatted: years are

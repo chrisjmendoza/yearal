@@ -1,5 +1,7 @@
 package io.github.chrisjmendoza.yearal.feature.holidays
 
+import android.content.res.Configuration
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,28 +10,39 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -43,9 +56,32 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
+import io.github.chrisjmendoza.yearal.core.holidays.BundledHolidayPacks
 import io.github.chrisjmendoza.yearal.core.navigation.DayKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
+import io.github.chrisjmendoza.yearal.core.designsystem.R as DesignSystemR
+
+/**
+ * Test tags of the Holidays screen's shapeless marks (docs/design-plan.md section 4.7), the same
+ * pattern as `:core:designsystem`'s `MonthGridTestTags`: colour alone never carries the fact, so these
+ * exist for tests to confirm which mark a row drew, in the unmerged tree (rows merge their
+ * descendants; a screen reader hears the row's own content description instead).
+ */
+internal object HolidaysTestTags {
+    /** The rotated-square mark on an ordinary holiday row. */
+    const val HOLIDAY_DIAMOND: String = "holidays:diamond"
+
+    /** The intercalary icon on a Year Day or Leap Day row, replacing the diamond. */
+    const val INTERCALARY_MARK: String = "holidays:intercalaryMark"
+}
+
+// 12dp pack colour dot, 8dp holiday diamond (docs/design-plan.md section 4.7) - sized locally, not from
+// :core:designsystem's Dimens, since these are this screen's own marks, not the month grid's.
+private val PackDotSize = 12.dp
+private val HolidayDiamondSize = 8.dp
 
 /**
  * The Holidays screen (docs/FEATURES.md H1, H2, H3, H5, H7; ROADMAP M6 T2): collects
@@ -109,6 +145,10 @@ fun HolidaysScreen(
                         )
                     }
                 },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
             )
         },
     ) { padding ->
@@ -169,20 +209,27 @@ private fun LoadedContent(
             EmptyYearList()
         } else {
             state.groups.forEach { group ->
-                SectionHeading(group.monthLabel)
+                MonthEyebrow(group.monthLabel)
                 group.rows.forEach { row -> HolidayOccurrenceItem(row = row, onClick = onRowClick) }
             }
         }
     }
 }
 
-/** FEATURES H1, H2, H3, H5: one bundled set's switch, region, holiday count and sources. */
+/**
+ * FEATURES H1, H2, H3, H5: one bundled set's switch, region, holiday count and sources, with a leading
+ * colour dot from [packDotColor] (docs/design-plan.md section 4.7). An enabled row sits on
+ * [YearalTheme]'s `cardContainer`; a disabled one sits on the plain page surface — colour plus the
+ * switch's own on/off state, never colour alone.
+ */
 @Composable
 private fun HolidaySetItem(
     row: HolidaySetRow,
     onCheckedChange: (Boolean) -> Unit,
 ) {
+    val rowContainerColor = if (row.enabled) YearalTheme.colors.cardContainer else YearalTheme.colors.pageBackground
     ListItem(
+        leadingContent = { PackColorDot(id = row.id) },
         headlineContent = { Text(row.name) },
         supportingContent = {
             Column {
@@ -197,12 +244,40 @@ private fun HolidaySetItem(
             }
         },
         trailingContent = { Switch(checked = row.enabled, onCheckedChange = null) },
+        colors = ListItemDefaults.colors(containerColor = rowContainerColor),
         modifier =
             Modifier
                 .fillMaxWidth()
                 .toggleable(value = row.enabled, role = Role.Switch, onValueChange = onCheckedChange),
     )
 }
+
+/** A 12dp filled circle in [packDotColor]'s role for pack id [id] (docs/design-plan.md section 4.7). */
+@Composable
+private fun PackColorDot(id: String) {
+    Box(
+        modifier =
+            Modifier
+                .size(PackDotSize)
+                .clip(CircleShape)
+                .background(packDotColor(id)),
+    )
+}
+
+/**
+ * The pack colour-dot role, keyed by `HolidaySet.id` (docs/design-plan.md section 4.7): the IFC-native
+ * pack gets the intercalary token, national packs (`us`) get `primary`, religious/other packs get
+ * `secondary`, and any pack this map does not know yet gets `outline`. A static map, not pack data,
+ * until packs carry their own colour (design-plan section 5.5).
+ */
+@Composable
+private fun packDotColor(id: String): Color =
+    when (id) {
+        BundledHolidayPacks.IFC -> YearalTheme.colors.intercalary
+        BundledHolidayPacks.US.lowercase() -> MaterialTheme.colorScheme.primary
+        BundledHolidayPacks.RELIGIOUS_CHRISTIAN -> MaterialTheme.colorScheme.secondary
+        else -> MaterialTheme.colorScheme.outline
+    }
 
 /** FEATURES C7-style year paging, clamped at [io.github.chrisjmendoza.yearal.core.designsystem.picker.DatePickerRange]. */
 @Composable
@@ -223,7 +298,8 @@ private fun YearNav(
         }
         Text(
             text = formatter.formatNumber(state.year),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.primary,
             textAlign = TextAlign.Center,
             modifier = Modifier.weight(1f),
         )
@@ -236,13 +312,30 @@ private fun YearNav(
     }
 }
 
-/** One occurrence: name, IFC long and numeric form, Gregorian date with its real weekday. */
+/**
+ * One occurrence: name, IFC long and numeric form, Gregorian date with its real weekday. An ordinary
+ * holiday carries the `holidayMark` diamond; Year Day and Leap Day ([HolidayOccurrenceRow.isIntercalary])
+ * carry the intercalary icon instead and sit in an `intercalaryContainer` chip, not the diamond
+ * (docs/design-plan.md section 4.7).
+ */
 @Composable
 private fun HolidayOccurrenceItem(
     row: HolidayOccurrenceRow,
     onClick: (Long) -> Unit,
 ) {
     ListItem(
+        leadingContent = {
+            if (row.isIntercalary) {
+                Icon(
+                    painter = painterResource(DesignSystemR.drawable.ic_intercalary),
+                    contentDescription = null,
+                    tint = YearalTheme.colors.intercalary,
+                    modifier = Modifier.testTag(HolidaysTestTags.INTERCALARY_MARK),
+                )
+            } else {
+                HolidayDiamond()
+            }
+        },
         headlineContent = { Text(row.name) },
         supportingContent = {
             Column {
@@ -250,22 +343,58 @@ private fun HolidayOccurrenceItem(
                 Text(row.gregorianLong, style = MaterialTheme.typography.bodySmall)
             }
         },
+        colors =
+            if (row.isIntercalary) {
+                ListItemDefaults.colors(
+                    containerColor = YearalTheme.colors.intercalaryContainer,
+                    headlineColor = YearalTheme.colors.onIntercalaryContainer,
+                    supportingColor = YearalTheme.colors.onIntercalaryContainer,
+                )
+            } else {
+                ListItemDefaults.colors()
+            },
         modifier =
             Modifier
                 .fillMaxWidth()
+                .clip(if (row.isIntercalary) MaterialTheme.shapes.medium else RectangleShape)
                 .clickable(role = Role.Button, onClick = { onClick(row.epochDay) })
                 .semantics(mergeDescendants = true) { contentDescription = row.description },
     )
 }
 
+/** The 8dp rotated-square holiday mark (docs/design-plan.md section 4.7), a shape so it never depends
+ *  on colour alone (CLAUDE.md rule 6 / docs/ARCHITECTURE.md section 4 "Accessibility"). */
+@Composable
+private fun HolidayDiamond() {
+    Box(
+        modifier =
+            Modifier
+                .size(HolidayDiamondSize)
+                .rotate(degrees = 45f)
+                .background(YearalTheme.colors.holidayMark)
+                .testTag(HolidaysTestTags.HOLIDAY_DIAMOND),
+    )
+}
+
 @Composable
 private fun EmptyYearList() {
-    Text(
-        text = stringResource(R.string.holidays_empty_state),
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-    )
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(Dimens.SpaceL),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Dimens.SpaceS),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.DateRange,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = stringResource(R.string.holidays_empty_state),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 @Composable
@@ -277,6 +406,25 @@ private fun SectionHeading(text: String) {
         modifier =
             Modifier
                 .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp)
+                .semantics { heading() },
+    )
+}
+
+/**
+ * The eyebrow heading over one IFC month's holidays in the year list (docs/design-plan.md section
+ * 4.7): [MaterialTheme.typography.labelSmall] (already letter-spaced for eyebrow captions,
+ * `:core:designsystem`'s `Typography.kt`) in `primary`, distinct from [SectionHeading]'s larger,
+ * page-level style.
+ */
+@Composable
+private fun MonthEyebrow(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier =
+            Modifier
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
                 .semantics { heading() },
     )
 }
@@ -295,6 +443,8 @@ private fun SectionInfo(text: String) {
 // the goldens; dynamic colour is off for determinism.
 
 @Preview(name = "Holidays, 2026", showBackground = true, heightDp = 1400)
+@Preview(name = "Holidays, dark", showBackground = true, heightDp = 1400, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "Holidays, font 2.0", showBackground = true, heightDp = 2400, fontScale = 2f)
 @Composable
 internal fun HolidaysScreenPreview() {
     IfcTheme(dynamicColor = false) {
@@ -383,6 +533,7 @@ private val previewState =
                                 description =
                                     "Year Day. IFC Year Day, 2026 · IFC 2026-13-29. " +
                                         "Gregorian Thursday, December 31, 2026.",
+                                isIntercalary = true,
                             ),
                         ),
                 ),

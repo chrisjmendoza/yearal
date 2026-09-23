@@ -3,27 +3,31 @@ package io.github.chrisjmendoza.yearal.feature.settings.settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
-import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorPalette
 import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
+import io.github.chrisjmendoza.yearal.core.domain.settings.WidgetTheme
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import org.junit.Rule
@@ -48,7 +52,12 @@ class SettingsScreenTest {
 
     private val weekdaySelections = mutableListOf<WeekdayDisplay>()
     private val themeSelections = mutableListOf<ThemeMode>()
-    private val dynamicColorChanges = mutableListOf<Boolean>()
+    private val colorSourceSelections = mutableListOf<ColorSource>()
+    private val paletteSelections = mutableListOf<ColorPalette>()
+    private val pureBlackChanges = mutableListOf<Boolean>()
+    private val todayWidgetThemeSelections = mutableListOf<WidgetTheme>()
+    private val monthWidgetThemeSelections = mutableListOf<WidgetTheme>()
+    private val widgetBackgroundOpacityChanges = mutableListOf<Int>()
     private var holidaysOpened = 0
     private var backPresses = 0
     private var deleteAllDataRequested = 0
@@ -73,7 +82,12 @@ class SettingsScreenTest {
                     onBack = { backPresses++ },
                     onWeekdayDisplaySelected = { weekdaySelections += it },
                     onThemeModeSelected = { themeSelections += it },
-                    onDynamicColorChanged = { dynamicColorChanges += it },
+                    onColorSourceSelected = { colorSourceSelections += it },
+                    onPaletteSelected = { paletteSelections += it },
+                    onPureBlackChanged = { pureBlackChanges += it },
+                    onTodayWidgetThemeSelected = { todayWidgetThemeSelections += it },
+                    onMonthWidgetThemeSelected = { monthWidgetThemeSelections += it },
+                    onWidgetBackgroundOpacityChanged = { widgetBackgroundOpacityChanges += it },
                     onOpenHolidays = { holidaysOpened++ },
                     onRequestDeleteAllData = { deleteAllDataRequested++ },
                     onContinueDeleteAllData = { deleteAllDataContinued++ },
@@ -134,39 +148,117 @@ class SettingsScreenTest {
     fun `theme options form a radio group that reports the chosen mode`() {
         show(UserSettings(themeMode = ThemeMode.SYSTEM))
 
-        compose.onNodeWithText("System default").performScrollTo().assertIsSelected()
-        compose.onNodeWithText("Light").performScrollTo().assertIsNotSelected()
-        compose.onNodeWithText("Dark").performScrollTo().assertIsNotSelected()
+        val systemTag = SettingsTestTags.THEME_MODE_PREFIX + ThemeMode.SYSTEM.name
+        val lightTag = SettingsTestTags.THEME_MODE_PREFIX + ThemeMode.LIGHT.name
+        val darkTag = SettingsTestTags.THEME_MODE_PREFIX + ThemeMode.DARK.name
+        compose.onNodeWithTag(systemTag).performScrollTo().assertIsSelected()
+        compose.onNodeWithTag(lightTag).performScrollTo().assertIsNotSelected()
+        compose.onNodeWithTag(darkTag).performScrollTo().assertIsNotSelected()
 
-        compose.onNodeWithText("Dark").performScrollTo().performClick()
-        compose.onNodeWithText("Light").performScrollTo().performClick()
+        compose.onNodeWithTag(darkTag).performScrollTo().performClick()
+        compose.onNodeWithTag(lightTag).performScrollTo().performClick()
 
         themeSelections shouldContainExactly listOf(ThemeMode.DARK, ThemeMode.LIGHT)
     }
 
     @Test
-    fun `dynamic colour switch reflects the state and reports the opposite value on click`() {
+    fun `colour source segments reflect the state and report the other option on click`() {
         show(UserSettings(colorSource = ColorSource.DYNAMIC), dynamicColorSupported = true)
 
-        val row = compose.onNodeWithText("Dynamic colour").performScrollTo()
-        row.assertIsEnabled().assertIsOn()
-        compose.onNodeWithText("Use wallpaper colours (Android 12+)").assertIsDisplayed()
+        compose.onNodeWithText("Yearal palette").performScrollTo().assertIsNotSelected()
+        val dynamic = compose.onNodeWithText("Material You").performScrollTo()
+        dynamic.assertIsSelected().assertIsEnabled()
 
-        row.performClick()
+        compose.onNodeWithText("Yearal palette").performClick()
 
-        dynamicColorChanges shouldContainExactly listOf(false)
+        colorSourceSelections shouldContainExactly listOf(ColorSource.BRAND)
     }
 
     @Test
-    fun `dynamic colour switch is disabled with its reason when the device cannot support it`() {
-        show(UserSettings(colorSource = ColorSource.DYNAMIC), dynamicColorSupported = false)
+    fun `Material You is disabled with its reason when the device cannot support it`() {
+        show(UserSettings(colorSource = ColorSource.BRAND), dynamicColorSupported = false)
 
-        compose.onNodeWithText("Dynamic colour").performScrollTo().assertIsNotEnabled()
-        compose.onNodeWithText("Not available on this device").assertIsDisplayed()
+        compose.onNodeWithText("Material You").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Not available on this device").performScrollTo().assertIsDisplayed()
 
-        compose.onNodeWithText("Dynamic colour").performClick()
+        compose.onNodeWithText("Material You").performClick()
 
-        dynamicColorChanges shouldBe emptyList()
+        colorSourceSelections shouldBe emptyList()
+    }
+
+    @Test
+    fun `palette swatches show the stored selection and report a click`() {
+        show(UserSettings(colorSource = ColorSource.BRAND, palette = ColorPalette.SOL))
+
+        compose.onNodeWithText("Sol").performScrollTo().assertIsSelected()
+        compose.onNodeWithText("Teal").performScrollTo().assertIsNotSelected()
+
+        compose.onNodeWithText("Night").performScrollTo().performClick()
+
+        paletteSelections shouldContainExactly listOf(ColorPalette.NIGHT)
+    }
+
+    @Test
+    fun `the palette row is disabled and explained while Material You is the colour source`() {
+        show(UserSettings(colorSource = ColorSource.DYNAMIC))
+
+        compose
+            .onNodeWithText("Palette applies when Yearal palette is the colour source", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+        compose.onNodeWithText("Teal").performScrollTo().assertIsNotEnabled()
+
+        compose.onNodeWithText("Teal").performClick()
+
+        paletteSelections shouldBe emptyList()
+    }
+
+    @Test
+    fun `pure black switch reflects the state and reports the opposite value on click`() {
+        show(UserSettings(pureBlack = false))
+
+        val row = compose.onNodeWithText("Pure black in dark mode").performScrollTo()
+        row.assertIsEnabled()
+
+        row.performClick()
+
+        pureBlackChanges shouldContainExactly listOf(true)
+    }
+
+    @Test
+    fun `each widget theme row reflects its own stored setting and reports a click independently`() {
+        show(UserSettings(todayWidgetTheme = WidgetTheme.LIGHT, monthWidgetTheme = WidgetTheme.FOLLOW_APP))
+
+        val todayDark = SettingsTestTags.TODAY_WIDGET_THEME_PREFIX + WidgetTheme.DARK.name
+        val monthDark = SettingsTestTags.MONTH_WIDGET_THEME_PREFIX + WidgetTheme.DARK.name
+        compose
+            .onNodeWithTag(SettingsTestTags.TODAY_WIDGET_THEME_PREFIX + WidgetTheme.LIGHT.name)
+            .performScrollTo()
+            .assertIsSelected()
+        compose
+            .onNodeWithTag(SettingsTestTags.MONTH_WIDGET_THEME_PREFIX + WidgetTheme.FOLLOW_APP.name)
+            .performScrollTo()
+            .assertIsSelected()
+
+        compose.onNodeWithTag(todayDark).performScrollTo().performClick()
+        compose.onNodeWithTag(monthDark).performScrollTo().performClick()
+
+        todayWidgetThemeSelections shouldContainExactly listOf(WidgetTheme.DARK)
+        monthWidgetThemeSelections shouldContainExactly listOf(WidgetTheme.DARK)
+    }
+
+    @Test
+    fun `the widget background slider shows the stored percentage and reports a new one`() {
+        show(UserSettings(widgetBackgroundOpacity = 60))
+
+        compose.onNodeWithText("Widget background: 60%", substring = true).performScrollTo().assertIsDisplayed()
+
+        compose
+            .onNodeWithTag(SettingsTestTags.WIDGET_BACKGROUND_SLIDER)
+            .performScrollTo()
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(35f) }
+
+        widgetBackgroundOpacityChanges shouldContainExactly listOf(35)
     }
 
     @Test
@@ -276,7 +368,12 @@ class SettingsScreenTest {
                     onBack = {},
                     onWeekdayDisplaySelected = {},
                     onThemeModeSelected = {},
-                    onDynamicColorChanged = {},
+                    onColorSourceSelected = {},
+                    onPaletteSelected = {},
+                    onPureBlackChanged = {},
+                    onTodayWidgetThemeSelected = {},
+                    onMonthWidgetThemeSelected = {},
+                    onWidgetBackgroundOpacityChanged = {},
                     onOpenHolidays = {},
                 )
             }

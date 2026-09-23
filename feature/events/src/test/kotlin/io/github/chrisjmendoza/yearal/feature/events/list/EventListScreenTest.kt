@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
@@ -25,10 +26,12 @@ import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCalendar
+import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,10 +39,11 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * [EventListScreen] under Robolectric (`docs/ROADMAP.md` M4 T5): both dates on a row (IFC long form,
- * the canonical numeric form with its mandatory `IFC` prefix — CLAUDE.md rule 5 — and the Gregorian
- * date), the recurrence summary, search, the FAB and row taps report through their callbacks with ids
- * only (CLAUDE.md rule 8), the two empty states, and 200% font scale with 48dp targets
+ * [EventListScreen] under Robolectric (`docs/ROADMAP.md` M4 T5; `docs/design-plan.md` §4.5): rows are
+ * grouped under IFC month headers, each row shows one combined date line (the numeric IFC form with its
+ * mandatory `IFC` prefix — CLAUDE.md rule 5 — moves to the content description for TalkBack), a
+ * recurrence chip and a category chip, search, the FAB and row taps report through their callbacks with
+ * ids only (CLAUDE.md rule 8), the two empty states, and 200% font scale with 48dp targets
  * (`docs/ARCHITECTURE.md` §4 "Accessibility").
  */
 @RunWith(AndroidJUnit4::class)
@@ -90,6 +94,12 @@ class EventListScreenTest {
             timeLabel = null,
             zoneLabel = null,
             recurrenceSummary = RecurrenceSummary.YearlyIfc("Sol 13"),
+            category = EventCategory.EVENT,
+            ifcDayLabel = "Sol 13",
+            gregorianWeekdayShort = "Tue",
+            gregorianDayLabel = "Jun 30",
+            monthHeaderKey = "2026-7",
+            monthHeaderLabel = "Sol 2026",
         )
 
     private val hiddenTimed =
@@ -106,31 +116,76 @@ class EventListScreenTest {
             timeLabel = "9:30 AM",
             zoneLabel = "America/New_York",
             recurrenceSummary = null,
+            category = EventCategory.OBSERVANCE,
+            ifcDayLabel = "Year Day",
+            gregorianWeekdayShort = "Thu",
+            gregorianDayLabel = "Dec 31",
+            monthHeaderKey = "2026-YEAR_DAY",
+            monthHeaderLabel = "Year Day, 2026",
         )
 
     @Test
-    fun `a row shows both dates, the IFC prefix, the time and the recurrence summary`() {
+    fun `a row shows its month header, the combined date line, the time and the recurrence chip`() {
         show(EventListUiState.Loaded(items = listOf(sol13), query = "", hasAnyEvents = true))
 
+        compose.onNodeWithText("Sol 2026").assertIsDisplayed()
         compose.onNodeWithText("Sol 13 picnic").assertIsDisplayed()
-        compose.onNodeWithText("Sol 13, 2026").assertIsDisplayed()
-        compose.onNodeWithText("IFC 2026-07-13").assertIsDisplayed()
-        compose.onNodeWithText("Tuesday, June 30, 2026").assertIsDisplayed()
-        compose.onNodeWithText("Every Sol 13").assertIsDisplayed()
+        compose.onNodeWithText("Sol 13 · Tue Jun 30").assertIsDisplayed()
         compose.onNodeWithText("All day").assertIsDisplayed()
+        compose.onNodeWithText("Every Sol 13").assertIsDisplayed()
+        // EventCategory.EVENT gets no chip.
+        compose.onAllNodesWithText("Observance").assertCountEquals(0)
+        compose.onAllNodesWithText("Birthday").assertCountEquals(0)
     }
 
     @Test
-    fun `a blank title shows the placeholder, a hidden calendar is flagged, and the numeric form is prefixed`() {
+    fun `a blank title shows the placeholder, a hidden calendar is flagged, and the category chip shows`() {
         show(EventListUiState.Loaded(items = listOf(hiddenTimed), query = "", hasAnyEvents = true))
 
         compose.onNodeWithText("(No title)").assertIsDisplayed()
         compose.onNodeWithText("Hidden calendar").assertIsDisplayed()
-        compose.onNodeWithText("IFC 2026-13-29").assertIsDisplayed()
-        compose.onNodeWithText("Thursday, December 31, 2026").assertIsDisplayed()
+        compose.onNodeWithText("Year Day · Thu Dec 31").assertIsDisplayed()
         compose.onNodeWithText("9:30 AM (America/New_York)").assertIsDisplayed()
-        // Rule 5: never a locale-style numeric date for the IFC form.
+        compose.onNodeWithText("Observance").assertIsDisplayed()
+        // Rule 5: the numeric IFC form is never shown visually as a locale-style date, and here it does
+        // not appear on screen at all — it moved into the row's content description for TalkBack.
+        compose.onAllNodesWithText("IFC 2026-13-29").assertCountEquals(0)
         compose.onAllNodesWithText("13/29/2026", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun `the numeric IFC form is spoken in the row's content description`() {
+        show(EventListUiState.Loaded(items = listOf(sol13), query = "", hasAnyEvents = true))
+
+        val description =
+            compose
+                .onNodeWithText("Sol 13 picnic")
+                .fetchSemanticsNode()
+                .config[SemanticsProperties.ContentDescription]
+                .single()
+        description shouldContain "IFC 2026-07-13"
+    }
+
+    @Test
+    fun `rows are grouped under IFC month headers, and Year Day gets its own`() {
+        show(
+            EventListUiState.Loaded(
+                items = listOf(sol13, hiddenTimed),
+                query = "",
+                hasAnyEvents = true,
+            ),
+        )
+
+        compose.onNodeWithText("Sol 2026").assertIsDisplayed()
+        compose.onNodeWithText("Year Day, 2026").assertIsDisplayed()
+    }
+
+    @Test
+    fun `two rows sharing a header show it only once`() {
+        val second = sol13.copy(eventId = 99, title = "Second Sol event")
+        show(EventListUiState.Loaded(items = listOf(sol13, second), query = "", hasAnyEvents = true))
+
+        compose.onAllNodesWithText("Sol 2026").assertCountEquals(1)
     }
 
     @Test
@@ -200,7 +255,7 @@ class EventListScreenTest {
         compose.onNodeWithContentDescription("Add event").assertHeightIsAtLeast(48.dp)
         val row = compose.onNodeWithText("Sol 13 picnic").assertHasClickAction()
         row.assertHeightIsAtLeast(48.dp)
-        for (line in listOf("Sol 13, 2026", "IFC 2026-07-13", "Tuesday, June 30, 2026")) {
+        for (line in listOf("Sol 13 picnic", "Sol 13 · Tue Jun 30", "All day")) {
             compose.onNodeWithText(line).textLayout().isCut() shouldBe false
         }
     }

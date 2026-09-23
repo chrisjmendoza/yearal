@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -19,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.TwoPaneLayout
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.feature.calendar.R
 import io.github.chrisjmendoza.yearal.feature.calendar.agenda.AgendaItemUi
 import io.github.chrisjmendoza.yearal.feature.calendar.day.DayDetail
@@ -27,6 +32,7 @@ import java.time.LocalDate
 
 private val EmptyStatePadding = 32.dp
 private val EmptyStateSpacing = 8.dp
+private val EmptyStateGlyphSize = 48.dp
 
 /**
  * Every callback the expanded-width detail pane reports (docs/ROADMAP.md M3 T4), grouped like
@@ -190,14 +196,22 @@ fun MonthListDetailScreen(
 
 /**
  * Shown in the detail pane before any day is selected (docs/ROADMAP.md M3 T4). Not a dead control —
- * it states a fact, nothing here is tappable.
+ * it states a fact, nothing here is tappable. A muted calendar glyph (`docs/design-plan.md` §4.4) sits
+ * above the text so the empty pane reads as "nothing chosen yet" rather than a blank space.
  */
 @Composable
 private fun MonthDetailEmptyState(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.padding(EmptyStatePadding),
         verticalArrangement = Arrangement.spacedBy(EmptyStateSpacing),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Icon(
+            imageVector = Icons.Filled.DateRange,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = Dimens.SpaceS).size(EmptyStateGlyphSize),
+        )
         Text(
             text = stringResource(R.string.month_detail_empty_title),
             style = MaterialTheme.typography.titleMedium,

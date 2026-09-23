@@ -18,6 +18,11 @@ import java.time.LocalDate
  * @property eventDates the dates of [year] with at least one event occurrence, from
  * `ObserveAgendaUseCase.presence` for the whole year in one query (docs/ARCHITECTURE.md §3.4).
  * Holidays are not included (CLAUDE.md rule 6 does not apply here: this set is events only, by design).
+ * @property holidays holiday label per Gregorian date of [year] (Year Day included) from the enabled
+ * holiday sets, evaluated the same way `MonthUiState.holidaysByMonth` is — `docs/design-plan.md` §4.3
+ * asks for a holiday diamond on the mini-months, not yet wired into
+ * [io.github.chrisjmendoza.yearal.core.designsystem.calendar.YearMiniMonthTile] as of this task (see
+ * the `TODO(integration)` in `YearScreen.kt`), but the data is cheap to have ready here.
  * @property canGoPrevious whether [year] `- 1` is still inside [DatePickerRange] (the "previous year"
  * action is disabled otherwise).
  * @property canGoNext whether [year] `+ 1` is still inside [DatePickerRange].
@@ -26,6 +31,7 @@ data class YearUiState(
     val year: Int,
     val today: LocalDate?,
     val eventDates: Set<LocalDate> = emptySet(),
+    val holidays: Map<LocalDate, String> = emptyMap(),
     val canGoPrevious: Boolean = year > DatePickerRange.MIN_YEAR,
     val canGoNext: Boolean = year < DatePickerRange.MAX_YEAR,
 ) {

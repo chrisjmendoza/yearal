@@ -1,5 +1,6 @@
 package io.github.chrisjmendoza.yearal.feature.events.editor
 
+import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
 import java.time.LocalDate
 import java.time.ZoneId
@@ -74,6 +75,9 @@ sealed interface EventEditorUiState {
      *   [startDate] lands on a different IFC date in leap years than in common years (ROADMAP R4;
      *   `docs/calendar-spec.md` §7.7). `false` for February 29, which has no common-year analogue to
      *   compare against.
+     * @property colorArgb the event's own colour as `0xAARRGGBB` (`docs/design-plan.md` §5.4), or
+     *   `null` for the "Calendar colour" swatch (inherit the calendar's own colour).
+     * @property category what kind of entry this is; drives the category segmented control.
      */
     data class Loaded(
         val isNew: Boolean,
@@ -113,5 +117,7 @@ sealed interface EventEditorUiState {
         val showRecurrenceResetNotice: Boolean = false,
         val yearlyIfcGregorianShifts: Boolean = false,
         val yearlyGregorianIfcShifts: Boolean = false,
+        val colorArgb: Int? = null,
+        val category: EventCategory = EventCategory.EVENT,
     ) : EventEditorUiState
 }

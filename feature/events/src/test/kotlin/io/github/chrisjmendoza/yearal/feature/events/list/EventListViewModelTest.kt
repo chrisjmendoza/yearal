@@ -7,12 +7,14 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.domain.event.Event
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCalendar
+import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.EventTiming
 import io.github.chrisjmendoza.yearal.core.testing.EventFixtures
 import io.github.chrisjmendoza.yearal.core.testing.FakeEventRepository
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -157,6 +159,77 @@ class EventListViewModelTest {
             val items = state().items
             items.first { it.eventId == 1L }.calendarColorArgb shouldBe 0xFF112233.toInt()
             items.first { it.eventId == 2L }.calendarColorArgb shouldBe EventCalendar.DEFAULT_COLOR_ARGB
+        }
+
+    // docs/design-plan.md §4.5, §8 decision 5: rows group under IFC month headers, not Gregorian ones.
+
+    @Test
+    fun `two events in the same IFC month share one header across a Gregorian month boundary`() =
+        runTest(dispatcher) {
+            val repository = FakeEventRepository()
+            repository.seed(
+                listOf(
+                    // Both IFC Sol 2026 (Gregorian June 18 - July 15), one on each side of the Gregorian
+                    // month boundary.
+                    EventFixtures.allDay(date = LocalDate.of(2026, 6, 20), title = "Late June"),
+                    EventFixtures.allDay(date = LocalDate.of(2026, 7, 10), title = "Early July"),
+                ),
+            )
+            val state = observe(viewModel(repository))
+
+            val items = state().items
+            items.map { it.monthHeaderKey }.distinct() shouldHaveSize 1
+            items.map { it.monthHeaderLabel } shouldContainExactly listOf("Sol 2026", "Sol 2026")
+        }
+
+    @Test
+    fun `a Year Day event gets its own header, distinct from December's regular days`() =
+        runTest(dispatcher) {
+            val repository = FakeEventRepository()
+            repository.seed(
+                listOf(
+                    EventFixtures.allDay(date = LocalDate.of(2026, 12, 20), title = "December"),
+                    EventFixtures.allDay(date = EventFixtures.YEAR_DAY_2026, title = "Year Day"),
+                ),
+            )
+            val state = observe(viewModel(repository))
+
+            val items = state().items
+            items.first { it.title == "December" }.monthHeaderLabel shouldBe "December 2026"
+            items.first { it.title == "Year Day" }.monthHeaderLabel shouldBe "Year Day, 2026"
+            items.first { it.title == "December" }.monthHeaderKey shouldNotBe
+                items.first { it.title == "Year Day" }.monthHeaderKey
+        }
+
+    @Test
+    fun `a Leap Day event gets its own header, distinct from June's regular days`() =
+        runTest(dispatcher) {
+            val repository = FakeEventRepository()
+            repository.seed(
+                listOf(
+                    EventFixtures.allDay(date = LocalDate.of(2024, 6, 1), title = "June"),
+                    EventFixtures.allDay(date = EventFixtures.LEAP_DAY_2024, title = "Leap Day"),
+                ),
+            )
+            val state = observe(viewModel(repository))
+
+            val items = state().items
+            items.first { it.title == "June" }.monthHeaderLabel shouldBe "June 2024"
+            items.first { it.title == "Leap Day" }.monthHeaderLabel shouldBe "Leap Day, 2024"
+            items.first { it.title == "June" }.monthHeaderKey shouldNotBe
+                items.first { it.title == "Leap Day" }.monthHeaderKey
+        }
+
+    // docs/design-plan.md §5.4: the row carries the event's category for the list's chip.
+
+    @Test
+    fun `the row carries the event's category`() =
+        runTest(dispatcher) {
+            val repository = FakeEventRepository()
+            repository.seed(listOf(EventFixtures.yearDayYearly())) // OBSERVANCE, per EventFixtures
+            val state = observe(viewModel(repository))
+
+            state().items.single().category shouldBe EventCategory.OBSERVANCE
         }
 
     @Test

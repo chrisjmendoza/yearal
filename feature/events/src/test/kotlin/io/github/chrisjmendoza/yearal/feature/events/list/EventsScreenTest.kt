@@ -67,6 +67,11 @@ class EventsScreenTest {
             timeLabel = null,
             zoneLabel = null,
             recurrenceSummary = null,
+            ifcDayLabel = "Sol 13",
+            gregorianWeekdayShort = "Tue",
+            gregorianDayLabel = "Jun 30",
+            monthHeaderKey = "2026-7",
+            monthHeaderLabel = "Sol 2026",
         )
 
     private fun listState() = EventListUiState.Loaded(items = listOf(picnic), query = "", hasAnyEvents = true)
@@ -119,6 +124,8 @@ class EventsScreenTest {
             onZoneChoiceChange = {},
             onRecurrenceKindChange = {},
             onLeapDayPolicyChange = {},
+            onColorChange = {},
+            onCategoryChange = {},
             onRecurrenceEndKindChange = {},
             onUntilDateChange = {},
             onCountChange = {},

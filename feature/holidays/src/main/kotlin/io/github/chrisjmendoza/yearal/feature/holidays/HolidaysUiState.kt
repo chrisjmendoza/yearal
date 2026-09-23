@@ -1,4 +1,4 @@
-﻿package io.github.chrisjmendoza.yearal.feature.holidays
+package io.github.chrisjmendoza.yearal.feature.holidays
 
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.DatePickerRange
 import io.github.chrisjmendoza.yearal.core.domain.holiday.HolidaySet
@@ -9,14 +9,14 @@ import io.github.chrisjmendoza.yearal.core.domain.holiday.HolidaySet
  *
  * @property id the set's [HolidaySet.id], the value stored in
  * [io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings.enabledHolidaySets] (`"ifc"`,
- * `"us"`, â€¦).
+ * `"us"`, …).
  * @property name the display name for the device language, falling back to English.
  * @property region the localized country name for a regional set (`"United States"`), or `null` for a
  * region-independent set such as the IFC observances and the Easter family.
  * @property holidayCount how many holidays [HolidaySet.holidays] defines, irrespective of whether any
  * of them has an occurrence in the shown year (`since`/`until`/`yearFilter` can make that count vary
  * by year; this is the size of the definition list, not of a particular year's occurrences).
- * @property sources where the set's data came from (`docs/holidays-and-import.md` Â§2.4), already
+ * @property sources where the set's data came from (`docs/holidays-and-import.md` §2.4), already
  * joined into one display line, or `null` when the pack carries none.
  * @property enabled whether this set is in
  * [io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings.enabledHolidaySets] right now; the
@@ -42,10 +42,14 @@ data class HolidaySetRow(
  * @property ifcLong the IFC date in long form (`September 8, 2026`, `Leap Day, 2028`, `Year Day, 2026`).
  * @property ifcNumeric the canonical numeric form with its mandatory `IFC` prefix (`IFC 2026-10-08`;
  * CLAUDE.md rule 5).
- * @property gregorianLong the Gregorian date with its real weekday (`Thursday, September 17, 2026`) â€”
+ * @property gregorianLong the Gregorian date with its real weekday (`Thursday, September 17, 2026`) —
  * the app's one unlabelled-weekday exception, because the sentence is unmistakably Gregorian
  * (CLAUDE.md rule 3; see [io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter.formatGregorianLong]).
  * @property description the merged TalkBack description of the whole row.
+ * @property isIntercalary whether this occurrence falls on Year Day or Leap Day (`ifcDate.isIntercalary`
+ * from `:core:calendar`), so the row can show the intercalary icon and container instead of the plain
+ * holiday diamond (docs/design-plan.md section 4.7; CLAUDE.md rule 6). Defaults to `false` for every ordinary
+ * holiday.
  */
 data class HolidayOccurrenceRow(
     val epochDay: Long,
@@ -54,12 +58,13 @@ data class HolidayOccurrenceRow(
     val ifcNumeric: String,
     val gregorianLong: String,
     val description: String,
+    val isIntercalary: Boolean = false,
 )
 
 /**
- * [rows] grouped under the IFC month they belong to, in calendar order (`docs/ARCHITECTURE.md` Â§4
- * "Screen behaviors"). An intercalary day belongs to the month it follows â€” Leap Day groups under June,
- * Year Day under December â€” the same attachment [io.github.chrisjmendoza.yearal.core.calendar.IfcDate.monthNumber]
+ * [rows] grouped under the IFC month they belong to, in calendar order (`docs/ARCHITECTURE.md` §4
+ * "Screen behaviors"). An intercalary day belongs to the month it follows — Leap Day groups under June,
+ * Year Day under December — the same attachment [io.github.chrisjmendoza.yearal.core.calendar.IfcDate.monthNumber]
  * already encodes, so grouping by it needs no special case for the floating days (CLAUDE.md rule 6).
  *
  * @property monthLabel the month's display name (`January`, `Sol`, `December`).

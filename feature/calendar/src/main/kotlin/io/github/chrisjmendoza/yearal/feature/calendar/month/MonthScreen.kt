@@ -1,8 +1,11 @@
 package io.github.chrisjmendoza.yearal.feature.calendar.month
 
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -14,15 +17,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,9 +38,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -45,12 +56,16 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.currentWindowWidthClass
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.MonthGrid
+import io.github.chrisjmendoza.yearal.core.designsystem.calendar.MonthGridTestTags
+import io.github.chrisjmendoza.yearal.core.designsystem.explainer.ExplainerInfoButton
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.DatePickerRange
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.GregorianDatePickerDialog
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.IfcDatePicker
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.rememberIfcDatePickerState
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.PillShape
 import io.github.chrisjmendoza.yearal.core.navigation.ConverterKey
 import io.github.chrisjmendoza.yearal.core.navigation.DayKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
@@ -63,10 +78,20 @@ import io.github.chrisjmendoza.yearal.feature.calendar.day.DayViewModel
 import io.github.chrisjmendoza.yearal.feature.calendar.day.rememberDayDetailState
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import io.github.chrisjmendoza.yearal.core.designsystem.R as DesignSystemR
 
 private val PageHorizontalPadding = 16.dp
 private val JumpChooserOptionSpacing = 8.dp
 private val JumpChooserMinTouchTarget = 48.dp
+
+/**
+ * A floor on the selected-day summary's height (`docs/design-plan.md` §4.2, owner note 2: "fills the
+ * space below"), so a tall screen with a short summary still reads as one anchored page rather than
+ * the grid floating above dead space. Not a hard fill: the page column scrolls, so a summary with more
+ * content than this — or a grid grown tall by a large font scale — is never clipped (design-plan §2,
+ * "200% font scale never clips").
+ */
+private val SummaryMinHeight = 220.dp
 
 /**
  * The Calendar tab's Month pager (docs/FEATURES.md C1, C3, C5, C7; docs/ARCHITECTURE.md §4 "Adaptive
@@ -170,12 +195,17 @@ fun MonthRoute(
  * (docs/ARCHITECTURE.md §4 "State management").
  *
  * A [HorizontalPager] over every month of [MonthPages] (spec §7.1: 1583..9999), one [MonthGrid] per
- * page, keeping one page warm on each side (ARCHITECTURE §3.4). The grid carries the month heading;
- * the app bar above shows the currently visible month as its own tappable title — tapping it invokes
- * [onTitleClick] with the year, the zoom-out to the Year view (docs/ARCHITECTURE.md §4;
- * docs/ROADMAP.md M3 T2) — a jump-to-date action (FEATURES C7) and the "Today" action, shown only
- * while the pager is away from today's month, which animates the pager to [MonthUiState.todayPage].
- * Leap Day and Year Day are the grid's band and reach [onDayClick] like any cell (spec §7.2).
+ * page, keeping one page warm on each side (ARCHITECTURE §3.4). Each page is **anchored**
+ * (`docs/design-plan.md` §4.2, owner note 2): the grid at the top with `showTitle = false` — the app
+ * bar above is the page's one title, a [MonthTitlePill] showing the currently visible month; tapping
+ * it invokes [onTitleClick] with the year, the zoom-out to the Year view (docs/ARCHITECTURE.md §4;
+ * docs/ROADMAP.md M3 T2) — and a [SelectedDaySummary] filling the rest of the page below it, so the
+ * grid never floats above dead space. The app bar also carries the weekday-header
+ * [ExplainerInfoButton] `showTitle = false` hides along with the grid's own heading (`MonthGrid`'s
+ * KDoc calls this trap out by name), a jump-to-date action (FEATURES C7) and the "Today" action,
+ * shown only while the pager is away from today's month, which animates the pager to
+ * [MonthUiState.todayPage]. Leap Day and Year Day are the grid's band and reach [onDayClick] like any
+ * cell (spec §7.2).
  *
  * Opts in to the Material 3 experimental marker only because `TopAppBar`'s default arguments still
  * carry it.
@@ -219,17 +249,17 @@ fun MonthScreen(
             TopAppBar(
                 title = {
                     val visibleMonth = MonthPages.monthAt(pagerState.currentPage)
-                    Text(
+                    MonthTitlePill(
                         text = formatter.monthTitle(visibleMonth),
-                        modifier =
-                            Modifier.selectable(
-                                selected = false,
-                                role = Role.Button,
-                                onClick = { onTitleClick(visibleMonth.year) },
-                            ),
+                        onClick = { onTitleClick(visibleMonth.year) },
                     )
                 },
                 actions = {
+                    ExplainerInfoButton(
+                        title = stringResource(DesignSystemR.string.weekday_explainer_title),
+                        explanation = stringResource(DesignSystemR.string.weekday_explainer_body),
+                        modifier = Modifier.testTag(MonthGridTestTags.WEEKDAY_EXPLAINER),
+                    )
                     IconButton(onClick = { jumpChooserVisible = true }) {
                         Icon(
                             imageVector = Icons.Filled.Search,
@@ -242,6 +272,10 @@ fun MonthScreen(
                         }
                     }
                 },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
             )
         },
     ) { padding ->
@@ -252,20 +286,40 @@ fun MonthScreen(
             key = { page -> page },
         ) { page ->
             val month = MonthPages.monthAt(page)
-            MonthGrid(
-                month = month,
-                today = state.today,
-                selected = state.selected,
-                weekdayDisplay = state.weekdayDisplay,
-                onDayClick = onDayClick,
-                eventCounts = state.eventCountsByMonth[month].orEmpty(),
-                holidays = state.holidaysByMonth[month].orEmpty(),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = PageHorizontalPadding),
-            )
+            // Anchor the grid (docs/design-plan.md §4.2, owner note 2): the grid stays at the top of
+            // the page, unweighted, and the selected-day summary fills the rest — only the summary
+            // scrolls on its own, so the grid's own fixed 4x7 shape never moves.
+            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                MonthGrid(
+                    month = month,
+                    today = state.today,
+                    selected = state.selected,
+                    weekdayDisplay = state.weekdayDisplay,
+                    onDayClick = onDayClick,
+                    eventCounts = state.eventCountsByMonth[month].orEmpty(),
+                    holidays = state.holidaysByMonth[month].orEmpty(),
+                    showTitle = false,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = PageHorizontalPadding),
+                )
+                // The summary itself is not page-specific (it follows state.selected/state.today, not
+                // this page's month), but beyondViewportPageCount keeps up to three pages composed at
+                // once — rendering it on every one of them would put three identical, off-screen copies
+                // in the semantics tree. Only the page the pager is actually settled on shows it.
+                if (page == pagerState.currentPage) {
+                    SelectedDaySummary(
+                        state = state,
+                        formatter = formatter,
+                        onDetailsClick = {
+                            state.summaryDate?.let { date -> onDayClick(IfcDate.from(date)) }
+                        },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = PageHorizontalPadding, vertical = Dimens.SpaceM)
+                                .heightIn(min = SummaryMinHeight),
+                    )
+                }
+            }
         }
     }
 
@@ -304,6 +358,37 @@ fun MonthScreen(
                 onJumpToDate(date)
             },
             onDismiss = { jumpIfcVisible = false },
+        )
+    }
+}
+
+/**
+ * The app-bar title (`docs/design-plan.md` §4.2, owner notes 3–4): a visibly tappable pill — the
+ * month heading plus a trailing chevron — that zooms out to the Year view. Content-described "Show
+ * year" (a new string) so TalkBack announces it as a control, not a plain heading; still a heading
+ * ([Role.Button] plus [androidx.compose.ui.semantics.heading]) so [onClick]'s target reads as the
+ * page's own title, exactly as the grid's own (now hidden, `showTitle = false`) heading used to.
+ */
+@Composable
+private fun MonthTitlePill(
+    text: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .clip(PillShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                .selectable(selected = false, role = Role.Button, onClick = onClick)
+                .semantics(mergeDescendants = true) { heading() }
+                .padding(horizontal = Dimens.SpaceM, vertical = Dimens.SpaceS),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceXs),
+    ) {
+        Text(text = text, style = MaterialTheme.typography.titleMedium)
+        Icon(
+            imageVector = Icons.Filled.KeyboardArrowDown,
+            contentDescription = stringResource(R.string.month_show_year),
         )
     }
 }
@@ -362,46 +447,93 @@ private fun JumpToDateIfcDialog(
     )
 }
 
-// Previews — one per band shape (CLAUDE.md rule 6): none, Leap Day, Year Day. Roborazzi's preview
-// scanner captures every @Preview once docs/ROADMAP.md M2 T10 records the goldens; dynamic colour is
-// off for determinism. Today is the spec §4.1 worked example, Gregorian September 17, 2026.
+// Previews — one per band shape (CLAUDE.md rule 6): none, Leap Day, Year Day, each at light, dark and
+// 200% font scale. Roborazzi's preview scanner captures every @Preview once docs/ROADMAP.md M2 T10
+// records the goldens; dynamic colour is off for determinism. Today is the spec §4.1 worked example,
+// Gregorian September 17, 2026.
 
 /** Sol 2026: no intercalary day, so the band slot shows the Gregorian span. */
-@Preview(name = "Sol 2026", showBackground = true)
+@Preview(name = "Sol 2026 — light", showBackground = true)
 @Composable
 internal fun MonthScreenSolPreview() {
     MonthPreview(IfcYearMonth(2026, IfcMonth.SOL))
 }
 
+@Preview(name = "Sol 2026 — dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun MonthScreenSolDarkPreview() {
+    MonthPreview(IfcYearMonth(2026, IfcMonth.SOL), darkTheme = true)
+}
+
+@Preview(name = "Sol 2026 — 200% font", showBackground = true, fontScale = 2f)
+@Composable
+internal fun MonthScreenSolLargeFontPreview() {
+    MonthPreview(IfcYearMonth(2026, IfcMonth.SOL))
+}
+
 /** June 2028: a leap year, so the Leap Day band follows the fourth week. */
-@Preview(name = "June 2028 (Leap Day)", showBackground = true)
+@Preview(name = "June 2028 (Leap Day) — light", showBackground = true)
 @Composable
 internal fun MonthScreenLeapDayPreview() {
     MonthPreview(IfcYearMonth(2028, IfcMonth.JUNE))
 }
 
+@Preview(name = "June 2028 (Leap Day) — dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun MonthScreenLeapDayDarkPreview() {
+    MonthPreview(IfcYearMonth(2028, IfcMonth.JUNE), darkTheme = true)
+}
+
+@Preview(name = "June 2028 (Leap Day) — 200% font", showBackground = true, fontScale = 2f)
+@Composable
+internal fun MonthScreenLeapDayLargeFontPreview() {
+    MonthPreview(IfcYearMonth(2028, IfcMonth.JUNE))
+}
+
 /** December 2026: the Year Day band, with the December holidays of the default packs. */
-@Preview(name = "December 2026 (Year Day)", showBackground = true)
+@Preview(name = "December 2026 (Year Day) — light", showBackground = true)
 @Composable
 internal fun MonthScreenYearDayPreview() {
     MonthPreview(
         month = IfcYearMonth(2026, IfcMonth.DECEMBER),
-        holidays =
-            mapOf(
-                LocalDate.of(2026, 12, 24) to "Christmas Eve",
-                LocalDate.of(2026, 12, 25) to "Christmas Day",
-                LocalDate.of(2026, 12, 31) to "Year Day, New Year’s Eve",
-            ),
+        holidays = DecemberHolidaysPreview,
     )
 }
+
+@Preview(name = "December 2026 (Year Day) — dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun MonthScreenYearDayDarkPreview() {
+    MonthPreview(
+        month = IfcYearMonth(2026, IfcMonth.DECEMBER),
+        holidays = DecemberHolidaysPreview,
+        darkTheme = true,
+    )
+}
+
+@Preview(name = "December 2026 (Year Day) — 200% font", showBackground = true, fontScale = 2f)
+@Composable
+internal fun MonthScreenYearDayLargeFontPreview() {
+    MonthPreview(
+        month = IfcYearMonth(2026, IfcMonth.DECEMBER),
+        holidays = DecemberHolidaysPreview,
+    )
+}
+
+private val DecemberHolidaysPreview =
+    mapOf(
+        LocalDate.of(2026, 12, 24) to "Christmas Eve",
+        LocalDate.of(2026, 12, 25) to "Christmas Day",
+        LocalDate.of(2026, 12, 31) to "Year Day, New Year’s Eve",
+    )
 
 @Composable
 private fun MonthPreview(
     month: IfcYearMonth,
     holidays: Map<LocalDate, String> = emptyMap(),
+    darkTheme: Boolean = false,
 ) {
     val today = LocalDate.of(2026, 9, 17)
-    IfcTheme(dynamicColor = false) {
+    IfcTheme(darkTheme = darkTheme, dynamicColor = false) {
         MonthScreen(
             state =
                 MonthUiState(

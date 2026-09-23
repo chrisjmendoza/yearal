@@ -509,8 +509,9 @@ months that stay warm" pins the query count.
     whole-widget `ACTION_OPEN_MONTH` fallback (the title, header rows and Gregorian-span line) inside its
     own bounds. Every `PendingIntent` stays explicit, immutable, and carries only ids or epoch days.
 - **Screen behaviors:**
-  - **Today:** the hero IFC date, the Gregorian equivalent, both weekdays, year progress, today's agenda, and the next intercalary day or holiday.
-  - **Month:** a `HorizontalPager` of months (done: an app bar with a Today action, a jump-to-date action (FEATURES C7) and the visible page's own title; each page's `MonthGrid` carries the same heading text inside the grid; holidays come from `HolidayCatalog`, which evaluates the enabled packs with `HolidayEngine` for the visible page ±1). The app bar's title mirrors the visible page's `MonthGrid` heading and is itself the tappable control that zooms out to **Year** (docs/ROADMAP.md M3 T2) — done this way, rather than making the grid's own heading tappable, because the grid is a shared `:core:designsystem` component and the zoom-out is `:feature:calendar` behavior. The jump-to-date action opens a small calendar chooser (Gregorian or IFC, the event editor's own pattern) and pushes the chosen date's `MonthKey`. **Year** is 13 mini-months in a `LazyVerticalGrid(Adaptive(160.dp))`, each drawn as a single `Canvas` rather than 28 real day cells (`YearMiniMonthTile`, `:core:designsystem`) — 364 real cells visibly cost frames while scrolling the grid. On a two-column phone, Year Day takes the 14th slot.
+  - **Today** (`docs/design-plan.md` §4.1): a hero `Card` on `YearalTheme.colors.heroContainer`/`onHero` — the IFC date in `displayMedium`, an "IFC"/"Gregorian" eyebrow pair (the numeric IFC form and the Gregorian long date), the weekday block (unchanged sage `secondaryContainer`), the day/week/quarter line and a tinted year-progress bar. Below it: the intercalary countdown as an amber `PillShape` chip (`intercalaryContainer`, the `ic_intercalary` icon); a Holidays card and an Events card (`cardContainer`), each with a `labelSmall` eyebrow heading, holiday rows carrying a leading diamond mark (`HolidayDiamondMark`, `:feature:calendar`'s own `common` package, shared with the Month summary and Day detail) and agenda rows keeping their colour swatch with a hairline between them; both cards show one quiet line rather than disappearing when there is nothing to show.
+  - **Month** (`docs/design-plan.md` §4.2): a `HorizontalPager` of months, one page per month, **anchored**: the app bar (`surfaceContainerLow`) → the `MonthGrid` at the top (`showTitle = false`, since the app bar itself is the page's one title) → a **selected-day summary** filling the rest of the page. The app bar's title is a tappable pill (`MonthTitlePill`, a `PillShape` chip with a trailing chevron, content-described "Show year") showing the visible page's month and year — tapping it zooms out to **Year** (docs/ROADMAP.md M3 T2), done this way rather than making the grid's own heading tappable because the grid is a shared `:core:designsystem` component and the zoom-out is `:feature:calendar` behaviour. Because hiding the grid's own heading also hides its weekday `ExplainerInfoButton` (a trap `MonthGrid`'s own KDoc calls out), the app bar carries an equivalent one as its first action, followed by the jump-to-date action (FEATURES C7) and the "Today" action. The **selected-day summary** (`SelectedDaySummary`) shows `MonthUiState.selected` — or today when nothing is selected — in both calendars, its holidays (diamond rows) and events (colour-swatch rows), and a "Details" `FilledTonalButton` that reuses the same callback a grid cell tap uses, so it opens the same Day detail regardless of width class; its holidays and agenda are evaluated by `MonthViewModel` for that one day (`HolidayCatalog.labels` and a single-day `ObserveAgendaUseCase` subscription, separate from the per-month `holidaysByMonth`/`eventCountsByMonth` the grid itself reads), and it renders only on the page the pager is actually settled on, since `beyondViewportPageCount` keeps neighbouring pages composed too. Holidays for the grid come from `HolidayCatalog`, which evaluates the enabled packs with `HolidayEngine` for the visible page ±1. The jump-to-date action opens a small calendar chooser (Gregorian or IFC, the event editor's own pattern) and pushes the chosen date's `MonthKey`.
+  - **Year** (`docs/design-plan.md` §4.3): 13 mini-months in a `LazyVerticalGrid(Adaptive(160.dp))`, each drawn as a single `Canvas` rather than 28 real day cells (`YearMiniMonthTile`, `:core:designsystem`) — 364 real cells visibly cost frames while scrolling the grid. On a two-column phone, Year Day takes the 14th slot. The app bar uses the same `surfaceContainerLow` colour as Month's and a `titleLarge` year number; the grid's `contentPadding` adds the Scaffold's own top inset plus a fixed gap so the first row is never clipped under the app bar. `YearUiState.holidays` (from `HolidayCatalog`, the same range `ObserveAgendaUseCase.presence` already covers) is evaluated and ready, but not yet passed to `YearMiniMonthTile` — see the `TODO(integration)` in `YearScreen.kt`, left for the tile's own (additive) holidays parameter from the parallel design-pass restyle of `:core:designsystem`.
   - **Converter:** one chosen day and a direction switch (done). Gregorian → IFC picks the date in the Material 3
     `DatePickerDialog`; IFC → Gregorian uses `IfcDatePicker`. Both live in `:core:designsystem` (`picker` package) so the
     M4 event editor can reuse them, both are limited to `DatePickerRange` (1583–9999, reconciled decision 6), and the
@@ -521,9 +522,55 @@ months that stay warm" pins the query count.
     `ConverterKey.prefillEpochDay` overrides it when it lies in range and is ignored otherwise. Input lives in the
     ViewModel's `SavedStateHandle` as primitives and is re-validated on restore. The result shows both dates, the numeric
     `IFC` form, both labelled weekdays, and the proleptic note for years up to 1923 (the latest adoption calendar-spec
-    §7.1 names); copy and `ACTION_SEND` text always carry the `IFC` marker and the Gregorian date.
-  - **Day detail:** a bottom sheet on compact widths (done: a material3 `ModalBottomSheet` inside the Nav3 entry — Nav3 1.1.7 has no sheet scene, only `DialogSceneStrategy`) and a pane on expanded widths (M3 T4). It shows both dates, both weekdays and the day's events, with "Add event" and "Open in converter" actions. An agenda row's long-press (also a TalkBack custom action) opens a delete confirmation: "delete this occurrence" for a recurring event — an `EventRepository.addExdate` on the occurrence's own start date, never the day the sheet is showing (`docs/contracts/Events.md` §4) — with an undo snackbar, or a plain, permanent delete for a one-off event (M4 T8).
-  - **Holidays** (done, M6 T2, `:feature:holidays`): two sections behind `HolidaysKey`. "Holiday sets" lists every bundled pack (`BundledHolidayPacks.all` via `HolidayPackLoader`) with its name, region, how many holidays it defines, its sources when the pack carries them, and a switch that writes through `SettingsRepository.enabledHolidaySets` — the only place that toggle lives now; Settings' own screen links here instead of duplicating it (`docs/FEATURES.md` H5). "Holidays this year" lists every occurrence of the enabled sets for a chosen IFC year (`HolidayEngine.occurrences`), grouped by IFC month — an intercalary day groups under the month it follows, so Leap Day needs no special case — each row showing the holiday's name, its IFC date in long and numeric (`IFC`-prefixed) form, and its Gregorian date with its real weekday; tapping a row pushes `DayKey`. The year defaults to and follows `DateTicker` (including across a December 31 → January 1 rollover) until the user pages away with the previous/next actions, which clamp to `DatePickerRange` (1583–9999). Every set disabled shows an explanatory empty state rather than nothing.
+    §7.1 names); copy and `ACTION_SEND` text always carry the `IFC` marker and the Gregorian date. **The design pass
+    (done, docs/design-plan.md section 4.6, ROADMAP F2):** the result is a card on `YearalTheme.colors.heroContainer`
+    (`MaterialTheme.shapes.large`), the same component the Today hero uses, with the IFC and Gregorian dates as
+    eyebrow-labelled ("IFC" / "Gregorian", uppercase `labelSmall`) value pairs — the direction's answer in
+    `headlineSmall`, the restated input in `titleMedium` — and the intercalary icon next to the IFC value on Year Day
+    and Leap Day; the weekday block keeps a container, now `YearalTheme.colors.weekdayNominalContainer`, and its actual-
+    weekday line uses `weekdayActualText` instead of a plain grey. A swap `IconButton` (`ic_swap.xml`, this module's own
+    res — material-icons-core has no swap glyph, the same reasoning as `:app`'s `ic_convert.xml`) sits beside the
+    segmented direction control and flips it. Copy, Share and Open day are `Button`/`OutlinedButton`s with a leading
+    icon: `ic_copy.xml` and `ic_open.xml` (hand-drawn, same reasoning) and `Icons.Filled.Share` (material-icons-core
+    has it). The app bar uses `TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)`.
+  - **Day detail** (`docs/design-plan.md` §4.4): a bottom sheet on compact widths (done: a material3 `ModalBottomSheet` inside the Nav3 entry — Nav3 1.1.7 has no sheet scene, only `DialogSceneStrategy`) and a pane on expanded widths (M3 T4). It shows both dates, both weekdays and the day's events, with "Add event" (a `FilledTonalButton`) and "Open in converter" (an `OutlinedButton`) actions. On Year Day and Leap Day the usual title row is replaced by an intercalary header (`IntercalaryHeader`): an `intercalaryContainer` surface with the `ic_intercalary` icon tinted `intercalary`, the date, and the weekday block's existing "no IFC weekday" explanation nested inside it, so the sheet reads as visibly different the moment it opens. Holiday rows carry a leading diamond mark (`HolidayDiamondMark`), matching Today and the Month summary. An agenda row's long-press (also a TalkBack custom action) opens a delete confirmation: "delete this occurrence" for a recurring event — an `EventRepository.addExdate` on the occurrence's own start date, never the day the sheet is showing (`docs/contracts/Events.md` §4) — with an undo snackbar, or a plain, permanent delete for a one-off event (M4 T8). The expanded-width pane's empty state (before any day is selected, `CalendarScreen.kt`'s `MonthDetailEmptyState`) shows a muted `Icons.Filled.DateRange` glyph above its text.
+  - **Events** (done, `:feature:events`; visual design pass, `docs/design-plan.md` §4.5, §5.4). The list
+    (behind `EventListKey`) groups its rows under **IFC month headers** (`docs/design-plan.md` §8
+    decision 5 — the app's own calendar, not Gregorian: an IFC month can span two Gregorian ones, and
+    Year Day and Leap Day each get their own header rather than joining the month they follow), built
+    as plain `LazyColumn` header items rather than `stickyHeader` (which needs
+    `ExperimentalFoundationApi` in this Compose Foundation version). Each row sits on `cardContainer`
+    with a 4dp leading bar in the event's resolved colour, one combined date line ("Sol 12 · Tue 23
+    Jun"; the numeric `IFC` form moves into the row's accessibility description, CLAUDE.md rule 5), the
+    time or "All day", and up to two `AssistChip`s — the recurrence summary, and the category
+    (`EventCategory.OBSERVANCE`/`BIRTHDAY`; `EVENT` gets none). The editor adds a **colour row** (eight
+    40dp swatches with 48dp touch targets — seven fixed absolute hues plus "Calendar colour", which
+    resets `Event.colorArgb` to `null`) and a three-way category `SingleChoiceSegmentedButtonRow`, both
+    threaded through `EventDraft`/`EventEditorUiState`/`EventEditorViewModel` exactly like every other
+    field (process-death survival included); neither needed a contract change since `Event.colorArgb`
+    and `Event.category` already existed. The selected recurrence/policy/end row fills with
+    `secondaryContainer`; the two advisory notices (the R3 recurrence-reset notice and the
+    `POST_NOTIFICATIONS`-denied notice) sit on `tertiaryContainer`; a validation error is an
+    `errorContainer` banner with a warning icon, and the offending field or button also gets an `error`
+    outline — colour is never the only signal (design-plan §2). Save is a filled `Button` with the text
+    "Save" in the app bar actions, not a bare check icon, disabled and showing progress while a save or
+    delete is in flight (the R2 double-tap guard, unchanged).
+  - **Holidays** (done, M6 T2, `:feature:holidays`): two sections behind `HolidaysKey`. "Holiday sets" lists every bundled pack (`BundledHolidayPacks.all` via `HolidayPackLoader`) with its name, region, how many holidays it defines, its sources when the pack carries them, and a switch that writes through `SettingsRepository.enabledHolidaySets` — the only place that toggle lives now; Settings' own screen links here instead of duplicating it (`docs/FEATURES.md` H5). "Holidays this year" lists every occurrence of the enabled sets for a chosen IFC year (`HolidayEngine.occurrences`), grouped by IFC month — an intercalary day groups under the month it follows, so Leap Day needs no special case — each row showing the holiday's name, its IFC date in long and numeric (`IFC`-prefixed) form, and its Gregorian date with its real weekday; tapping a row pushes `DayKey`. The year defaults to and follows `DateTicker` (including across a December 31 → January 1 rollover) until the user pages away with the previous/next actions, which clamp to `DatePickerRange` (1583–9999). Every set disabled shows an explanatory empty state rather than nothing, now with a muted `Icons.Filled.DateRange` glyph above the message. **The design pass (done, docs/design-plan.md section 4.7, ROADMAP F2):** each pack row gets a leading 12dp colour dot from a static map keyed by `HolidaySet.id` in this module (the IFC-native pack → `YearalTheme.colors.intercalary`, `us` → `primary`, `religious-christian` → `secondary`, an unknown pack → `outline`, until packs carry their own colour, design-plan section 5.5); an enabled row sits on `YearalTheme.colors.cardContainer`, a disabled one on the plain page surface — colour plus the switch's own on/off state, never colour alone. Each occurrence row gets a leading 8dp rotated-square `holidayMark` diamond; a Year Day or Leap Day row (`HolidayOccurrenceRow.isIntercalary`, from `IfcDate.isIntercalary`) gets the intercalary icon instead and sits in an `intercalaryContainer` chip. The per-month sub-headings in the year list are a `labelSmall` eyebrow in `primary` (`MonthEyebrow`, distinct from the page's own `titleSmall` `SectionHeading`); the year navigator's year number is `titleLarge` in `primary`. The app bar uses the same `surfaceContainerLow` colours as the converter's. `HolidaysTestTags` (this module, mirroring `:core:designsystem`'s `MonthGridTestTags`) tags the diamond and the intercalary mark for tests, since a screen reader gets the row's own merged content description instead.
+  - **Settings** (`:feature:settings`; FEATURES W1, W2, W6): the weekday-header radio group, then an
+    **Appearance** section (design-plan §5, ROADMAP wave 2 H2) — the `ThemeMode` radio group with a
+    detail line per option; a colour-source `SingleChoiceSegmentedButtonRow` ("Yearal palette" /
+    "Material You", the latter disabled below API 31); six `ColorPalette` swatch chips in a `FlowRow`,
+    each a 48dp circle of that palette's light `primary` with a smaller `tertiary` dot and a check mark
+    when selected, the whole row disabled while the colour source is `DYNAMIC`; a pure-black switch; and
+    two more three-way segmented rows (Today widget, Month widget — `WidgetTheme.FOLLOW_APP`/`LIGHT`/
+    `DARK`) plus a 0–100% `Slider` (5% steps) for the widgets' background opacity — then the "Holiday
+    sets" link and "Delete all data". Every control is a read-modify-write through
+    `SettingsRepository.update` via a `SettingsViewModel` setter (`setPalette`, `setPureBlack`,
+    `setTodayWidgetTheme`, `setMonthWidgetTheme`, `setWidgetBackgroundOpacity`, alongside the existing
+    `setThemeMode`/`setColorSource`); nothing is held only in Compose state. A live preview strip under
+    the palette row is a wave-3 follow-up (design-plan §4.8), left as a marked `Spacer`. The More hub's
+    four navigation rows (Holidays, Settings, Learn, Privacy) each get a 40dp `secondaryContainer` circle
+    around their leading icon, tinted `onSecondaryContainer`; the non-interactive About row is unchanged.
   - **Learn** (done, M3 T3, `:feature:settings`): static sections (what the IFC is, the floating days, nominal-vs-actual weekdays, how dates are calculated, a brief history, an FAQ) plus an expandable-FAQ list. Every worked-example date is computed through `:core:calendar` (`LearnFacts`) and rendered with `IfcDateFormatter`, never typed as a literal. Its first row, "Watch the intro again," pushes `IntroKey` — the re-open path FEATURES L1 requires for a user who skipped it.
   - **Privacy** (done, the in-app half of M2 T12, `:feature:settings`): a static, truthful statement of what the app stores and what its two declared permissions (`RECEIVE_BOOT_COMPLETED`, `WAKE_LOCK`) are for, sourced from `docs/security-and-privacy.md`'s allow-list; the hosted-policy URL is left blank until one exists.
   - **First-run intro** (done, `:feature:settings`, package `intro`; FEATURES L1): three screens behind `IntroKey` — what the IFC is (calendar-spec §2.2 R4: 13 months of 28 days, Sol between June and July); the nominal-vs-actual weekday distinction, with the spec's own worked example (§4.1); Year Day and Leap Day (§2.4 R8, R9), ending with a "find my IFC birthday" button. Every worked example comes from `IntroFacts`, which reuses `LearnFacts`'s values directly (both objects are `internal`, so same-module visibility is enough) rather than recomputing them, so the two screens can never disagree. Plain Back/Next buttons, not a swipeable pager — a new visual language is exactly what M2 T13 owns, not this task. The birthday hook calls `navigator.navigate(ConverterKey())`, the same "push onto whatever tab is current" pattern `DayScreen`'s "Open in converter" action already uses; `ConverterKey`'s existing `prefillEpochDay = null` default ("follow today, but the user can pick any date") already is the "let me pick a date" behavior FEATURES D3 wants, so no new key shape was needed. `IfcApp` decides whether to show it: `IntroGateViewModel` (`:app`) maps `SettingsRepository.settings` to a `StateFlow<Boolean?>` of `hasSeenIntro` that starts `null` (deliberately distinct from the persisted `false` a fresh install also has) until the store has actually been read once, so a returning user is never shown a flash of the intro while `MainViewModel.settings` is still sitting at `UserSettings.DEFAULT`. The first time that flow resolves non-null and `false`, a `LaunchedEffect` in `IfcApp` pushes `IntroKey` onto the Today tab's stack — literally "over" `TodayKey`, the tab's static root — guarded by a `rememberSaveable` flag so it fires at most once per process. Skipping or finishing marks `UserSettings.hasSeenIntro = true` through `IntroViewModel.markSeen()` before popping back off; "Learn more" pushes `LearnKey` without marking it seen, so leaving the intro unfinished still shows it again on the next cold start. **Known edge case, not handled:** if the very first launch is also routed by a widget or notification intent (see "Intent routing" above), the intro's `LaunchedEffect` and the intent-routing `LaunchedEffect` both act on the tab back stacks independently; which one "wins" the Today tab's top slot is not deterministic. In practice a first launch cannot yet have an existing widget tap or event reminder (both require the app to have run once already), so this has not been given a specific ordering rule.
@@ -545,7 +592,16 @@ flips the app's default look from the wallpaper to the brand.
   surfaces with AMOLED black (design-plan §5.3) on top of *whichever* scheme was chosen — brand or
   dynamic. **`dynamicColor` now defaults to `false`** (design-plan §5.1/§8.1 decision 1): the curated
   `ColorPalette.TEAL` brand scheme is what a fresh install shows without the user touching Settings,
-  reversing the previous default that made the wallpaper the accidental default look.
+  reversing the previous default that made the wallpaper the accidental default look. **`MainActivity`
+  wires all four theme fields through** (ROADMAP wave 2 H2): `themeMode`, `colorSource`, `palette` and
+  `pureBlack` all come from `SettingsRepository.settings` and pass straight to `IfcTheme`; Settings'
+  Appearance section (above) is where a user changes any of them. The same task fixed design-plan §3.2's
+  D6: `enableEdgeToEdge`'s status/navigation bar icon style used to follow the *system* dark setting
+  regardless of a forced `ThemeMode`. A `DisposableEffect(darkTheme)` inside `setContent` now calls
+  `enableEdgeToEdge` again with an explicit `SystemBarStyle.light`/`.dark` chosen from the same resolved
+  `darkTheme` flag the theme itself uses (`MainActivity.resolveDarkTheme`, a plain `ThemeMode` + system
+  dark-mode mapping pulled out for a unit test) — never `SystemBarStyle.auto`, which would silently
+  re-derive the icon colour from the system again.
 - **Six curated palettes** (`ColorPalette` in `:core:domain`, the schemes in `:core:designsystem`'s
   `theme/Palette*.kt`): `TEAL` (default, the launcher-icon brand scheme, `Color.kt`), `SOL`, `NIGHT`,
   `MOSS`, `ROSE`, `INK` (design-plan §5.2). Each is a hand-tuned light/dark `ColorScheme` pair, not a
@@ -565,7 +621,16 @@ flips the app's default look from the wallpaper to the brand.
   `displayMedium` for the Today hero date, built on Roboto (the owner's choice, design-plan §8 decision
   3 — no bundled font). `Dimens` centralises the spacing and sizing scale, including the grid's own
   `CellGap`/`CellPadding`/`TodayRingWidth`/mark sizes, which used to be private constants duplicated
-  per component.
+  per component. `Dimens.MarkSize` is 8dp (design-plan §4.2 "Marks grow"), up from the incumbent's 6dp.
+  Every day cell now carries a fill — `.gridCell` plain, `.gridCellMarked` for a day with an event or
+  holiday, `primaryContainer` when selected — but `MonthGrid`/`DayCell` deliberately never draws
+  `.gridCellWeekend`: tinting the IFC week's nominal Saturday/Sunday columns would visually assert a
+  "weekend" that is not the real one (CLAUDE.md rule 3). The token stays declared for a future caller
+  that wants it under a real-weekday key instead.
+- **`yearalTopAppBarColors()`** (`theme/AppBars.kt`) is the `TopAppBarColors` every feature screen's
+  `TopAppBar` should pass (design-plan §3.2 "Top app bars"): `surfaceContainerLow` container,
+  `surfaceContainer` once scrolled. Not folded into `IfcTheme` itself because `TopAppBar` lives in each
+  feature module, not `:core:designsystem` (CLAUDE.md rule 10) — a screen opts in explicitly.
 - **`MonthGrid`'s inner heading is optional** (`showTitle: Boolean = true`): the Month screen (phase 2)
   passes `false` once its own app bar shows the month and year, so the grid and the app bar stop
   showing the same title twice; every other caller is unaffected by the default.
@@ -616,14 +681,21 @@ Use plain unidirectional data flow with no MVI framework.
 - June in leap years and every December gain an **intercalary band** below row 4.
   - It is one full-width pill spanning all seven columns.
   - It shows a label ("Leap Day" or "Year Day"), the Gregorian date and the real weekday.
-  - It uses the tertiary-container color plus an icon, and it is tappable like any other day.
-  - The slot height is measured from real text (`intercalarySlotHeight()`), because non-linear font scaling breaks any "line height × N" estimate; months without a band show the month's Gregorian span in the placeholder.
+  - It fills with `YearalTheme.colors.intercalaryContainer` plus an icon, and it is tappable like any
+    other day.
+  - The slot height is measured from real text (`intercalarySlotHeight()`), because non-linear font
+    scaling breaks any "line height × N" estimate; months without a band show the month's Gregorian
+    span in a same-silhouette placeholder pill on `surfaceContainer` (design-plan §4.2), so all
+    thirteen months share one shape.
 - Spanning every column makes "belongs to no week" visible. No weekday header aligns with it.
-- The same component serves the Year view's Year Day tile (the grid's 14th item) as a thin bar, and the
-  widget. Leap Day, inside the Year view's compact June tile rather than its own grid item, uses a
-  smaller non-interactive inline indicator instead (an icon, the label, an event dot and a hollow
-  today ring, never colour alone) so that tile stays one TalkBack node; tapping anywhere in the tile,
-  the indicator included, opens June.
+- The Year view's Year Day tile (`YearDayTile`, the grid's 14th item) is a sibling of the mini-month
+  tile rather than a reuse of the band component — the band is built to span a month grid's seven
+  columns, which the year's tile grid does not have — but it shares the band's fill
+  (`.intercalaryContainer`/`.onIntercalaryContainer`) and icon, so the two read as one accent
+  (design-plan §8 decision 4). Leap Day, inside the Year view's compact June tile rather than its own
+  grid item, uses a smaller non-interactive inline indicator instead: the same pill fill, an icon, the
+  label, an event dot and a hollow today ring, never colour alone — so that tile stays one TalkBack
+  node; tapping anywhere in the tile, the indicator included, opens June.
 - A `WeekdayDisplay { NOMINAL, ACTUAL, BOTH }` setting drives the headers. `BOTH` is the default: nominal IFC weekdays with the actual weekdays in a second header row.
 
 ### Adaptive layouts

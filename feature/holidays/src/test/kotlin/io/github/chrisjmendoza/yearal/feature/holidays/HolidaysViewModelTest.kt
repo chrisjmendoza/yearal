@@ -233,6 +233,21 @@ class HolidaysViewModelTest {
             }
         }
 
+    // docs/design-plan.md section 4.7: the Holidays screen shows Year Day and Leap Day with the
+    // intercalary mark instead of the plain holiday diamond, driven by this flag.
+    @Test
+    fun `isIntercalary is true only for Year Day and Leap Day rows`() =
+        runTest(dispatcher) {
+            viewModel(ticker = FakeDateTicker(LocalDate.of(2028, 1, 1))).uiState.test {
+                awaitItem()
+                val loaded = awaitItem().shouldBeInstanceOf<HolidaysUiState.Loaded>()
+                val rows = loaded.groups.flatMap { it.rows }
+                rows.first { it.name == "New Year's Day" }.isIntercalary shouldBe false
+                rows.first { it.name == "Year Day" }.isIntercalary shouldBe true
+                rows.first { it.name == "Leap Day" }.isIntercalary shouldBe true
+            }
+        }
+
     // ----- The default year (docs/WORKFLOW.md §3: crossing midnight, including a year rollover) -----
 
     @Test

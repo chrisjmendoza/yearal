@@ -11,7 +11,9 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.DatePickerRange
 import io.github.chrisjmendoza.yearal.core.domain.DateTicker
 import io.github.chrisjmendoza.yearal.core.domain.event.ObserveAgendaUseCase
+import io.github.chrisjmendoza.yearal.core.domain.settings.SettingsRepository
 import io.github.chrisjmendoza.yearal.core.navigation.YearKey
+import io.github.chrisjmendoza.yearal.feature.calendar.holiday.HolidayCatalog
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -27,7 +29,9 @@ import java.time.LocalDate
  * including the December 31 → January 1 case where the shown year does not change but which tile is
  * "today" does. The year's event presence comes from **one** range query,
  * [ObserveAgendaUseCase.presence] over the whole IFC year (docs/ARCHITECTURE.md §3.4 last paragraph),
- * re-issued only when [year] changes.
+ * re-issued only when [year] changes; the year's holidays come from the memoised [HolidayCatalog] over
+ * the same range and the live [SettingsRepository.settings] (`docs/design-plan.md` §4.3 — not yet
+ * wired into the mini-month tiles, see the `TODO(integration)` in `YearScreen.kt`).
  *
  * The starting year is assisted-injected from the [YearKey] of the entry (see [Factory]) and clamped
  * to [DatePickerRange] on every change, so a key built from foreign input (an intent extra) can never
@@ -43,6 +47,8 @@ class YearViewModel
     constructor(
         @Assisted initialYear: Int,
         dateTicker: DateTicker,
+        settingsRepository: SettingsRepository,
+        private val catalog: HolidayCatalog,
         private val observeAgenda: ObserveAgendaUseCase,
     ) : ViewModel() {
         /** Creates a [YearViewModel] for the entry's year; used by `hiltViewModel(creationCallback)`. */
@@ -61,8 +67,13 @@ class YearViewModel
          * the first tick and the year's presence bitmap arrive on subscription.
          */
         val uiState: StateFlow<YearUiState> =
-            combine(year, dateTicker.today, eventDates) { y, today, dates ->
-                YearUiState(year = y, today = today, eventDates = dates)
+            combine(year, dateTicker.today, eventDates, settingsRepository.settings) { y, today, dates, settings ->
+                YearUiState(
+                    year = y,
+                    today = today,
+                    eventDates = dates,
+                    holidays = catalog.gridLabels(settings.enabledHolidaySets, wholeYearRange(y)),
+                )
             }.stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),

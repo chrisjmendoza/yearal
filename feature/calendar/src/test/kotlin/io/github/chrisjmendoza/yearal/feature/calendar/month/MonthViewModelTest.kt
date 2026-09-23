@@ -308,11 +308,14 @@ class MonthViewModelTest {
                 val loaded = awaitItem()
                 loaded.eventCountsByMonth.keys shouldContainExactly
                     setOf(IfcYearMonth(2026, IfcMonth.AUGUST), september2026, october2026)
+                // Plus one single-day range for the selected-day summary (today, since nothing is
+                // selected), from the separately keyed MonthViewModel.summaryAgenda flow.
                 agenda.requestedRanges shouldContainExactly
                     listOf(
                         IfcYearMonth(2026, IfcMonth.AUGUST).gregorianRange,
                         september2026.gregorianRange,
                         october2026.gregorianRange,
+                        LocalDate.of(2026, 9, 17)..LocalDate.of(2026, 9, 17),
                     )
             }
         }
@@ -331,21 +334,30 @@ class MonthViewModelTest {
             viewModel.uiState.test {
                 awaitItem()
                 awaitItem()
-                // The initial warm window {Sep, Oct, Nov} issues exactly one query per month.
+                // The initial warm window {Sep, Oct, Nov} issues exactly one query per month, plus one
+                // single-day range for the selected-day summary (today; see the comment on the test
+                // above).
                 agenda.requestedRanges shouldContainExactly
-                    listOf(september2026.gregorianRange, october2026.gregorianRange, november2026.gregorianRange)
+                    listOf(
+                        september2026.gregorianRange,
+                        october2026.gregorianRange,
+                        november2026.gregorianRange,
+                        LocalDate.of(2026, 9, 17)..LocalDate.of(2026, 9, 17),
+                    )
 
                 viewModel.showPage(MonthPages.pageOf(november2026))
                 awaitItem()
                 awaitItem()
 
                 // The new warm window {Oct, Nov, Dec} adds only December: Oct and Nov are not
-                // re-requested, because their shared flows from the previous window are reused.
+                // re-requested, because their shared flows from the previous window are reused; the
+                // summary's own range is untouched by paging (neither today nor the selection changed).
                 agenda.requestedRanges shouldContainExactly
                     listOf(
                         september2026.gregorianRange,
                         october2026.gregorianRange,
                         november2026.gregorianRange,
+                        LocalDate.of(2026, 9, 17)..LocalDate.of(2026, 9, 17),
                         december2026.gregorianRange,
                     )
             }
@@ -361,6 +373,74 @@ class MonthViewModelTest {
                 awaitItem()
                 val loaded = awaitItem()
                 loaded.eventCountsByMonth[september2026]?.get(onScreen) shouldBe 1
+            }
+        }
+
+    // docs/design-plan.md §4.2, owner note 2: the selected-day summary below the grid — today when
+    // nothing is selected, the selected day once one is picked.
+
+    @Test
+    fun `the summary follows today when nothing is selected`() =
+        runTest(dispatcher) {
+            viewModel(september2026).uiState.test {
+                awaitItem()
+                val loaded = awaitItem()
+                loaded.summaryDate shouldBe LocalDate.of(2026, 9, 17)
+            }
+        }
+
+    @Test
+    fun `selecting a day moves the summary to it`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(december2026)
+            viewModel.uiState.test {
+                awaitItem()
+                awaitItem()
+
+                viewModel.select(yearDay2026)
+
+                val loaded = awaitItem()
+                loaded.summaryDate shouldBe yearDay2026
+            }
+        }
+
+    @Test
+    fun `the summary's holidays come from the enabled sets on the summary date`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(december2026)
+            viewModel.uiState.test {
+                awaitItem()
+                awaitItem()
+
+                viewModel.select(christmas2026)
+
+                val loaded = awaitItem()
+                loaded.summaryHolidays shouldBe listOf("Christmas Day")
+            }
+        }
+
+    @Test
+    fun `the summary's agenda comes from the selected day's own occurrences`() =
+        runTest(dispatcher) {
+            val agenda = FakeObserveAgendaUseCase()
+            agenda.putEntry(EventFixtures.entry(EventFixtures.allDay(date = christmas2026, title = "Party")))
+            val viewModel = viewModel(december2026, observeAgenda = agenda)
+            viewModel.uiState.test {
+                awaitItem()
+                awaitItem()
+
+                viewModel.select(christmas2026)
+
+                // The summary's own agenda comes from a separately keyed flow
+                // (MonthViewModel.summaryAgenda), so its settled value can land an emission or two
+                // after the one that already shows the new selection (the same "two combined flows"
+                // shape as event counts around a page change, see the comment above).
+                var loaded = awaitItem()
+                while (loaded.summaryAgenda.isEmpty()) {
+                    loaded = awaitItem()
+                }
+                loaded.summaryDate shouldBe christmas2026
+                loaded.summaryAgenda.map { it.title } shouldBe listOf("Party")
             }
         }
 

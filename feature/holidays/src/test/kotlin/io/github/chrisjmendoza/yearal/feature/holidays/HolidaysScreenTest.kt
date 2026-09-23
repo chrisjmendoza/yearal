@@ -2,9 +2,14 @@ package io.github.chrisjmendoza.yearal.feature.holidays
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -12,6 +17,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -108,6 +114,7 @@ class HolidaysScreenTest {
             ifcNumeric = "IFC 2026-13-29",
             gregorianLong = "Thursday, December 31, 2026",
             description = "Year Day. IFC Year Day, 2026 · IFC 2026-13-29. Gregorian Thursday, December 31, 2026.",
+            isIntercalary = true,
         )
 
     private fun loaded(
@@ -148,6 +155,24 @@ class HolidaysScreenTest {
         compose.onNodeWithText("Christian (Easter family)").performScrollTo().performClick()
 
         holidayChanges shouldBe listOf("us" to false, "religious-christian" to true)
+    }
+
+    // docs/design-plan.md section 4.7: colour is never the only signal — an enabled pack's switch
+    // state (Role.Switch, on/off) is exposed in semantics independently of its container colour.
+    @Test
+    fun `a pack row's enabled state is exposed as switch semantics, not colour alone`() {
+        show(loaded())
+
+        compose
+            .onNodeWithText("International Fixed Calendar")
+            .performScrollTo()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch))
+            .assertIsOn()
+        compose
+            .onNodeWithText("Christian (Easter family)")
+            .performScrollTo()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch))
+            .assertIsOff()
     }
 
     // ----- Year paging (task 2) -----
@@ -196,6 +221,16 @@ class HolidaysScreenTest {
         compose.onNodeWithText("December").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Year Day").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Year Day, 2026 · IFC 2026-13-29").performScrollTo().assertIsDisplayed()
+    }
+
+    // docs/design-plan.md section 4.7: an ordinary holiday carries the diamond mark; Year Day and Leap
+    // Day carry the intercalary mark instead, never both.
+    @Test
+    fun `an ordinary holiday shows the diamond mark and an intercalary row shows the intercalary mark`() {
+        show(loaded())
+
+        compose.onAllNodesWithTag(HolidaysTestTags.HOLIDAY_DIAMOND, useUnmergedTree = true).assertCountEquals(1)
+        compose.onAllNodesWithTag(HolidaysTestTags.INTERCALARY_MARK, useUnmergedTree = true).assertCountEquals(1)
     }
 
     @Test

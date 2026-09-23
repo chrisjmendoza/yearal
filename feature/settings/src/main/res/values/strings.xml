@@ -20,7 +20,7 @@
     <string name="more_settings">Settings</string>
 
     <!-- Supporting line under the Settings row, listing what can be changed there. -->
-    <string name="more_settings_detail">Weekday headers, theme</string>
+    <string name="more_settings_detail">Weekday headers, appearance</string>
 
     <!-- Row that opens the Learn screen (docs/FEATURES.md L2). -->
     <string name="more_learn">Learn</string>
@@ -73,26 +73,64 @@
     <!-- One-line explanation of the "IFC only" option. -->
     <string name="settings_weekday_nominal_detail">Only the perpetual IFC weekday names, identical every month</string>
 
-    <!-- Section heading for the theme preferences (FEATURES W2). -->
-    <string name="settings_section_theme">Theme</string>
+    <!-- Section heading for the appearance preferences (FEATURES W2, W6; docs/design-plan.md §5). -->
+    <string name="settings_section_appearance">Appearance</string>
 
     <!-- Theme option: follow the device's light/dark setting. -->
     <string name="settings_theme_system">System default</string>
+    <string name="settings_theme_system_detail">Match your device\'s light or dark setting</string>
 
     <!-- Theme option: always light. -->
     <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_light_detail">Always use the light theme</string>
 
     <!-- Theme option: always dark. -->
     <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_dark_detail">Always use the dark theme</string>
 
-    <!-- Switch: derive the colour scheme from the wallpaper (Material You). -->
-    <string name="settings_dynamic_color">Dynamic colour</string>
+    <!-- Group label above the colour-source segmented row (design-plan §5.1). -->
+    <string name="settings_color_source_label">Colour source</string>
 
-    <!-- Supporting line of the dynamic-colour switch on devices that support it. -->
-    <string name="settings_dynamic_color_detail">Use wallpaper colours (Android 12+)</string>
+    <!-- Colour source option: one of the six curated Yearal palettes (design-plan §5.2). -->
+    <string name="settings_color_source_brand">Yearal palette</string>
 
-    <!-- Supporting line of the dynamic-colour switch on devices below Android 12, where it is disabled. -->
-    <string name="settings_dynamic_color_unavailable">Not available on this device</string>
+    <!-- Colour source option: the wallpaper-derived Material You scheme, Android 12+ only. -->
+    <string name="settings_color_source_dynamic">Material You</string>
+
+    <!-- Shown under the colour-source row on devices below Android 12, where Material You is disabled. -->
+    <string name="settings_color_source_unavailable">Not available on this device</string>
+
+    <!-- Group label above the palette swatches (design-plan §5.2). -->
+    <string name="settings_palette_label">Palette</string>
+
+    <!-- Shown instead of the swatches\' own subtitle while the palette row is disabled, i.e. while
+         Material You is the colour source. -->
+    <string name="settings_palette_disabled_detail">Palette applies when Yearal palette is the colour source</string>
+
+    <string name="settings_palette_teal">Teal</string>
+    <string name="settings_palette_sol">Sol</string>
+    <string name="settings_palette_night">Night</string>
+    <string name="settings_palette_moss">Moss</string>
+    <string name="settings_palette_rose">Rose</string>
+    <string name="settings_palette_ink">Ink</string>
+
+    <!-- The AMOLED pure-black override (design-plan §5.3). -->
+    <string name="settings_pure_black">Pure black in dark mode</string>
+    <string name="settings_pure_black_detail">Replace dark surfaces with true black to save power on AMOLED screens. No effect in light mode.</string>
+
+    <!-- Group label above the two widget-theme rows and the opacity slider (design-plan §5.6). -->
+    <string name="settings_section_widgets">Widgets</string>
+
+    <string name="settings_widget_today_label">Today widget</string>
+    <string name="settings_widget_month_label">Month widget</string>
+
+    <string name="settings_widget_theme_follow">Follow app</string>
+    <string name="settings_widget_theme_light">Light</string>
+    <string name="settings_widget_theme_dark">Dark</string>
+
+    <!-- The widget background opacity slider\'s label. %1$d = the current percentage, e.g. "Widget
+         background: 75%". -->
+    <string name="settings_widget_background_label">Widget background: %1$d%%</string>
 
     <!-- Section heading above the row that links to the Holidays screen (FEATURES H5). The switches
          themselves live only on that screen (ROADMAP M6 T2) so there is one place to turn a set on or

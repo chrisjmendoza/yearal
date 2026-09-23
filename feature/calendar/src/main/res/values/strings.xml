@@ -6,13 +6,23 @@
     <!-- Spoken description of the progress spinner shown until the first date tick arrives. -->
     <string name="today_loading">Loading today’s date</string>
 
-    <!-- The Gregorian equivalent of today's IFC date, labelled so it is never confused with the IFC date
-         above it. %1$s = the full Gregorian date with its weekday, e.g. "Thursday, September 17, 2026". -->
-    <string name="today_gregorian">Gregorian: %1$s</string>
+    <!-- Eyebrow captions of the Today hero card's date pair (`docs/design-plan.md` §4.1) and the Month
+         summary's date pair (§4.2): "IFC" labels the long IFC date, "Gregorian" the Gregorian long
+         date. Shown in `labelSmall`, uppercased for display. Reused by both screens so the two never
+         drift out of sync. -->
+    <string name="eyebrow_ifc">IFC</string>
+    <string name="eyebrow_gregorian">Gregorian</string>
 
     <!-- Joins the day-and-week text with the quarter on one line.
          %1$s = "Day 260 · Week 38 of 52", %2$s = "Q3". -->
     <string name="today_day_week_quarter">%1$s · %2$s</string>
+
+    <!-- Shown in the Holidays card when today has none, instead of hiding the card (`docs/design-plan.md`
+         §4.1: "Empty Today ... shows one quiet line inside a card, not nothing"). -->
+    <string name="today_holidays_empty">No holidays today.</string>
+
+    <!-- Shown in the Events card when today has none, for the same reason as today_holidays_empty. -->
+    <string name="today_agenda_empty">Nothing on your agenda today.</string>
 
     <!-- Month pager (FEATURES C1, C7) -->
 
@@ -33,6 +43,18 @@
     <string name="month_jump_confirm">Jump</string>
     <!-- Dismiss button shared by the jump-to-date dialogs. -->
     <string name="month_jump_cancel">Cancel</string>
+
+    <!-- Content description folded into the app-bar title control's merged description (`docs/design-plan.md`
+         §4.2, owner note 4): the title is itself a tappable pill that zooms out to the Year view. -->
+    <string name="month_show_year">Show year</string>
+
+    <!-- Selected-day summary below the grid (`docs/design-plan.md` §4.2, owner note 2). -->
+    <string name="month_summary_holidays_empty">No holidays on this day.</string>
+    <string name="month_summary_events_empty">No events on this day.</string>
+    <!-- Opens the same Day detail a grid cell tap opens, for the day the summary is showing. -->
+    <string name="month_summary_details">Details</string>
+    <!-- Shown before the first date tick, when there is no selected or "today" date to summarise yet. -->
+    <string name="month_summary_loading">Loading…</string>
 
     <!-- Expanded-width list-detail pane (docs/ROADMAP.md M3 T4): shown in the detail pane before any
          day is selected. -->

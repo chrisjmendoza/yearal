@@ -1,6 +1,7 @@
 package io.github.chrisjmendoza.yearal.core.designsystem.calendar
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -36,6 +38,9 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.R
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.PillShape
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
 import java.time.LocalDate
 
 /**
@@ -51,11 +56,15 @@ object YearOverviewTestTags {
     const val MINI_MONTH_TILE_PREFIX: String = "ifc:yearMiniMonth:"
 }
 
-private val TilePadding = 12.dp
+// TilePadding and TileBorderWidth come from Dimens (docs/design-plan.md §3.1) rather than their own
+// literals now that the tile is a card sharing the grid's own spacing and today-ring scale.
+private val TilePadding = Dimens.SpaceM
 private val TileContentSpacing = 6.dp
-private val TileBorderWidth = 2.dp
+private val TileBorderWidth = Dimens.TodayRingWidth
 private val IntercalaryIconSize = 16.dp
 private val IntercalaryRowSpacing = 6.dp
+private val LeapDayPillHorizontalPadding = Dimens.SpaceS
+private val LeapDayPillVerticalPadding = Dimens.SpaceXs
 private const val MINI_GRID_ASPECT_RATIO = GRID_COLUMNS.toFloat() / GRID_ROWS.toFloat()
 private const val CELL_INSET_FRACTION = 0.12f
 private const val EVENT_DOT_RADIUS_FRACTION = 0.16f
@@ -77,11 +86,15 @@ private const val TODAY_RING_RADIUS_FRACTION = 0.32f
  * explicit [androidx.compose.ui.semantics.SemanticsPropertyReceiver.contentDescription] that replaces
  * whatever the inner `Text`s would otherwise contribute.
  *
- * Today is marked two ways, never by colour alone (docs/ARCHITECTURE.md §4 "Accessibility"): a border
- * around the whole tile when it contains the real today (a regular day or, for June, Leap Day), and a
- * hollow ring around that exact cell in the grid. A day with an event occurrence gets a filled dot
- * (holidays are not shown here — the Year view's presence bitmap is events only, per
- * [io.github.chrisjmendoza.yearal.core.domain.event.ObserveAgendaUseCase.presence]).
+ * The tile is a card (design-plan §4.3 "Every mini-month is a card"): [YearalTheme.colors]`.cardContainer`
+ * fill on `MaterialTheme.shapes.medium`. Today is marked two ways, never by colour alone
+ * (docs/ARCHITECTURE.md §4 "Accessibility"): a `.todayRing` border around the whole tile when it
+ * contains the real today (a regular day or, for June, Leap Day), and a hollow ring around that exact
+ * cell in the grid. A day with an event occurrence gets a filled `.eventMark` dot; a day with a
+ * holiday gets a `.holidayMark` diamond, since [holidays] carries the data already (design-plan §4.3
+ * "a holiday diamond appears in the mini grid too" — reversing the earlier state where the Year view's
+ * presence bitmap was events only). A day that is both marked steps its cell fill up to
+ * `.gridCellMarked`, the same convention [DayCell] uses.
  *
  * @param month the month this tile shows.
  * @param today the real today as a Gregorian date, or `null` to mark nothing.
@@ -89,6 +102,9 @@ private const val TODAY_RING_RADIUS_FRACTION = 0.32f
  * @param onClick invoked when the tile — including its Leap Day indicator — is tapped.
  * @param modifier applied to the tile; it fills the width the grid cell gives it.
  * @param formatter supplies the month name and the day names spoken in the description.
+ * @param holidays dates with a holiday this month, keyed the same way [eventDates] is (a presence
+ * set, not a name map — the mini grid draws a mark, never a label). Defaults to empty so every
+ * existing caller is unaffected.
  */
 @Composable
 fun YearMiniMonthTile(
@@ -98,6 +114,7 @@ fun YearMiniMonthTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     formatter: IfcDateFormatter = rememberIfcDateFormatter(),
+    holidays: Set<LocalDate> = emptySet(),
 ) {
     val leapDay = month.trailingIntercalary as? IfcDate.LeapDay
     val regularDays =
@@ -111,6 +128,7 @@ fun YearMiniMonthTile(
         remember(regularDates, leapDayDate, eventDates) {
             regularDates.count { it in eventDates } + (if (leapDayDate != null && leapDayDate in eventDates) 1 else 0)
         }
+    val holidayCount = remember(regularDates, holidays) { regularDates.count { it in holidays } }
     val todayDayName =
         when {
             todayIsLeapDay -> formatter.formatDay(requireNotNull(leapDay))
@@ -118,23 +136,28 @@ fun YearMiniMonthTile(
             else -> null
         }
 
-    val colors = MaterialTheme.colorScheme
+    val yearalColors = YearalTheme.colors
     val shape = MaterialTheme.shapes.medium
     val eventsSentence =
         eventCount.takeIf { it > 0 }?.let { count ->
             pluralStringResource(R.plurals.year_mini_month_events, count, count)
         }
+    val holidaysSentence =
+        holidayCount.takeIf { it > 0 }?.let { count ->
+            pluralStringResource(R.plurals.year_mini_month_holidays, count, count)
+        }
     val leapDaySentence = if (leapDay != null) stringResource(R.string.year_mini_month_leap_day_note) else null
     val todaySentence = todayDayName?.let { name -> stringResource(R.string.year_mini_month_today, name) }
     val description =
-        listOfNotNull(formatter.monthTitle(month), leapDaySentence, eventsSentence, todaySentence)
+        listOfNotNull(formatter.monthTitle(month), leapDaySentence, eventsSentence, holidaysSentence, todaySentence)
             .joinToString(" ")
 
     Column(
         modifier =
             modifier
                 .clip(shape)
-                .then(if (containsToday) Modifier.border(TileBorderWidth, colors.primary, shape) else Modifier)
+                .background(yearalColors.cardContainer)
+                .then(if (containsToday) Modifier.border(TileBorderWidth, yearalColors.todayRing, shape) else Modifier)
                 .selectable(selected = false, role = Role.Button, onClick = onClick)
                 .semantics { contentDescription = description }
                 .testTag(YearOverviewTestTags.MINI_MONTH_TILE_PREFIX + month.month.number)
@@ -155,22 +178,34 @@ fun YearMiniMonthTile(
                 val row = index / GRID_COLUMNS
                 val column = index % GRID_COLUMNS
                 val center = Offset(cellWidth * (column + 0.5f), cellHeight * (row + 0.5f))
+                val date = regularDates[index]
+                val hasHoliday = date in holidays
+                val hasEvent = date in eventDates
                 drawRoundRect(
-                    color = colors.surfaceVariant,
+                    color = if (hasHoliday || hasEvent) yearalColors.gridCellMarked else yearalColors.gridCell,
                     topLeft = Offset(cellWidth * column + inset, cellHeight * row + inset),
                     size = Size(cellWidth - 2 * inset, cellHeight - 2 * inset),
                     cornerRadius = CornerRadius(inset),
                 )
-                if (regularDates[index] in eventDates) {
+                if (hasHoliday) {
+                    val markRadius = minOf(cellWidth, cellHeight) * EVENT_DOT_RADIUS_FRACTION
+                    rotate(degrees = 45f, pivot = center) {
+                        drawRect(
+                            color = yearalColors.holidayMark,
+                            topLeft = Offset(center.x - markRadius, center.y - markRadius),
+                            size = Size(markRadius * 2, markRadius * 2),
+                        )
+                    }
+                } else if (hasEvent) {
                     drawCircle(
-                        color = colors.primary,
+                        color = yearalColors.eventMark,
                         radius = minOf(cellWidth, cellHeight) * EVENT_DOT_RADIUS_FRACTION,
                         center = center,
                     )
                 }
-                if (regularDates[index] == today) {
+                if (date == today) {
                     drawCircle(
-                        color = colors.primary,
+                        color = yearalColors.todayRing,
                         radius = minOf(cellWidth, cellHeight) * TODAY_RING_RADIUS_FRACTION,
                         center = center,
                         style = Stroke(width = TileBorderWidth.toPx()),
@@ -191,26 +226,35 @@ fun YearMiniMonthTile(
  * The non-interactive note that Leap Day belongs to June (spec §7.2): the same intercalary icon as
  * [IntercalaryBand], the label, an event dot and a hollow today ring — never colour alone — but no
  * click target of its own, so June's tile stays one semantics node (see [YearMiniMonthTile]).
+ *
+ * Drawn as a small pill on [YearalTheme.colors]`.intercalaryContainer` (design-plan §4.3/§8 decision 4
+ * — see [YearDayTile]'s KDoc for why the fill returned), the same [PillShape] the full-width
+ * [IntercalaryBand] uses, scaled down to sit inside a mini-month tile.
  */
 @Composable
 private fun LeapDayIndicator(
     hasEvent: Boolean,
     isToday: Boolean,
 ) {
-    val colors = MaterialTheme.colorScheme
+    val yearalColors = YearalTheme.colors
     Row(
+        modifier =
+            Modifier
+                .clip(PillShape)
+                .background(yearalColors.intercalaryContainer)
+                .padding(horizontal = LeapDayPillHorizontalPadding, vertical = LeapDayPillVerticalPadding),
         horizontalArrangement = Arrangement.spacedBy(IntercalaryRowSpacing),
     ) {
         Icon(
             painter = painterResource(R.drawable.ic_intercalary),
             contentDescription = null,
-            tint = colors.tertiary,
+            tint = yearalColors.intercalary,
             modifier =
                 Modifier
                     .size(IntercalaryIconSize)
                     .then(
                         if (isToday) {
-                            Modifier.border(TileBorderWidth, colors.primary, MaterialTheme.shapes.small)
+                            Modifier.border(TileBorderWidth, yearalColors.todayRing, MaterialTheme.shapes.small)
                         } else {
                             Modifier
                         },
@@ -219,7 +263,7 @@ private fun LeapDayIndicator(
         Text(
             text = stringResource(R.string.intercalary_leap_day),
             style = MaterialTheme.typography.bodySmall,
-            color = colors.onSurfaceVariant,
+            color = yearalColors.onIntercalaryContainer,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -230,16 +274,24 @@ private fun LeapDayIndicator(
 /**
  * The Year overview's fourteenth tile: Year Day, the day that belongs to no month (spec §2.4;
  * FEATURES C6). A sibling of [YearMiniMonthTile] rather than a reuse of [IntercalaryBand] — the band is
- * built to span a month grid's seven columns, and dropping that full-width, filled pill into the year's
- * tile grid put a shape and a colour on screen that nothing around it shared (owner feedback,
- * 2026-09-19). This tile borrows the mini-month's own vocabulary instead: the same [MaterialTheme.shapes]
- * container with no fill, the same `titleSmall` heading, the same today border, and the same
- * [DayMarks] row, so the year reads as one grid.
+ * built to span a month grid's seven columns, and this tile borrows the mini-month's own vocabulary
+ * instead: the same `titleSmall` heading, the same today border, and the same [DayMarks] row, so the
+ * year reads as one grid.
  *
- * It is still visibly *not* a month. The intercalary icon in [colors.tertiary][ColorScheme.tertiary] —
- * the same icon and tint [LeapDayIndicator] already uses inside June's tile — carries that, and the
- * Gregorian date beneath says which real day it is. Shape and glyph, never colour alone (CLAUDE.md
- * rule 3).
+ * **The intercalary fill is back.** It was removed on 2026-09-19 because a filled, full-width pill
+ * dropped into the year's tile grid "put a shape and a colour on screen that nothing around it
+ * shared" — at the time, no other component used that accent, so the tile alone looked like a mistake.
+ * The owner's later call (design-plan §8 decision 4, 2026-09-23) was that the *fill* was never the
+ * problem, only that nothing around it matched it: "I never wanted it gone, just styling to be more
+ * in line." Now that [IntercalaryBand], the Day detail header and [LeapDayIndicator] all share
+ * [YearalTheme.colors]`.intercalaryContainer`, the same fill here reads as one consistent accent
+ * rather than an outlier, so it returns: [YearalTheme.colors]`.intercalaryContainer` on
+ * `MaterialTheme.shapes.medium`, content in `.onIntercalaryContainer`, the intercalary icon tinted
+ * `.intercalary`.
+ *
+ * It is still visibly *not* a month: the intercalary icon and the fill itself carry that, and the
+ * Gregorian date beneath says which real day it is. Shape, fill and glyph together, never colour
+ * alone (CLAUDE.md rule 3).
  *
  * @param yearDay the year's [IfcDate.YearDay].
  * @param isToday whether the real today is Year Day, matched on its Gregorian date (CLAUDE.md rule 4).
@@ -257,7 +309,7 @@ fun YearDayTile(
     modifier: Modifier = Modifier,
     formatter: IfcDateFormatter = rememberIfcDateFormatter(),
 ) {
-    val colors = MaterialTheme.colorScheme
+    val yearalColors = YearalTheme.colors
     val shape = MaterialTheme.shapes.medium
     val description = formatter.dayDescription(yearDay, isToday, if (hasEvent) 1 else 0, null)
 
@@ -265,7 +317,8 @@ fun YearDayTile(
         modifier =
             modifier
                 .clip(shape)
-                .then(if (isToday) Modifier.border(TileBorderWidth, colors.primary, shape) else Modifier)
+                .background(yearalColors.intercalaryContainer)
+                .then(if (isToday) Modifier.border(TileBorderWidth, yearalColors.todayRing, shape) else Modifier)
                 .selectable(selected = false, role = Role.Button, onClick = onClick)
                 .semantics { contentDescription = description }
                 .padding(TilePadding),
@@ -277,12 +330,13 @@ fun YearDayTile(
             Icon(
                 painter = painterResource(R.drawable.ic_intercalary),
                 contentDescription = null,
-                tint = colors.tertiary,
+                tint = yearalColors.intercalary,
                 modifier = Modifier.size(IntercalaryIconSize),
             )
             Text(
                 text = formatter.formatDay(yearDay),
                 style = MaterialTheme.typography.titleSmall,
+                color = yearalColors.onIntercalaryContainer,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -290,7 +344,7 @@ fun YearDayTile(
         Text(
             text = formatter.intercalarySubtitle(yearDay),
             style = MaterialTheme.typography.bodySmall,
-            color = colors.onSurfaceVariant,
+            color = yearalColors.onIntercalaryContainer,
             maxLines = YEAR_DAY_SUBTITLE_MAX_LINES,
             overflow = TextOverflow.Ellipsis,
         )

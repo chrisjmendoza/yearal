@@ -96,11 +96,29 @@ class MonthScreenTest {
         val pages = mutableListOf<Int>()
         show(state(october2026), onPageChanged = { pages += it })
 
+        // The grid's own heading is hidden (showTitle = false); the app bar's title pill carries it.
         heading("October 2026").assertIsDisplayed()
-        // The neighbours are composed (kept warm) but off screen.
-        heading("September 2026").assertIsNotDisplayed()
-        heading("November 2026").assertIsNotDisplayed()
         pages shouldContainExactly listOf(MonthPages.pageOf(october2026))
+    }
+
+    // docs/design-plan.md §4.2, owner notes 3-4: one title, and it is visibly a control that zooms
+    // out to the Year view.
+
+    @Test
+    fun `the title pill is content-described Show year and opens Year on tap`() {
+        var clickedYear: Int? = null
+        show(state(october2026), onTitleClick = { clickedYear = it })
+
+        compose.onNode(hasContentDescription("Show year", substring = true)).assertIsDisplayed().performClick()
+
+        clickedYear shouldBe 2026
+    }
+
+    @Test
+    fun `the app bar carries the weekday explainer the hidden grid heading used to show`() {
+        show(state(october2026))
+
+        compose.onNodeWithTag(MonthGridTestTags.WEEKDAY_EXPLAINER).assertIsDisplayed()
     }
 
     @Test
@@ -212,6 +230,52 @@ class MonthScreenTest {
         compose
             .onAllNodesWithTag(MonthGridTestTags.EVENT_DOT, useUnmergedTree = true)
             .assertCountEquals(2)
+    }
+
+    // docs/design-plan.md §4.2, owner note 2: the selected-day summary anchored below the grid.
+
+    @Test
+    fun `the summary shows today's date when nothing is selected`() {
+        show(state(october2026))
+
+        // Gregorian September 17, 2026 is IFC September 8, 2026 (spec §4.1 worked example) — today,
+        // not a day of the visible October page.
+        compose
+            .onNode(hasText("September 8, 2026").and(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)))
+            .assertIsDisplayed()
+        compose.onNodeWithText("No holidays on this day.").assertIsDisplayed()
+        compose.onNodeWithText("No events on this day.").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the summary follows the selected day after a cell tap`() {
+        var uiState by mutableStateOf(state(october2026))
+        compose.setContent {
+            IfcTheme(dynamicColor = false) {
+                MonthScreen(state = uiState, onPageChanged = {}, onDayClick = {})
+            }
+        }
+
+        // IFC October 5, 2026 is Gregorian October 12, 2026.
+        uiState = uiState.copy(selected = LocalDate.of(2026, 10, 12))
+        compose.waitForIdle()
+
+        compose
+            .onNode(hasText("October 5, 2026").and(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `the Details action opens the same day a cell tap would`() {
+        val opened = mutableListOf<IfcDate>()
+        show(
+            state(october2026).copy(selected = LocalDate.of(2026, 10, 12)),
+            onDayClick = { opened += it },
+        )
+
+        compose.onNodeWithText("Details").performClick()
+
+        opened shouldContainExactly listOf(IfcDate.Regular(2026, IfcMonth.OCTOBER, 5))
     }
 
     // docs/ROADMAP.md M3 T2: tapping the month title zooms out to the Year view.

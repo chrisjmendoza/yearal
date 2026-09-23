@@ -89,6 +89,10 @@ enum class ZoneChoice {
  * @property count occurrences when [recurrenceEndKind] is [RecurrenceEndKind.COUNT], `≥ 1`.
  * @property reminders minutes-before values, each a preset chip (FEATURES E4; storage only — no
  *   `POST_NOTIFICATIONS` request or scheduling here, that is M6).
+ * @property colorArgb the event's own colour as `0xAARRGGBB` (`docs/design-plan.md` §5.4), or `null` to
+ *   inherit the calendar's colour — the "Calendar colour" swatch's value.
+ * @property category what kind of entry this is (`docs/design-plan.md` §5.4); defaults to
+ *   [EventCategory.EVENT], which the editor's category control shows unselected-among-equals.
  */
 data class EventDraft(
     val title: String = "",
@@ -107,6 +111,8 @@ data class EventDraft(
     val untilDate: LocalDate? = null,
     val count: Int = 1,
     val reminders: Set<Int> = emptySet(),
+    val colorArgb: Int? = null,
+    val category: EventCategory = EventCategory.EVENT,
 ) {
     /** Well-known values. */
     companion object {
@@ -161,6 +167,8 @@ data class EventDraft(
                 untilDate = until,
                 count = count ?: 1,
                 reminders = event.reminders.map { it.minutesBefore }.toSet(),
+                colorArgb = event.colorArgb,
+                category = event.category,
             )
         }
 
@@ -372,8 +380,8 @@ internal fun buildEvent(
         title = draft.title,
         description = draft.description,
         location = draft.location,
-        colorArgb = existing?.colorArgb,
-        category = existing?.category ?: EventCategory.EVENT,
+        colorArgb = draft.colorArgb,
+        category = draft.category,
         timing = timing,
         recurrence = recurrence,
         exdates = exdates,

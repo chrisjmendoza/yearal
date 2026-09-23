@@ -1,9 +1,9 @@
 package io.github.chrisjmendoza.yearal.feature.calendar.year
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -13,10 +13,12 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -32,6 +34,7 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.YearDayTile
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.YearMiniMonthTile
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.navigation.MonthKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
@@ -121,7 +124,12 @@ fun YearScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(formatter.formatNumber(state.year)) },
+                title = {
+                    Text(
+                        text = formatter.formatNumber(state.year),
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                },
                 actions = {
                     IconButton(onClick = onPreviousYear, enabled = state.canGoPrevious) {
                         Icon(
@@ -141,13 +149,27 @@ fun YearScreen(
                         }
                     }
                 },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
             )
         },
     ) { padding ->
         LazyVerticalGrid(
             columns = GridCells.Adaptive(TileMinWidth),
-            modifier = Modifier.padding(padding).fillMaxSize().testTag(YEAR_GRID_TEST_TAG),
-            contentPadding = PaddingValues(GridPadding),
+            modifier = Modifier.fillMaxSize().testTag(YEAR_GRID_TEST_TAG),
+            // padding, not Modifier.padding: a Scaffold's inner padding alone left the top row clipped
+            // under the app bar (docs/design-plan.md §4.3) — contentPadding insets the grid's own
+            // scrollable content instead of just offsetting the LazyVerticalGrid's bounds, and GridPadding
+            // still applies on every other edge.
+            contentPadding =
+                PaddingValues(
+                    start = GridPadding,
+                    end = GridPadding,
+                    top = padding.calculateTopPadding() + Dimens.SpaceL,
+                    bottom = padding.calculateBottomPadding() + GridPadding,
+                ),
             verticalArrangement = Arrangement.spacedBy(GridSpacing),
             horizontalArrangement = Arrangement.spacedBy(GridSpacing),
         ) {
@@ -156,6 +178,7 @@ fun YearScreen(
                     month = month,
                     today = state.today,
                     eventDates = state.eventDates,
+                    holidays = state.holidays.keys,
                     onClick = { onMonthClick(month) },
                     formatter = formatter,
                 )
@@ -178,20 +201,46 @@ fun YearScreen(
 
 private const val YEAR_DAY_ITEM_KEY = "yearDay"
 
-// Previews — a common year and a leap year (CLAUDE.md rule 6). Roborazzi's preview scanner captures
-// every @Preview once docs/ROADMAP.md M2 T10 records the goldens; dynamic colour is off for determinism.
+// Previews — a common year and a leap year (CLAUDE.md rule 6), each at light, dark and 200% font
+// scale (Year Day, the intercalary case every year has, is always on screen as the grid's 14th tile).
+// Roborazzi's preview scanner captures every @Preview once docs/ROADMAP.md M2 T10 records the
+// goldens; dynamic colour is off for determinism.
 
 /** 2026: a common year, no Leap Day tile. */
-@Preview(name = "2026 (common year)", showBackground = true)
+@Preview(name = "2026 (common year) — light", showBackground = true)
 @Composable
 internal fun YearScreenCommonYearPreview() {
     YearPreview(year = 2026, today = LocalDate.of(2026, 9, 17))
 }
 
+@Preview(name = "2026 (common year) — dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun YearScreenCommonYearDarkPreview() {
+    YearPreview(year = 2026, today = LocalDate.of(2026, 9, 17), darkTheme = true)
+}
+
+@Preview(name = "2026 (common year) — 200% font", showBackground = true, fontScale = 2f)
+@Composable
+internal fun YearScreenCommonYearLargeFontPreview() {
+    YearPreview(year = 2026, today = LocalDate.of(2026, 9, 17))
+}
+
 /** 2028: a leap year, so June's tile shows the Leap Day indicator. */
-@Preview(name = "2028 (leap year)", showBackground = true)
+@Preview(name = "2028 (leap year) — light", showBackground = true)
 @Composable
 internal fun YearScreenLeapYearPreview() {
+    YearPreview(year = 2028, today = LocalDate.of(2028, 6, 17))
+}
+
+@Preview(name = "2028 (leap year) — dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun YearScreenLeapYearDarkPreview() {
+    YearPreview(year = 2028, today = LocalDate.of(2028, 6, 17), darkTheme = true)
+}
+
+@Preview(name = "2028 (leap year) — 200% font", showBackground = true, fontScale = 2f)
+@Composable
+internal fun YearScreenLeapYearLargeFontPreview() {
     YearPreview(year = 2028, today = LocalDate.of(2028, 6, 17))
 }
 
@@ -199,8 +248,9 @@ internal fun YearScreenLeapYearPreview() {
 private fun YearPreview(
     year: Int,
     today: LocalDate,
+    darkTheme: Boolean = false,
 ) {
-    IfcTheme(dynamicColor = false) {
+    IfcTheme(darkTheme = darkTheme, dynamicColor = false) {
         YearScreen(
             state = YearUiState(year = year, today = today),
             onPreviousYear = {},

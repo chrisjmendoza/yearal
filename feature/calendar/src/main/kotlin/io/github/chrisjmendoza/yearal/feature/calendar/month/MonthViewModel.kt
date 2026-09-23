@@ -12,6 +12,8 @@ import io.github.chrisjmendoza.yearal.core.domain.DateTicker
 import io.github.chrisjmendoza.yearal.core.domain.event.ObserveAgendaUseCase
 import io.github.chrisjmendoza.yearal.core.domain.settings.SettingsRepository
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
+import io.github.chrisjmendoza.yearal.feature.calendar.agenda.AgendaItemUi
+import io.github.chrisjmendoza.yearal.feature.calendar.agenda.toAgendaItemUi
 import io.github.chrisjmendoza.yearal.feature.calendar.holiday.HolidayCatalog
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -73,6 +76,20 @@ class MonthViewModel
         private val eventCountsByPage: Flow<Map<IfcYearMonth, Map<LocalDate, Int>>> =
             page.flatMapLatest { p -> eventCountsAround(p) }
 
+        // The selected-day summary below the grid (docs/design-plan.md §4.2, owner note 2): the
+        // selected day, or today when nothing is selected. Its agenda needs its own single-day
+        // ObserveAgendaUseCase subscription — MonthUiState.eventCountsByMonth only carries counts, not
+        // the AgendaItemUi rows the summary shows — re-issued only when the summary date itself changes.
+        private val summaryDate: Flow<LocalDate> =
+            combine(dateTicker.today, selected) { today, sel -> sel ?: today }.distinctUntilChanged()
+
+        private val summaryAgenda: Flow<List<AgendaItemUi>> =
+            summaryDate.flatMapLatest { date ->
+                observeAgenda(date..date).map { agendas ->
+                    agendas[date]?.entries.orEmpty().map { it.toAgendaItemUi() }
+                }
+            }
+
         /**
          * The current [MonthUiState]. Starts with the initial page, no today and default settings;
          * the first tick, the stored settings and the event counts arrive on subscription.
@@ -85,14 +102,22 @@ class MonthViewModel
                 selected,
                 eventCountsByPage,
             ) { today, settings, page, selected, eventCounts ->
+                MonthPartialState(today, settings, page, selected, eventCounts)
+            }.combine(summaryAgenda) { partial, summaryAgenda ->
+                val summaryDate = partial.selected ?: partial.today
                 MonthUiState(
-                    currentPage = page,
-                    today = today,
-                    todayPage = MonthPages.pageOf(IfcYearMonth.from(IfcDate.from(today))),
-                    selected = selected,
-                    weekdayDisplay = settings.weekdayDisplay,
-                    holidaysByMonth = holidaysAround(page, settings.enabledHolidaySets),
-                    eventCountsByMonth = eventCounts,
+                    currentPage = partial.page,
+                    today = partial.today,
+                    todayPage = MonthPages.pageOf(IfcYearMonth.from(IfcDate.from(partial.today))),
+                    selected = partial.selected,
+                    weekdayDisplay = partial.settings.weekdayDisplay,
+                    holidaysByMonth = holidaysAround(partial.page, partial.settings.enabledHolidaySets),
+                    eventCountsByMonth = partial.eventCounts,
+                    summaryHolidays =
+                        catalog
+                            .labels(partial.settings.enabledHolidaySets, summaryDate..summaryDate)[summaryDate]
+                            .orEmpty(),
+                    summaryAgenda = summaryAgenda,
                 )
             }.stateIn(
                 viewModelScope,
@@ -176,3 +201,16 @@ class MonthViewModel
             const val STOP_TIMEOUT_MILLIS = 5_000L
         }
     }
+
+/**
+ * Everything [MonthViewModel.uiState] needs except the summary agenda, which arrives from a
+ * separately keyed flow ([MonthViewModel.summaryAgenda]) — kept apart purely so the two `combine`
+ * stages stay under kotlinx.coroutines' five-argument `combine` overload.
+ */
+private data class MonthPartialState(
+    val today: LocalDate,
+    val settings: UserSettings,
+    val page: Int,
+    val selected: LocalDate?,
+    val eventCounts: Map<IfcYearMonth, Map<LocalDate, Int>>,
+)

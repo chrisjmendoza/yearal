@@ -4,11 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.chrisjmendoza.yearal.core.domain.event.EventRepository
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorPalette
 import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.SettingsRepository
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
+import io.github.chrisjmendoza.yearal.core.domain.settings.WidgetTheme
 import io.github.chrisjmendoza.yearal.feature.settings.di.DynamicColorSupported
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -101,6 +103,40 @@ class SettingsViewModel
          */
         fun setColorSource(source: ColorSource) {
             update { it.copy(colorSource = source) }
+        }
+
+        /**
+         * Stores which curated scheme to draw from when [ColorSource.BRAND] is active
+         * (`docs/design-plan.md` §5.2). The screen only offers this control while [ColorSource.BRAND]
+         * is selected, but nothing stops the value being stored regardless — it simply has no visible
+         * effect until the source is [ColorSource.BRAND] again.
+         */
+        fun setPalette(palette: ColorPalette) {
+            update { it.copy(palette = palette) }
+        }
+
+        /** Stores the AMOLED pure-black override for dark mode (`docs/design-plan.md` §5.3). */
+        fun setPureBlack(pureBlack: Boolean) {
+            update { it.copy(pureBlack = pureBlack) }
+        }
+
+        /** Stores the Today widget's light/dark override, independent of [ThemeMode] (design-plan §5.6). */
+        fun setTodayWidgetTheme(theme: WidgetTheme) {
+            update { it.copy(todayWidgetTheme = theme) }
+        }
+
+        /** Stores the Month widget's light/dark override (design-plan §5.6). */
+        fun setMonthWidgetTheme(theme: WidgetTheme) {
+            update { it.copy(monthWidgetTheme = theme) }
+        }
+
+        /**
+         * Stores the widget background opacity as a percentage (design-plan §5.6). Coerced into
+         * `0..100` here as well as on read (`UserSettingsDto.toDomain`), so a caller that somehow
+         * passes an out-of-range value — the slider itself cannot — never reaches the store unclamped.
+         */
+        fun setWidgetBackgroundOpacity(percent: Int) {
+            update { it.copy(widgetBackgroundOpacity = percent.coerceIn(0, 100)) }
         }
 
         private fun update(transform: (UserSettings) -> UserSettings) {

@@ -172,12 +172,18 @@
     <!-- Spoken, optional sentence on a Year overview mini-month tile noting that Leap Day is drawn
          with it, outside the 4x7 grid (it belongs to no week). -->
     <string name="year_mini_month_leap_day_note">Includes Leap Day.</string>
-    <!-- Spoken, optional sentence on a Year overview mini-month tile giving its event-day count
-         (holidays are not counted here — the Year view's presence bitmap is events only).
+    <!-- Spoken, optional sentence on a Year overview mini-month tile giving its event-day count.
          %1$d = number of days with at least one event. -->
     <plurals name="year_mini_month_events">
         <item quantity="one">%1$d day with events.</item>
         <item quantity="other">%1$d days with events.</item>
+    </plurals>
+    <!-- Spoken, optional sentence on a Year overview mini-month tile giving its holiday-day count
+         (design-plan §4.3: the mini grid now marks holidays too, since the data is already there).
+         %1$d = number of days with at least one holiday. -->
+    <plurals name="year_mini_month_holidays">
+        <item quantity="one">%1$d day with a holiday.</item>
+        <item quantity="other">%1$d days with holidays.</item>
     </plurals>
     <!-- Spoken, optional last sentence on a Year overview mini-month tile that contains the real
          today; the visual mark is a border and a ring, which a screen reader cannot see.

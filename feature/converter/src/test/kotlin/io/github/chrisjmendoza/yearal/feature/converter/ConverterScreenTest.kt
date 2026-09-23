@@ -19,6 +19,7 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -119,8 +120,8 @@ class ConverterScreenTest {
     fun `Gregorian to IFC shows both dates, the numeric form and both labelled weekdays`() {
         show(loaded(specToday, chosen = false))
 
-        compose.onNodeWithText("IFC: September 8, 2026").assertIsDisplayed()
-        compose.onNodeWithText("Gregorian: Thursday, September 17, 2026").assertIsDisplayed()
+        compose.onNodeWithContentDescription("IFC: September 8, 2026").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Gregorian: Thursday, September 17, 2026").assertIsDisplayed()
         compose.onNodeWithText("IFC 2026-10-08").assertIsDisplayed()
         compose.onNodeWithText("IFC weekday: Sunday", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Actual weekday: Thursday", useUnmergedTree = true).assertIsDisplayed()
@@ -139,8 +140,8 @@ class ConverterScreenTest {
     fun `Year Day shows no IFC weekday next to its actual weekday`() {
         show(loaded(LocalDate.of(2026, 12, 31)))
 
-        compose.onNodeWithText("IFC: Year Day, 2026").assertIsDisplayed()
-        compose.onNodeWithText("Gregorian: Thursday, December 31, 2026").assertIsDisplayed()
+        compose.onNodeWithContentDescription("IFC: Year Day, 2026").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Gregorian: Thursday, December 31, 2026").assertIsDisplayed()
         compose.onNodeWithText("IFC 2026-13-29").assertIsDisplayed()
         compose.onNodeWithText("no IFC weekday", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Actual weekday: Thursday", useUnmergedTree = true).assertIsDisplayed()
@@ -160,20 +161,20 @@ class ConverterScreenTest {
         compose.onNodeWithText("Sol").assertIsNotSelected()
         compose.onAllNodesWithText("Gregorian date").assertCountEquals(0)
 
-        compose.onNodeWithText("Gregorian: Monday, June 17, 2024").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("IFC: Leap Day, 2024").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Gregorian: Monday, June 17, 2024").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("IFC: Leap Day, 2024").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("IFC 2024-06-29").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("no IFC weekday, actual Monday").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("no IFC weekday", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Actual weekday: Monday", useUnmergedTree = true).assertIsDisplayed()
         val answerTop =
             compose
-                .onNodeWithText("Gregorian: Monday, June 17, 2024")
+                .onNodeWithContentDescription("Gregorian: Monday, June 17, 2024")
                 .fetchSemanticsNode()
                 .boundsInRoot.top
         val questionTop =
             compose
-                .onNodeWithText("IFC: Leap Day, 2024")
+                .onNodeWithContentDescription("IFC: Leap Day, 2024")
                 .fetchSemanticsNode()
                 .boundsInRoot.top
         (answerTop < questionTop) shouldBe true
@@ -203,6 +204,31 @@ class ConverterScreenTest {
         compose.onNode(hasText("IFC year")).performScrollTo().performTextReplacement("2028")
         ifcInputs.map { it.date } shouldContainExactly
             listOf(IfcDate.Regular(2026, IfcMonth.SOL, 8), IfcDate.Regular(2028, IfcMonth.SEPTEMBER, 8))
+    }
+
+    // docs/design-plan.md §4.6: the swap icon replaces a glyph the review read as "refresh" and does
+    // exactly what tapping the other segment does.
+    @Test
+    fun `the swap control has its content description and flips the direction`() {
+        show(loaded(specToday, direction = ConversionDirection.GREGORIAN_TO_IFC))
+
+        compose.onNodeWithContentDescription("Swap direction").assertIsDisplayed().performClick()
+        directions shouldContainExactly listOf(ConversionDirection.IFC_TO_GREGORIAN)
+    }
+
+    // docs/design-plan.md §4.6: eyebrow captions "IFC" / "Gregorian" over their values, so a newcomer
+    // sees which calendar each date belongs to. The eyebrows are their own exact-text nodes (unique on
+    // screen); the values are checked through the merged content description instead of plain text,
+    // since the Gregorian date button legitimately shows the same date text as the result's restated
+    // Gregorian value.
+    @Test
+    fun `the result card shows the IFC and Gregorian eyebrows over their values`() {
+        show(loaded(specToday, chosen = false))
+
+        compose.onNodeWithText("IFC", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("GREGORIAN", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("IFC: September 8, 2026").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Gregorian: Thursday, September 17, 2026").assertIsDisplayed()
     }
 
     @Test
@@ -238,7 +264,7 @@ class ConverterScreenTest {
             .assertIsDisplayed()
         compose.onNode(hasText("IFC year")).assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Error))
         for (absent in listOf("Copy", "Share", "Open day")) compose.onAllNodesWithText(absent).assertCountEquals(0)
-        compose.onAllNodesWithText("Gregorian: ", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithContentDescription("Gregorian:", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Actual weekday", substring = true, useUnmergedTree = true).assertCountEquals(0)
     }
 
@@ -256,7 +282,7 @@ class ConverterScreenTest {
         // §6.4: 1900-12-31 = Year Day 1900, a Monday.
         show(loaded(LocalDate.of(1900, 12, 31)))
 
-        compose.onNodeWithText("IFC: Year Day, 1900").assertIsDisplayed()
+        compose.onNodeWithContentDescription("IFC: Year Day, 1900").assertIsDisplayed()
         val note =
             compose
                 .onNodeWithText("proleptic", substring = true)
@@ -355,12 +381,20 @@ class ConverterScreenTest {
             control.performScrollTo().assertHeightIsAtLeast(48.dp)
             control.textLayout().isCut() shouldBe false
         }
-        for (line in listOf("IFC: Year Day, 1900", "Gregorian: Monday, December 31, 1900", "IFC 1900-13-29")) {
+        for (line in listOf("IFC", "GREGORIAN", "Year Day, 1900", "IFC 1900-13-29")) {
             compose
-                .onNodeWithText(line)
+                .onNodeWithText(line, useUnmergedTree = true)
                 .performScrollTo()
                 .textLayout()
                 .isCut() shouldBe false
+        }
+        // "Monday, December 31, 1900" legitimately appears twice (the Gregorian date button and the
+        // result card's restated Gregorian value): check both instances instead of one ambiguous node.
+        compose.onAllNodesWithText("Monday, December 31, 1900", useUnmergedTree = true).apply {
+            assertCountEquals(2)
+            for (index in 0 until fetchSemanticsNodes().size) {
+                get(index).performScrollTo().textLayout().isCut() shouldBe false
+            }
         }
     }
 
@@ -413,7 +447,7 @@ class ConverterScreenTest {
         compose.onAllNodesWithText("Leap Day").assertCountEquals(0)
 
         enterInPicker(IfcDate.LeapDay(2024))
-        compose.onNodeWithText("Gregorian: Monday, June 17, 2024").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Gregorian: Monday, June 17, 2024").performScrollTo().assertIsDisplayed()
 
         compose.onNode(hasText("IFC year")).performScrollTo().performTextReplacement("2025")
         compose.onAllNodesWithText("Leap Day").assertCountEquals(0)
@@ -422,8 +456,8 @@ class ConverterScreenTest {
                 "2025 has no Leap Day, so the date moved to June 28.",
             ).performScrollTo()
             .assertIsDisplayed()
-        compose.onNodeWithText("Gregorian: Tuesday, June 17, 2025").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("IFC: June 28, 2025").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Gregorian: Tuesday, June 17, 2025").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("IFC: June 28, 2025").performScrollTo().assertIsDisplayed()
 
         compose.onNode(hasText("IFC year")).performScrollTo().performTextReplacement("158")
         compose
@@ -458,18 +492,24 @@ class ConverterScreenTest {
             // Gregorian → IFC: what the Material picker's OK does, then read the screen.
             compose.onNodeWithText("Gregorian to IFC").performScrollTo().performClick()
             compose.runOnIdle { viewModel.setGregorianDate(gregorian) }
-            compose.onNodeWithText("IFC: ${formatter.formatLong(expected)}").performScrollTo().assertIsDisplayed()
+            compose
+                .onNodeWithContentDescription("IFC: ${formatter.formatLong(expected)}")
+                .performScrollTo()
+                .assertIsDisplayed()
             compose.onNodeWithText(expected.toPrefixedString()).performScrollTo().assertIsDisplayed()
 
             // Move the IFC input somewhere else, then type the converted date back in by hand.
             compose.onNodeWithText("IFC to Gregorian").performScrollTo().performClick()
             enterInPicker(IfcDate.YearDay(2000))
-            compose.onNodeWithText("Gregorian: Sunday, December 31, 2000").performScrollTo().assertIsDisplayed()
+            compose
+                .onNodeWithContentDescription("Gregorian: Sunday, December 31, 2000")
+                .performScrollTo()
+                .assertIsDisplayed()
             enterInPicker(expected)
 
             // IFC → Gregorian lands on the day we started from.
             compose
-                .onNodeWithText("Gregorian: ${formatter.formatGregorianLong(gregorian)}")
+                .onNodeWithContentDescription("Gregorian: ${formatter.formatGregorianLong(gregorian)}")
                 .performScrollTo()
                 .assertIsDisplayed()
             compose.onNodeWithText(expected.toPrefixedString()).performScrollTo().assertIsDisplayed()

@@ -21,6 +21,7 @@ import io.github.chrisjmendoza.yearal.core.designsystem.R
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter.WeekdayNameStyle
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
 
 /** Columns of an IFC month grid: the nominal Sunday column is 0, the nominal Saturday column is 6. */
@@ -38,6 +39,12 @@ private val HeaderVerticalPadding = 4.dp
  *   [IfcYearMonth.actualDayOfWeek].
  * - [WeekdayDisplay.BOTH]: the nominal row with the actual row beneath it in a smaller, secondary
  *   style — the default (ARCHITECTURE "Reconciled decisions" #7).
+ *
+ * The nominal row is `onSurface` at `labelLarge`; the actual row is
+ * [YearalTheme.colors]`.weekdayActualText`, a colour kept legible on purpose rather than a plain grey
+ * (design-plan §4.2/§4.8 "the actual row in the sage text colour rather than a lighter grey") — at
+ * `labelMedium` when it sits under the nominal row in [WeekdayDisplay.BOTH], or `labelLarge` when it
+ * is the only row shown in [WeekdayDisplay.ACTUAL]. No layout changes with the colour swap.
  *
  * Each row is labelled for screen readers ("IFC weekdays" / "Actual weekdays"), so a spoken header
  * can never be mistaken for the other kind. Nominal names come from the days' own
@@ -58,6 +65,7 @@ fun WeekdayHeaders(
     val formatter = rememberIfcDateFormatter()
     val typography = MaterialTheme.typography
     val colors = MaterialTheme.colorScheme
+    val yearalColors = YearalTheme.colors
     Column(modifier = modifier.fillMaxWidth()) {
         when (display) {
             WeekdayDisplay.NOMINAL -> {
@@ -65,12 +73,12 @@ fun WeekdayHeaders(
             }
 
             WeekdayDisplay.ACTUAL -> {
-                ActualRow(month, formatter, typography.labelLarge, colors.onSurface)
+                ActualRow(month, formatter, typography.labelLarge, yearalColors.weekdayActualText)
             }
 
             WeekdayDisplay.BOTH -> {
                 NominalRow(month, formatter, typography.labelLarge, colors.onSurface)
-                ActualRow(month, formatter, typography.labelMedium, colors.onSurfaceVariant)
+                ActualRow(month, formatter, typography.labelMedium, yearalColors.weekdayActualText)
             }
         }
     }

@@ -8,6 +8,7 @@ import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.domain.DateTicker
 import io.github.chrisjmendoza.yearal.core.domain.event.Event
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCalendar
+import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.EventRepository
 import io.github.chrisjmendoza.yearal.core.domain.event.IfcRecurrence
 import io.github.chrisjmendoza.yearal.core.domain.event.IntercalaryDay
@@ -524,6 +525,85 @@ class EventEditorViewModelTest {
             runCurrent()
 
             repo.currentEvents.single().calendarId shouldBe EventCalendar.DEFAULT_ID
+        }
+
+    // ----- docs/design-plan.md §5.4: per-event colour and category -----
+
+    @Test
+    fun `setColor and setCategory update the loaded state and the saved event`() =
+        runTest(dispatcher) {
+            val repo = FakeEventRepository()
+            val viewModel = viewModel(repository = repo)
+            val state = observe(viewModel)
+            viewModel.setStartDate(LocalDate.of(2026, 6, 30))
+            state().colorArgb shouldBe null
+            state().category shouldBe EventCategory.EVENT
+
+            viewModel.setColor(0xFF993A7A.toInt())
+            viewModel.setCategory(EventCategory.BIRTHDAY)
+
+            state().colorArgb shouldBe 0xFF993A7A.toInt()
+            state().category shouldBe EventCategory.BIRTHDAY
+
+            viewModel.save()
+            runCurrent()
+
+            val saved = repo.currentEvents.single()
+            saved.colorArgb shouldBe 0xFF993A7A.toInt()
+            saved.category shouldBe EventCategory.BIRTHDAY
+        }
+
+    @Test
+    fun `choosing Calendar colour resets colorArgb to null, even after an earlier choice`() =
+        runTest(dispatcher) {
+            val repo = FakeEventRepository()
+            val viewModel = viewModel(repository = repo)
+            val state = observe(viewModel)
+            viewModel.setStartDate(LocalDate.of(2026, 6, 30))
+            viewModel.setColor(0xFF1E6962.toInt())
+            state().colorArgb shouldBe 0xFF1E6962.toInt()
+
+            viewModel.setColor(null)
+
+            state().colorArgb shouldBe null
+
+            viewModel.save()
+            runCurrent()
+
+            repo.currentEvents.single().colorArgb shouldBe null
+        }
+
+    @Test
+    fun `the chosen colour and category survive process death`() =
+        runTest(dispatcher) {
+            val handle = SavedStateHandle()
+            val first = viewModel(handle = handle)
+            observe(first)
+            first.setColor(0xFFF28C28.toInt())
+            first.setCategory(EventCategory.OBSERVANCE)
+            runCurrent()
+
+            val restored = SavedStateHandle(handle.keys().associateWith { handle.get<Any?>(it) })
+            val second = viewModel(handle = restored)
+            val state = observe(second)
+
+            state().colorArgb shouldBe 0xFFF28C28.toInt()
+            state().category shouldBe EventCategory.OBSERVANCE
+        }
+
+    @Test
+    fun `editing an existing event loads its own colour and category`() =
+        runTest(dispatcher) {
+            val repo = FakeEventRepository()
+            val stored =
+                repo
+                    .seed(listOf(EventFixtures.sol13Yearly().copy(colorArgb = 0xFF554BCB.toInt())))
+                    .single()
+            val viewModel = viewModel(key = EventEditorKey(eventId = stored.id), repository = repo)
+            val state = observe(viewModel)
+
+            state().colorArgb shouldBe 0xFF554BCB.toInt()
+            state().category shouldBe stored.category
         }
 
     // ----- POST_NOTIFICATIONS state machine (FEATURES E4, P2): first chip -> request; granted; denied

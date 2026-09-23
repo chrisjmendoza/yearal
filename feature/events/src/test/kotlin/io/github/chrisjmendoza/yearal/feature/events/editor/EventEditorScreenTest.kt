@@ -14,6 +14,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -23,6 +24,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
 import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldContainExactly
@@ -57,6 +59,8 @@ class EventEditorScreenTest {
     private val recurrenceKinds = mutableListOf<RecurrenceKind>()
     private val leapDayPolicies = mutableListOf<LeapDayPolicy>()
     private val reminders = mutableListOf<Int>()
+    private val colors = mutableListOf<Int?>()
+    private val categories = mutableListOf<EventCategory>()
     private var saved = 0
     private var deleteRequested = 0
     private var deleteConfirmed = 0
@@ -82,6 +86,8 @@ class EventEditorScreenTest {
             onZoneChoiceChange = {},
             onRecurrenceKindChange = { recurrenceKinds += it },
             onLeapDayPolicyChange = { leapDayPolicies += it },
+            onColorChange = { colors += it },
+            onCategoryChange = { categories += it },
             onRecurrenceEndKindChange = {},
             onUntilDateChange = {},
             onCountChange = {},
@@ -117,6 +123,8 @@ class EventEditorScreenTest {
         showRecurrenceResetNotice: Boolean = false,
         yearlyIfcGregorianShifts: Boolean = false,
         yearlyGregorianIfcShifts: Boolean = false,
+        colorArgb: Int? = null,
+        category: EventCategory = EventCategory.EVENT,
     ) = EventEditorUiState.Loaded(
         isNew = isNew,
         title = "",
@@ -155,6 +163,8 @@ class EventEditorScreenTest {
         showRecurrenceResetNotice = showRecurrenceResetNotice,
         yearlyIfcGregorianShifts = yearlyIfcGregorianShifts,
         yearlyGregorianIfcShifts = yearlyGregorianIfcShifts,
+        colorArgb = colorArgb,
+        category = category,
     )
 
     /** Sets the initial state and composes the screen once; later state changes assign [uiState] directly. */
@@ -185,11 +195,11 @@ class EventEditorScreenTest {
     @Test
     fun `Save is enabled when the draft can be saved and disabled when it cannot`() {
         show(baseState(canSave = true))
-        compose.onNodeWithContentDescription("Save").performClick()
+        compose.onNodeWithText("Save").performClick()
         saved shouldBe 1
 
         uiState = baseState(isAllDay = false, canSave = false, endBeforeStart = true)
-        compose.onNodeWithContentDescription("Save").assertIsNotEnabled()
+        compose.onNodeWithText("Save").assertIsNotEnabled()
         compose.onNodeWithText("The end must be on or after the start.").performScrollTo().assertIsDisplayed()
     }
 
@@ -402,7 +412,7 @@ class EventEditorScreenTest {
     fun `at 200 percent font scale every control is reachable and no label is cut`() {
         show(baseState(recurrenceKind = RecurrenceKind.YEARLY_IFC), fontScale = 2f)
 
-        compose.onNodeWithContentDescription("Save").assertIsDisplayed()
+        compose.onNodeWithText("Save").assertIsDisplayed()
         compose.onNodeWithContentDescription("Back").assertIsDisplayed()
         val recurrenceOption =
             SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton).and(hasText("Does not repeat"))
@@ -416,7 +426,7 @@ class EventEditorScreenTest {
     fun `Save is disabled and a progress indicator shows while saving`() {
         show(baseState(isSaving = true))
 
-        compose.onNodeWithContentDescription("Save").assertIsNotEnabled()
+        compose.onNodeWithText("Save").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Saving…").assertIsDisplayed()
     }
 
@@ -496,5 +506,53 @@ class EventEditorScreenTest {
                     "on the same IFC weekday.",
             ).performScrollTo()
             .assertIsDisplayed()
+    }
+
+    // ----- docs/design-plan.md §5.4: per-event colour and category -----
+
+    @Test
+    fun `tapping a colour swatch reports through the callback`() {
+        show(baseState(colorArgb = null))
+
+        compose.onNodeWithContentDescription("Teal").performScrollTo().performClick()
+
+        colors shouldContainExactly listOf(0xFF1E6962.toInt())
+    }
+
+    @Test
+    fun `the selected swatch is announced as selected, and the others are not`() {
+        show(baseState(colorArgb = 0xFF1E6962.toInt()))
+
+        compose.onNodeWithContentDescription("Teal, selected").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Calendar colour").performScrollTo().assertIsDisplayed()
+        compose.onAllNodesWithContentDescription("Calendar colour, selected").assertCountEquals(0)
+    }
+
+    @Test
+    fun `tapping Calendar colour resets the colour to null`() {
+        show(baseState(colorArgb = 0xFF1E6962.toInt()))
+
+        compose.onNodeWithContentDescription("Calendar colour").performScrollTo().performClick()
+
+        colors shouldContainExactly listOf(null)
+    }
+
+    @Test
+    fun `choosing a category reports through the callback`() {
+        show(baseState(category = EventCategory.EVENT))
+
+        compose.onNodeWithText("Observance").performScrollTo().performClick()
+
+        categories shouldContainExactly listOf(EventCategory.OBSERVANCE)
+    }
+
+    // docs/design-plan.md §4.5: validation errors show as an errorContainer banner with a warning icon,
+    // not just red text — colour is never the only signal (design-plan §2).
+    @Test
+    fun `a validation error shows in a banner with a warning icon`() {
+        show(baseState(isAllDay = false, canSave = false, endBeforeStart = true))
+
+        compose.onNodeWithText("The end must be on or after the start.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Error").performScrollTo().assertIsDisplayed()
     }
 }

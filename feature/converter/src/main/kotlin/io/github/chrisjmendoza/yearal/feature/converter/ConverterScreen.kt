@@ -6,15 +6,23 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -27,6 +35,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +46,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -53,12 +64,15 @@ import io.github.chrisjmendoza.yearal.core.designsystem.picker.DatePickerRange
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.GregorianDatePickerDialog
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.IfcDatePicker
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.IfcDatePickerValue
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
 import io.github.chrisjmendoza.yearal.core.navigation.ConverterKey
 import io.github.chrisjmendoza.yearal.core.navigation.DayKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import io.github.chrisjmendoza.yearal.core.designsystem.R as DesignSystemR
 
 // 12dp at the sides leaves 336dp on a 360dp phone: exactly seven 48dp day columns in the IFC picker.
 private val ScreenHorizontalPadding = 12.dp
@@ -68,6 +82,7 @@ private val LineSpacing = 4.dp
 private val BlockPadding = 16.dp
 private val ActionSpacing = 8.dp
 private val MinTouchTarget = 48.dp
+private val IntercalaryIconSpacing = 4.dp
 
 /**
  * The converter (docs/FEATURES.md D1, D2, D4): collects [ConverterViewModel.uiState] with the lifecycle
@@ -162,6 +177,10 @@ fun ConverterScreen(
                         TextButton(onClick = onResetToToday) { Text(stringResource(R.string.converter_today)) }
                     }
                 },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -227,34 +246,59 @@ private fun LoadedContent(
     }
 }
 
-/** FEATURES D1: the two directions as one single-choice segmented row. */
+/**
+ * FEATURES D1: the two directions as one single-choice segmented row, plus a swap icon button beside
+ * it (docs/design-plan.md §4.6) that flips [direction] the same way tapping the other segment does —
+ * the review found the previous glyph read as "refresh" rather than "swap" (ROADMAP R5).
+ */
 @Composable
 private fun DirectionSwitch(
     direction: ConversionDirection,
     onDirectionChange: (ConversionDirection) -> Unit,
 ) {
     SectionHeading(stringResource(R.string.converter_direction_heading))
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        ConversionDirection.entries.forEachIndexed { index, option ->
-            SegmentedButton(
-                selected = direction == option,
-                onClick = { onDirectionChange(option) },
-                shape = SegmentedButtonDefaults.itemShape(index = index, count = ConversionDirection.entries.size),
-                modifier = Modifier.heightIn(min = MinTouchTarget),
-            ) {
-                Text(
-                    text =
-                        stringResource(
-                            when (option) {
-                                ConversionDirection.GREGORIAN_TO_IFC -> R.string.converter_direction_gregorian_to_ifc
-                                ConversionDirection.IFC_TO_GREGORIAN -> R.string.converter_direction_ifc_to_gregorian
-                            },
-                        ),
-                )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(ActionSpacing),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
+            ConversionDirection.entries.forEachIndexed { index, option ->
+                SegmentedButton(
+                    selected = direction == option,
+                    onClick = { onDirectionChange(option) },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = ConversionDirection.entries.size),
+                    modifier = Modifier.heightIn(min = MinTouchTarget),
+                ) {
+                    Text(text = stringResource(option.labelRes()))
+                }
             }
+        }
+        IconButton(
+            onClick = { onDirectionChange(direction.opposite()) },
+            modifier = Modifier.size(MinTouchTarget),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_swap),
+                contentDescription = stringResource(R.string.converter_swap_direction),
+            )
         }
     }
 }
+
+/** The segmented button's label for this direction. */
+private fun ConversionDirection.labelRes(): Int =
+    when (this) {
+        ConversionDirection.GREGORIAN_TO_IFC -> R.string.converter_direction_gregorian_to_ifc
+        ConversionDirection.IFC_TO_GREGORIAN -> R.string.converter_direction_ifc_to_gregorian
+    }
+
+/** The other direction — swapping shows the same result the user would get by tapping that segment. */
+private fun ConversionDirection.opposite(): ConversionDirection =
+    when (this) {
+        ConversionDirection.GREGORIAN_TO_IFC -> ConversionDirection.IFC_TO_GREGORIAN
+        ConversionDirection.IFC_TO_GREGORIAN -> ConversionDirection.GREGORIAN_TO_IFC
+    }
 
 /** The Gregorian input: a button showing the date, which opens the Material picker (1583..9999). */
 @Composable
@@ -318,12 +362,16 @@ private fun InvalidResult() {
 }
 
 /**
- * Both dates, the converted one first and larger; the numeric form with its `IFC` prefix; the weekday
- * block; day and week; the proleptic note; the actions. **Copy and Share send the identical text**,
- * built from `R.string.converter_share_text` as `IFC {ifcLong} ({numeric}) = Gregorian {gregorianLong}`
- * — e.g. `IFC September 8, 2026 (IFC 2026-10-08) = Gregorian Thursday, September 17, 2026` — so the
- * shared text always carries the `IFC` marker and the Gregorian date (CLAUDE.md rule 5) before it
- * reaches [copyConversion] or [shareConversion].
+ * The result card (docs/design-plan.md §4.6): a `YearalTheme.colors.heroContainer` card, the same
+ * component as the Today hero, "so the answer looks like an answer". Inside it: the intercalary icon on Year Day
+ * and Leap Day, both dates as eyebrow-labelled ("IFC" / "Gregorian") pairs with the converted one shown
+ * larger, the numeric form with its `IFC` prefix, the weekday block (its sage container kept) and day
+ * and week. The proleptic note and the actions sit below the card. **Copy and Share send the identical
+ * text**, built from `R.string.converter_share_text` as
+ * `IFC {ifcLong} ({numeric}) = Gregorian {gregorianLong}` — e.g. `IFC September 8, 2026
+ * (IFC 2026-10-08) = Gregorian Thursday, September 17, 2026` — so the shared text always carries the
+ * `IFC` marker and the Gregorian date (CLAUDE.md rule 5) before it reaches [copyConversion] or
+ * [shareConversion].
  */
 @Composable
 private fun ConvertedResult(
@@ -333,26 +381,36 @@ private fun ConvertedResult(
     onShare: (String) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
 ) {
-    val ifcLine = stringResource(R.string.converter_result_ifc, result.ifcLong)
-    val gregorianLine = stringResource(R.string.converter_result_gregorian, result.gregorianLong)
-    val (answer, question) =
-        when (direction) {
-            ConversionDirection.GREGORIAN_TO_IFC -> ifcLine to gregorianLine
-            ConversionDirection.IFC_TO_GREGORIAN -> gregorianLine to ifcLine
-        }
     val shareText = stringResource(R.string.converter_share_text, result.ifcLong, result.numeric, result.gregorianLong)
 
-    Column(verticalArrangement = Arrangement.spacedBy(LineSpacing)) {
-        Text(text = answer, style = MaterialTheme.typography.headlineSmall)
-        Text(text = question, style = MaterialTheme.typography.titleMedium)
-        Text(
-            text = result.numeric,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    Surface(
+        color = YearalTheme.colors.heroContainer,
+        contentColor = YearalTheme.colors.onHero,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(Dimens.SpaceL),
+            verticalArrangement = Arrangement.spacedBy(Dimens.SpaceM),
+        ) {
+            // The answer (what the direction converted to) sits first and larger; the restated input
+            // follows, smaller — the same order the plain-text lines used before this card existed, so
+            // a newcomer always sees the answer first regardless of which calendar they typed into.
+            when (direction) {
+                ConversionDirection.GREGORIAN_TO_IFC -> {
+                    IfcField(result, emphasized = true)
+                    GregorianField(result, emphasized = false)
+                }
+
+                ConversionDirection.IFC_TO_GREGORIAN -> {
+                    GregorianField(result, emphasized = true)
+                    IfcField(result, emphasized = false)
+                }
+            }
+            WeekdayBlock(result)
+            Text(text = result.dayAndWeek, style = MaterialTheme.typography.bodyLarge)
+        }
     }
-    WeekdayBlock(result)
-    Text(text = result.dayAndWeek, style = MaterialTheme.typography.bodyLarge)
     if (result.showProlepticNote) {
         Text(
             text = stringResource(R.string.converter_proleptic_note),
@@ -365,29 +423,126 @@ private fun ConvertedResult(
         horizontalArrangement = Arrangement.spacedBy(ActionSpacing),
     ) {
         Button(onClick = { onCopy(shareText) }, modifier = Modifier.heightIn(min = MinTouchTarget)) {
+            Icon(
+                painter = painterResource(R.drawable.ic_copy),
+                contentDescription = null,
+                modifier = Modifier.size(ButtonDefaults.IconSize),
+            )
+            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
             Text(stringResource(R.string.converter_copy))
         }
         Button(onClick = { onShare(shareText) }, modifier = Modifier.heightIn(min = MinTouchTarget)) {
+            Icon(
+                imageVector = Icons.Filled.Share,
+                contentDescription = null,
+                modifier = Modifier.size(ButtonDefaults.IconSize),
+            )
+            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
             Text(stringResource(R.string.converter_share))
         }
         OutlinedButton(
             onClick = { onOpenDay(result.gregorianDate) },
             modifier = Modifier.heightIn(min = MinTouchTarget),
         ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_open),
+                contentDescription = null,
+                modifier = Modifier.size(ButtonDefaults.IconSize),
+            )
+            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
             Text(stringResource(R.string.converter_open_day))
         }
     }
 }
 
 /**
+ * The IFC side of the result card: the intercalary icon on Year Day and Leap Day, the "IFC" eyebrow and
+ * [ConversionResult.Converted.ifcLong], then the numeric `IFC` form — the numeric line travels with this
+ * field, not with the card as a whole, so it stays adjacent to the value it restates when [IfcField] and
+ * [GregorianField] swap order by direction.
+ */
+@Composable
+private fun IfcField(
+    result: ConversionResult.Converted,
+    emphasized: Boolean,
+) {
+    Column {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(IntercalaryIconSpacing),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (result.date.isIntercalary) {
+                Icon(
+                    painter = painterResource(DesignSystemR.drawable.ic_intercalary),
+                    contentDescription = null,
+                    tint = YearalTheme.colors.intercalary,
+                )
+            }
+            ResultField(
+                eyebrow = stringResource(R.string.converter_eyebrow_ifc),
+                value = result.ifcLong,
+                description = stringResource(R.string.converter_result_ifc, result.ifcLong),
+                emphasized = emphasized,
+            )
+        }
+        Text(text = result.numeric, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** The Gregorian side of the result card: the "Gregorian" eyebrow and [ConversionResult.Converted.gregorianLong]. */
+@Composable
+private fun GregorianField(
+    result: ConversionResult.Converted,
+    emphasized: Boolean,
+) {
+    ResultField(
+        eyebrow = stringResource(R.string.converter_eyebrow_gregorian),
+        value = result.gregorianLong,
+        description = stringResource(R.string.converter_result_gregorian, result.gregorianLong),
+        emphasized = emphasized,
+    )
+}
+
+/**
+ * One eyebrow-labelled value in the result card (docs/design-plan.md §3.1 "Typography", §4.6): a small
+ * uppercase caption ("IFC", "Gregorian") naming the calendar, then the date — larger
+ * ([MaterialTheme.typography.headlineSmall]) when [emphasized] (the direction's answer), smaller
+ * ([MaterialTheme.typography.titleMedium]) otherwise (the input restated). The pair merges into one
+ * semantics node carrying [description] ("IFC: September 8, 2026"), the same wording the plain text
+ * line used before this card existed, so a screen reader still hears the eyebrow and the value as one
+ * fact rather than two.
+ */
+@Composable
+private fun ResultField(
+    eyebrow: String,
+    value: String,
+    description: String,
+    emphasized: Boolean,
+) {
+    val locale = LocalLocale.current.platformLocale
+    Column(
+        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = description },
+    ) {
+        Text(text = eyebrow.uppercase(locale), style = MaterialTheme.typography.labelSmall)
+        Text(
+            text = value,
+            style = if (emphasized) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium,
+        )
+    }
+}
+
+/**
  * Both weekdays, each line labelled by the formatter (spec §4.1 item 4) and merged into one spoken
  * description, "IFC Sunday, actual Thursday" (§4.1 item 7), so neither can be mistaken for the other.
+ * The sage container is [YearalTheme]'s weekday-nominal token pair rather than a raw Material role, so
+ * it stays in step with the rest of the app's "IFC weekday" surfaces (docs/design-plan.md §4.6); the
+ * actual-weekday line keeps its own, still-legible token instead of a plain grey (design-plan §4.8).
  */
 @Composable
 private fun WeekdayBlock(result: ConversionResult.Converted) {
     Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        color = YearalTheme.colors.weekdayNominalContainer,
+        contentColor = YearalTheme.colors.onWeekdayNominalContainer,
         shape = MaterialTheme.shapes.medium,
         modifier =
             Modifier
@@ -399,7 +554,11 @@ private fun WeekdayBlock(result: ConversionResult.Converted) {
             verticalArrangement = Arrangement.spacedBy(LineSpacing),
         ) {
             Text(text = result.nominalWeekday, style = MaterialTheme.typography.bodyLarge)
-            Text(text = result.actualWeekday, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = result.actualWeekday,
+                style = MaterialTheme.typography.bodyLarge,
+                color = YearalTheme.colors.weekdayActualText,
+            )
         }
     }
 }
@@ -436,6 +595,8 @@ internal fun ConverterLeapDayPreview() {
 
 /** Year Day 1900 → Gregorian Monday, December 31, 1900, with the proleptic note. */
 @Preview(name = "Year Day with proleptic note", showBackground = true)
+@Preview(name = "Year Day, dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "Year Day, font 2.0", showBackground = true, heightDp = 1400, fontScale = 2f)
 @Composable
 internal fun ConverterYearDayPreview() {
     ConverterPreview(ConversionDirection.GREGORIAN_TO_IFC, LocalDate.of(1900, 12, 31))

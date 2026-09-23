@@ -3,23 +3,25 @@ package io.github.chrisjmendoza.yearal.feature.events.list
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -27,8 +29,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -37,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
@@ -45,8 +50,11 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.currentWindowWidthClass
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCalendar
+import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
 import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
@@ -56,10 +64,11 @@ import io.github.chrisjmendoza.yearal.feature.events.editor.rememberEventEditorS
 
 private val RowMinHeight = 48.dp
 private val ScreenPadding = 16.dp
-private val RowSpacing = 4.dp
-private val SwatchSize = 16.dp
-private val RowContentSpacing = 12.dp
-private val SectionSpacing = 8.dp
+private val RowSpacing = Dimens.SpaceXs
+private val LeadingBarWidth = Dimens.SpaceXs
+private val SectionSpacing = Dimens.SpaceS
+private val ChipSpacing = Dimens.SpaceS
+private val EmptyStateIconSize = 48.dp
 
 /**
  * The events list (`EventListKey`, `docs/FEATURES.md` E1, E3, E5–E7, E9; docs/ARCHITECTURE.md §4
@@ -151,8 +160,10 @@ private fun EventListSelection.editorViewModelKey(): String? =
 
 /**
  * The stateless events list — the unit for previews and Compose tests. A search field, then either an
- * empty state or the rows: title (a placeholder when blank), both dates, time or "all day", a
- * recurrence summary and a "hidden calendar" note, each tappable to edit; a FAB creates a new event.
+ * empty state or the rows grouped under IFC month headers (`docs/design-plan.md` §4.5, §8 decision 5):
+ * a 4dp leading bar in the row's resolved colour, the title, one combined date line (IFC day · short
+ * Gregorian date), the time or "all day", a recurrence chip and a category chip (`EventCategory.EVENT`
+ * gets none), and a "hidden calendar" note; each row is tappable to edit. A FAB creates a new event.
  *
  * @param onQueryChange receives the search field's text after every edit.
  * @param onAddEvent the FAB's action.
@@ -170,7 +181,15 @@ fun EventListScreen(
     val addDescription = stringResource(R.string.events_add)
     Scaffold(
         modifier = modifier,
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.events_list_title)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.events_list_title)) },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddEvent,
@@ -194,13 +213,27 @@ fun EventListScreen(
                     if (state.items.isEmpty()) {
                         EmptyState(hasAnyEvents = state.hasAnyEvents, hasQuery = state.query.isNotBlank())
                     } else {
+                        // Grouped under IFC month headers (docs/design-plan.md §4.5, §8 decision 5): the
+                        // items are already sorted by start date, so a header is inserted every time
+                        // monthHeaderKey changes as the list is walked once. `stickyHeader` would need
+                        // `ExperimentalFoundationApi` in this foundation version, so these are plain
+                        // header items instead (the task's documented fallback).
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(state.items, key = EventListItem::eventId) { item ->
-                                EventRow(
-                                    item = item,
-                                    showCalendarName = state.showCalendarNames,
-                                    onClick = { onOpenEvent(item.eventId) },
-                                )
+                            var previousHeaderKey: String? = null
+                            for (item in state.items) {
+                                if (item.monthHeaderKey != previousHeaderKey) {
+                                    item(key = "header-${item.monthHeaderKey}") {
+                                        MonthHeader(text = item.monthHeaderLabel)
+                                    }
+                                    previousHeaderKey = item.monthHeaderKey
+                                }
+                                item(key = item.eventId) {
+                                    EventRow(
+                                        item = item,
+                                        showCalendarName = state.showCalendarNames,
+                                        onClick = { onOpenEvent(item.eventId) },
+                                    )
+                                }
                             }
                         }
                     }
@@ -243,13 +276,38 @@ private fun EmptyState(
         } else {
             stringResource(R.string.events_empty_no_events)
         }
-    Box(modifier = Modifier.fillMaxSize().padding(ScreenPadding), contentAlignment = Alignment.Center) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(ScreenPadding),
+        verticalArrangement = Arrangement.spacedBy(SectionSpacing, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            Icons.Filled.DateRange,
+            contentDescription = null,
+            modifier = Modifier.height(EmptyStateIconSize),
+            tint = MaterialTheme.colorScheme.primary,
+        )
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/** A section header naming the IFC month (or intercalary day) the rows below it belong to. */
+@Composable
+private fun MonthHeader(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = ScreenPadding, vertical = SectionSpacing)
+                .semantics { heading() },
+    )
 }
 
 @Composable
@@ -269,9 +327,20 @@ private fun EventRow(
             else -> item.timeLabel.orEmpty()
         }
     val recurrenceText = item.recurrenceSummary?.let { recurrenceSummaryText(it) }
+    val categoryText = if (item.category != EventCategory.EVENT) categoryChipText(item.category) else null
     val hiddenCalendarText = stringResource(R.string.events_calendar_hidden)
+    val gregorianShort =
+        stringResource(R.string.events_row_date_gregorian_short, item.gregorianWeekdayShort, item.gregorianDayLabel)
+    val dateLine = stringResource(R.string.events_row_date_line, item.ifcDayLabel, gregorianShort)
     val rowDescription =
-        stringResource(R.string.events_row_description, title, item.ifcLong, item.gregorianLong, timeText)
+        stringResource(
+            R.string.events_row_description,
+            title,
+            item.ifcLong,
+            item.ifcNumeric,
+            item.gregorianLong,
+            timeText,
+        )
     val description =
         buildString {
             append(rowDescription)
@@ -279,55 +348,79 @@ private fun EventRow(
                 append(' ')
                 append(recurrenceText)
             }
+            if (categoryText != null) {
+                append(' ')
+                append(categoryText)
+            }
             if (item.calendarHidden) {
                 append(' ')
                 append(hiddenCalendarText)
             }
         }
-    Row(
+    Surface(
+        onClick = onClick,
         modifier =
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = RowMinHeight)
-                .clickable(onClick = onClick)
                 .semantics(mergeDescendants = true) {
                     role = Role.Button
                     contentDescription = description
-                }.padding(horizontal = ScreenPadding, vertical = SectionSpacing),
-        horizontalArrangement = Arrangement.spacedBy(RowContentSpacing),
+                },
+        shape = MaterialTheme.shapes.medium,
+        color = YearalTheme.colors.cardContainer,
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(SwatchSize)
-                    .background(color = Color(item.calendarColorArgb), shape = CircleShape),
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(RowSpacing)) {
-            Text(text = title, style = MaterialTheme.typography.titleMedium)
-            if (showCalendarName) {
-                Text(text = calendarName, style = MaterialTheme.typography.bodySmall)
-            }
-            Text(text = item.ifcLong, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                text = item.ifcNumeric,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxHeight()
+                        .width(LeadingBarWidth)
+                        .background(color = Color(item.calendarColorArgb)),
             )
-            Text(text = item.gregorianLong, style = MaterialTheme.typography.bodyMedium)
-            Text(text = timeText, style = MaterialTheme.typography.bodyMedium)
-            if (recurrenceText != null) {
-                Text(text = recurrenceText, style = MaterialTheme.typography.bodySmall)
-            }
-            if (item.calendarHidden) {
-                Text(
-                    text = hiddenCalendarText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(horizontal = ScreenPadding, vertical = SectionSpacing),
+                verticalArrangement = Arrangement.spacedBy(RowSpacing),
+            ) {
+                Text(text = title, style = MaterialTheme.typography.titleMedium)
+                if (showCalendarName) {
+                    Text(text = calendarName, style = MaterialTheme.typography.bodySmall)
+                }
+                Text(text = dateLine, style = MaterialTheme.typography.bodyMedium)
+                Text(text = timeText, style = MaterialTheme.typography.bodyMedium)
+                if (recurrenceText != null || categoryText != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(ChipSpacing)) {
+                        if (recurrenceText != null) {
+                            AssistChip(onClick = {}, label = { Text(recurrenceText) })
+                        }
+                        if (categoryText != null) {
+                            AssistChip(onClick = {}, label = { Text(categoryText) })
+                        }
+                    }
+                }
+                if (item.calendarHidden) {
+                    Text(
+                        text = hiddenCalendarText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
         }
     }
 }
+
+/** Turns an [EventCategory] other than [EventCategory.EVENT] into its chip label. */
+@Composable
+private fun categoryChipText(category: EventCategory): String =
+    when (category) {
+        EventCategory.EVENT -> error("EventCategory.EVENT never gets a chip")
+        EventCategory.OBSERVANCE -> stringResource(R.string.events_category_observance)
+        EventCategory.BIRTHDAY -> stringResource(R.string.events_category_birthday)
+    }
 
 /** Turns a [RecurrenceSummary] into localized text — the only place that maps its branches to strings. */
 @Composable
@@ -383,7 +476,14 @@ private val previewItems =
             timeLabel = null,
             zoneLabel = null,
             recurrenceSummary = RecurrenceSummary.YearlyIfc("Sol 13"),
+            category = EventCategory.EVENT,
+            ifcDayLabel = "Sol 13",
+            gregorianWeekdayShort = "Tue",
+            gregorianDayLabel = "Jun 30",
+            monthHeaderKey = "2026-7",
+            monthHeaderLabel = "Sol 2026",
         ),
+        // A Year Day event, an OBSERVANCE (its own chip), under its own header, distinct from December's.
         EventListItem(
             eventId = 2,
             title = "",
@@ -397,6 +497,12 @@ private val previewItems =
             timeLabel = "9:30 AM",
             zoneLabel = "America/New_York",
             recurrenceSummary = null,
+            category = EventCategory.OBSERVANCE,
+            ifcDayLabel = "Year Day",
+            gregorianWeekdayShort = "Thu",
+            gregorianDayLabel = "Dec 31",
+            monthHeaderKey = "2026-YEAR_DAY",
+            monthHeaderLabel = "Year Day, 2026",
         ),
     )
 

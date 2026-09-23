@@ -1,10 +1,12 @@
 package io.github.chrisjmendoza.yearal.feature.settings.settings
 
 import app.cash.turbine.test
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorPalette
 import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
+import io.github.chrisjmendoza.yearal.core.domain.settings.WidgetTheme
 import io.github.chrisjmendoza.yearal.core.testing.EventFixtures
 import io.github.chrisjmendoza.yearal.core.testing.FakeEventRepository
 import io.github.chrisjmendoza.yearal.core.testing.FakeSettingsRepository
@@ -144,6 +146,102 @@ class SettingsViewModelTest {
                 awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.colorSource shouldBe
                     ColorSource.DYNAMIC
                 repository.current shouldBe UserSettings.DEFAULT.copy(colorSource = ColorSource.DYNAMIC)
+            }
+        }
+
+    @Test
+    fun `setPalette updates the repository and the state`() =
+        runTest(dispatcher) {
+            val repository = FakeSettingsRepository()
+            val viewModel = viewModel(repository)
+            viewModel.uiState.test {
+                awaitItem() shouldBe SettingsUiState.Loading
+                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.palette shouldBe
+                    ColorPalette.TEAL
+
+                viewModel.setPalette(ColorPalette.NIGHT)
+
+                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.palette shouldBe
+                    ColorPalette.NIGHT
+                repository.current shouldBe UserSettings.DEFAULT.copy(palette = ColorPalette.NIGHT)
+            }
+        }
+
+    @Test
+    fun `setPureBlack updates the repository and the state`() =
+        runTest(dispatcher) {
+            val repository = FakeSettingsRepository()
+            val viewModel = viewModel(repository)
+            viewModel.uiState.test {
+                awaitItem() shouldBe SettingsUiState.Loading
+                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.pureBlack shouldBe false
+
+                viewModel.setPureBlack(true)
+
+                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.pureBlack shouldBe true
+                repository.current shouldBe UserSettings.DEFAULT.copy(pureBlack = true)
+            }
+        }
+
+    @Test
+    fun `setTodayWidgetTheme and setMonthWidgetTheme update the repository independently`() =
+        runTest(dispatcher) {
+            val repository = FakeSettingsRepository()
+            val viewModel = viewModel(repository)
+            viewModel.uiState.test {
+                awaitItem() shouldBe SettingsUiState.Loading
+                awaitItem()
+
+                viewModel.setTodayWidgetTheme(WidgetTheme.DARK)
+                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.todayWidgetTheme shouldBe
+                    WidgetTheme.DARK
+
+                viewModel.setMonthWidgetTheme(WidgetTheme.LIGHT)
+                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.monthWidgetTheme shouldBe
+                    WidgetTheme.LIGHT
+            }
+            repository.current shouldBe
+                UserSettings.DEFAULT.copy(
+                    todayWidgetTheme = WidgetTheme.DARK,
+                    monthWidgetTheme = WidgetTheme.LIGHT,
+                )
+        }
+
+    @Test
+    fun `setWidgetBackgroundOpacity updates the repository and the state`() =
+        runTest(dispatcher) {
+            val repository = FakeSettingsRepository()
+            val viewModel = viewModel(repository)
+            viewModel.uiState.test {
+                awaitItem() shouldBe SettingsUiState.Loading
+                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.widgetBackgroundOpacity shouldBe
+                    100
+
+                viewModel.setWidgetBackgroundOpacity(45)
+
+                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.widgetBackgroundOpacity shouldBe
+                    45
+                repository.current shouldBe UserSettings.DEFAULT.copy(widgetBackgroundOpacity = 45)
+            }
+        }
+
+    @Test
+    fun `setWidgetBackgroundOpacity coerces an out-of-range value into the 0 to 100 range`() =
+        runTest(dispatcher) {
+            // Starts from 50, not the 100 default, so each coerced write below is a genuinely new value
+            // — otherwise a write that coerces back to the value already stored would emit nothing.
+            val repository = FakeSettingsRepository(UserSettings(widgetBackgroundOpacity = 50))
+            val viewModel = viewModel(repository)
+            viewModel.uiState.test {
+                awaitItem() shouldBe SettingsUiState.Loading
+                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.widgetBackgroundOpacity shouldBe 50
+
+                viewModel.setWidgetBackgroundOpacity(150)
+                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.widgetBackgroundOpacity shouldBe
+                    100
+
+                viewModel.setWidgetBackgroundOpacity(-5)
+                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.widgetBackgroundOpacity shouldBe 0
             }
         }
 

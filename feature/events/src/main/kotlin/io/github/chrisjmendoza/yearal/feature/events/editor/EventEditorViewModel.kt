@@ -12,6 +12,7 @@ import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.domain.DateTicker
 import io.github.chrisjmendoza.yearal.core.domain.ZoneProvider
 import io.github.chrisjmendoza.yearal.core.domain.event.Event
+import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.EventRepository
 import io.github.chrisjmendoza.yearal.core.domain.event.EventUidGenerator
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
@@ -189,6 +190,16 @@ class EventEditorViewModel
 
         /** Chooses the common-year Leap Day policy (FEATURES E6); only meaningful on a Leap Day anchor. */
         fun setLeapDayPolicy(policy: LeapDayPolicy) = update { it.copy(leapDayPolicy = policy) }
+
+        /**
+         * Sets the event's own colour (`docs/design-plan.md` §5.4), or `null` for the "Calendar
+         * colour" swatch — the event then shows the calendar's own colour, resolved by the list and
+         * agenda screens exactly as it already does for every event with no colour of its own.
+         */
+        fun setColor(colorArgb: Int?) = update { it.copy(colorArgb = colorArgb) }
+
+        /** Chooses what kind of entry this is (`docs/design-plan.md` §5.4). */
+        fun setCategory(category: EventCategory) = update { it.copy(category = category) }
 
         /** Chooses never / until / count as the recurrence end. */
         fun setRecurrenceEndKind(kind: RecurrenceEndKind) = update { it.copy(recurrenceEndKind = kind) }
@@ -455,6 +466,8 @@ internal fun buildEventEditorUiState(
         showRecurrenceResetNotice = flags.recurrenceResetNotice,
         yearlyIfcGregorianShifts = yearlyIfcGregorianShifts(startDate),
         yearlyGregorianIfcShifts = yearlyGregorianIfcShifts(startDate),
+        colorArgb = draft.colorArgb,
+        category = draft.category,
     )
 }
 
@@ -506,6 +519,8 @@ private const val KEY_RECURRENCE_END_KIND = "events.editor.recurrenceEndKind"
 private const val KEY_UNTIL_DATE = "events.editor.untilDate"
 private const val KEY_COUNT = "events.editor.count"
 private const val KEY_REMINDERS = "events.editor.reminders"
+private const val KEY_COLOR_ARGB = "events.editor.colorArgb"
+private const val KEY_CATEGORY = "events.editor.category"
 
 // Not part of EventDraft.saveTo/restoreDraft: draftUid is drawn once, outside the field-by-field form
 // dump, and recurrenceResetNotice is an EditorFlags value (ROADMAP R2, R3).
@@ -529,6 +544,8 @@ private fun EventDraft.saveTo(handle: SavedStateHandle) {
     handle[KEY_UNTIL_DATE] = untilDate?.toEpochDay()
     handle[KEY_COUNT] = count
     handle[KEY_REMINDERS] = reminders.joinToString(separator = ",")
+    handle[KEY_COLOR_ARGB] = colorArgb
+    handle[KEY_CATEGORY] = category.name
 }
 
 /** Rebuilds a draft from saved primitives, or `null` if nothing was saved yet. Every part is re-validated. */
@@ -567,5 +584,9 @@ private fun restoreDraft(handle: SavedStateHandle): EventDraft? {
                 .split(",")
                 .mapNotNull { it.toIntOrNull() }
                 .toSet(),
+        colorArgb = handle.get<Int>(KEY_COLOR_ARGB),
+        category =
+            EventCategory.entries.firstOrNull { it.name == handle.get<String>(KEY_CATEGORY) }
+                ?: EventCategory.EVENT,
     )
 }

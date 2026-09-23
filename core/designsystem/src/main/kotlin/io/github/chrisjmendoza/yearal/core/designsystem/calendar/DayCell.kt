@@ -14,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -23,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
 import java.time.LocalDate
 
 /** Minimum touch target of a day cell (docs/ARCHITECTURE.md §4 "Accessibility"). See [Dimens.DayCellMinSize]. */
@@ -41,6 +41,21 @@ private val CellPadding = Dimens.CellPadding
  * month small in the top corner (the "dual date in every cell" pattern), then the holiday marker and
  * up to [MAX_EVENT_DOTS] event dots. Today is marked by a ring, selection by a filled container —
  * shape and colour, never colour alone.
+ *
+ * Every cell now carries a fill (`docs/design-plan.md` §3.1/§4.2 "Cells get a fill"), so the grid
+ * stops being ink on paper: an unselected, unmarked cell fills with
+ * [YearalTheme.colors]`.gridCell`; a cell carrying any event or holiday mark steps up to
+ * `.gridCellMarked` so colour, shape and fill all say "something is here"; a selected cell keeps
+ * Material's `primaryContainer`/`onPrimaryContainer` regardless of marks, since selection is the
+ * strongest state. The ring around today's cell uses `.todayRing`
+ * (asserted against `.gridCell`/`.gridCellWeekend` by
+ * [io.github.chrisjmendoza.yearal.core.designsystem.theme.ColorSchemeContrastTest]), and today's own
+ * number uses `.todayText` unless the cell is also selected, in which case the selected pairing wins.
+ * **Deliberately unused here:** `YearalColors.gridCellWeekend`. Tinting the IFC week's nominal
+ * Saturday/Sunday columns would visually assert a "weekend" that is not the real one — CLAUDE.md
+ * rule 3 forbids deriving anything user-facing from the nominal weekday alone, and a shaded column
+ * pair reads exactly like a weekend claim. The token stays declared (other components may find a use
+ * for it later) but this grid does not draw it.
  *
  * Semantics: one merged node with `Role.Button`, the `selected` state and the content description
  * from `IfcDateFormatter.dayDescription` (`Sol 13, IFC Friday. Gregorian Tuesday, June 30, 2026.
@@ -73,9 +88,17 @@ fun DayCell(
 ) {
     val formatter = rememberIfcDateFormatter()
     val colors = MaterialTheme.colorScheme
+    val yearalColors = YearalTheme.colors
     val shape = MaterialTheme.shapes.small
-    val containerColor = if (isSelected) colors.primaryContainer else Color.Transparent
+    val hasMark = eventCount > 0 || holidayName != null
+    val containerColor =
+        when {
+            isSelected -> colors.primaryContainer
+            hasMark -> yearalColors.gridCellMarked
+            else -> yearalColors.gridCell
+        }
     val contentColor = if (isSelected) colors.onPrimaryContainer else colors.onSurface
+    val numberColor = if (!isSelected && isToday) yearalColors.todayText else contentColor
     val secondaryColor = if (isSelected) colors.onPrimaryContainer else colors.onSurfaceVariant
     val description = formatter.dayDescription(date, isToday, eventCount, holidayName)
 
@@ -94,7 +117,7 @@ fun DayCell(
                 modifier =
                     Modifier
                         .matchParentSize()
-                        .border(TodayRingWidth, colors.primary, shape)
+                        .border(TodayRingWidth, yearalColors.todayRing, shape)
                         .testTag(MonthGridTestTags.TODAY_RING),
             )
         }
@@ -113,7 +136,7 @@ fun DayCell(
                 text = formatter.formatNumber(date.dayOfMonth),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = if (isToday) FontWeight.Bold else null,
-                color = contentColor,
+                color = numberColor,
                 maxLines = 1,
             )
             DayMarks(eventCount = eventCount, hasHoliday = holidayName != null)

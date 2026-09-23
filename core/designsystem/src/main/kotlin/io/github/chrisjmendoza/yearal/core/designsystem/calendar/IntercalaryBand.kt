@@ -35,6 +35,7 @@ import io.github.chrisjmendoza.yearal.core.designsystem.R
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.PillShape
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
 
 // Values live in Dimens (docs/design-plan.md §3.1).
 private val BandVerticalPadding = Dimens.SpaceS
@@ -52,8 +53,9 @@ private const val SUBTITLE_MAX_LINES = 2
  * It is a first-class selectable day: the same today ring and selected fill as [DayCell], the same
  * marks, `Role.Button`, the `selected` state and a content description from
  * `IfcDateFormatter.dayDescription` (`Year Day, no IFC weekday. Gregorian Thursday, December 31,
- * 2026.`). It shows the tertiary-container colour plus an icon, the label ("Leap Day" / "Year Day"),
- * the Gregorian date and the real weekday with the "no IFC weekday" note (spec §4.1 item 5).
+ * 2026.`). It shows [YearalTheme.colors]`.intercalaryContainer` plus an icon, the label ("Leap Day" /
+ * "Year Day"), the Gregorian date and the real weekday with the "no IFC weekday" note (spec §4.1
+ * item 5).
  *
  * The band is at least [intercalarySlotHeight] tall, the same minimum as [IntercalaryPlaceholder],
  * so the month pager never changes height between months.
@@ -80,9 +82,10 @@ fun IntercalaryBand(
     require(day.isIntercalary) { "IntercalaryBand takes Leap Day or Year Day, not $day" }
     val formatter = rememberIfcDateFormatter()
     val colors = MaterialTheme.colorScheme
+    val yearalColors = YearalTheme.colors
     val shape = PillShape
-    val containerColor = if (isSelected) colors.primaryContainer else colors.tertiaryContainer
-    val contentColor = if (isSelected) colors.onPrimaryContainer else colors.onTertiaryContainer
+    val containerColor = if (isSelected) colors.primaryContainer else yearalColors.intercalaryContainer
+    val contentColor = if (isSelected) colors.onPrimaryContainer else yearalColors.onIntercalaryContainer
     val description = formatter.dayDescription(day, isToday, eventCount, holidayName)
 
     Box(
@@ -103,7 +106,7 @@ fun IntercalaryBand(
                 modifier =
                     Modifier
                         .matchParentSize()
-                        .border(TodayRingWidth, colors.primary, shape)
+                        .border(TodayRingWidth, yearalColors.todayRing, shape)
                         .testTag(MonthGridTestTags.TODAY_RING),
             )
         }
@@ -145,6 +148,11 @@ fun IntercalaryBand(
  * reserves exactly the band's vertical space, [intercalarySlotHeight], so paging between months never
  * moves the grid (spec §7.2). Not interactive and not a day; it has no button semantics.
  *
+ * It is drawn as a quiet pill on `surfaceContainer` with `onSurfaceVariant` text (design-plan §4.2
+ * "the eleven ordinary months"), the same [PillShape] silhouette as [IntercalaryBand] but unfilled of
+ * meaning, so all thirteen months share one shape and the amber band no longer reads as a mistake in
+ * the two months that have one.
+ *
  * @param month the month whose span is shown.
  * @param modifier applied to the placeholder; it fills the available width itself.
  */
@@ -160,6 +168,8 @@ fun IntercalaryPlaceholder(
                 .padding(vertical = BandGap)
                 .fillMaxWidth()
                 .heightIn(min = intercalarySlotHeight())
+                .clip(PillShape)
+                .background(MaterialTheme.colorScheme.surfaceContainer)
                 .testTag(MonthGridTestTags.INTERCALARY_PLACEHOLDER),
         contentAlignment = Alignment.Center,
     ) {

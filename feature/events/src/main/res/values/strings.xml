@@ -31,10 +31,21 @@
     <string name="events_all_day">All day</string>
     <!-- A timed row's start time with its fixed zone. %1$s = the time (e.g. "9:30 AM"), %2$s = the zone id. -->
     <string name="events_time_with_zone">%1$s (%2$s)</string>
-    <!-- Merged accessibility description of a row, spoken in order title, IFC date, Gregorian date, time.
-         %1$s = title (already placeholder-resolved), %2$s = IFC long date, %3$s = Gregorian long date,
-         %4$s = time or "All day". -->
-    <string name="events_row_description">%1$s. IFC %2$s. Gregorian %3$s. %4$s.</string>
+    <!-- Merged accessibility description of a row, spoken in order title, IFC date (long and numeric,
+         CLAUDE.md rule 5: the numeric form always carries its "IFC" marker), Gregorian date, time.
+         %1$s = title (already placeholder-resolved), %2$s = IFC long date, %3$s = IFC numeric date
+         (already prefixed, e.g. "IFC 2026-07-13"), %4$s = Gregorian long date, %5$s = time or "All day". -->
+    <string name="events_row_description">%1$s. IFC %2$s, %3$s. Gregorian %4$s. %5$s.</string>
+    <!-- The row's single visible date line (docs/design-plan.md §4.5): %1$s = the IFC day named in its
+         month, no year (e.g. "Sol 12"), %2$s = the short Gregorian weekday and month/day (e.g. "Tue Jun 23"). -->
+    <string name="events_row_date_line">%1$s · %2$s</string>
+    <!-- The short Gregorian weekday and month/day combined. %1$s = short weekday (e.g. "Tue"), %2$s =
+         month and day, no year (e.g. "Jun 23"). -->
+    <string name="events_row_date_gregorian_short">%1$s %2$s</string>
+
+    <!-- Category chips (docs/design-plan.md §5.4): EventCategory.EVENT gets no chip. -->
+    <string name="events_category_observance">Observance</string>
+    <string name="events_category_birthday">Birthday</string>
 
     <!-- Recurrence summaries (a row's own text, and the editor's radio labels reuse the day text). -->
     <!-- %1$s = the IFC day named in its month, e.g. "Sol 13". -->
@@ -168,5 +179,28 @@
     <string name="events_editor_pick_gregorian">Gregorian calendar</string>
     <string name="events_editor_pick_ifc">International Fixed Calendar</string>
     <string name="events_editor_pick_time_title">Choose time</string>
+
+    <!-- Per-event colour (docs/design-plan.md §5.4): eight swatches, the eighth resets to the
+         calendar's own colour (Event.colorArgb null). -->
+    <string name="events_editor_color_heading">Colour</string>
+    <string name="events_editor_color_calendar">Calendar colour</string>
+    <string name="events_editor_color_teal">Teal</string>
+    <string name="events_editor_color_amber">Amber</string>
+    <string name="events_editor_color_indigo">Indigo</string>
+    <string name="events_editor_color_coral">Coral</string>
+    <string name="events_editor_color_moss">Moss</string>
+    <string name="events_editor_color_plum">Plum</string>
+    <string name="events_editor_color_slate">Slate</string>
+    <!-- Appended to a swatch's own name when it is the selected one. %1$s = the swatch name. -->
+    <string name="events_editor_color_swatch_selected">%1$s, selected</string>
+
+    <!-- Category (docs/design-plan.md §5.4): a three-way segmented control, Event / Observance / Birthday. -->
+    <string name="events_editor_category_heading">Category</string>
+    <string name="events_category_event">Event</string>
+
+    <!-- Validation error banner (docs/design-plan.md §4.5): wraps the existing per-field error text
+         (events_editor_end_before_start, events_editor_until_before_start) in an errorContainer surface
+         with a warning icon. -->
+    <string name="events_editor_error_icon_description">Error</string>
 
 </resources>

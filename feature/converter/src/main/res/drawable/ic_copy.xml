@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Copy action's leading icon (docs/design-plan.md §4.6): two overlapping sheets. Material's
+     "content copy" glyph lives only in material-icons-extended, which is deliberately not a dependency
+     here (docs/ARCHITECTURE.md §1 "Stack decisions" — see ic_convert.xml for the same reasoning), so
+     this is a small hand-drawn replacement. Tinted by the caller (Icon's tint), like ic_intercalary.xml. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Back sheet, offset up and to the left. -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M8,3h9a2,2 0,0 1,2 2v10h-2L17,5L8,5z" />
+    <!-- Front sheet with a plain border, drawn as a filled outline so it reads at 24dp. -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M5,7h9a2,2 0,0 1,2 2v10a2,2 0,0 1,-2 2h-9a2,2 0,0 1,-2 -2v-10a2,2 0,0 1,2 -2zM5,9v10h9v-10z" />
+</vector>

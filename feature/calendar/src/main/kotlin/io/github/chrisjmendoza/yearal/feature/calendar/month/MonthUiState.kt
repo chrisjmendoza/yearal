@@ -3,6 +3,7 @@ package io.github.chrisjmendoza.yearal.feature.calendar.month
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
+import io.github.chrisjmendoza.yearal.feature.calendar.agenda.AgendaItemUi
 import java.time.LocalDate
 
 /**
@@ -26,6 +27,11 @@ import java.time.LocalDate
  * @property eventCountsByMonth number of event occurrences per Gregorian date, keyed by month, for the
  * same warm pages as [holidaysByMonth] (FEATURES C4). A date with no event is absent (read as `0`); a
  * month not yet evaluated is absent entirely.
+ * @property summaryHolidays the enabled holidays of [selected] (or [today] when nothing is selected),
+ * in holiday-engine order (`docs/design-plan.md` §4.2, owner note 2: "the selected-day summary");
+ * empty before the first tick or when the day has none.
+ * @property summaryAgenda the event occurrences of the same day, all-day first then by start time;
+ * empty before the first tick or when the day has none.
  */
 data class MonthUiState(
     val currentPage: Int,
@@ -35,4 +41,9 @@ data class MonthUiState(
     val weekdayDisplay: WeekdayDisplay = UserSettings.DEFAULT.weekdayDisplay,
     val holidaysByMonth: Map<IfcYearMonth, Map<LocalDate, String>> = emptyMap(),
     val eventCountsByMonth: Map<IfcYearMonth, Map<LocalDate, Int>> = emptyMap(),
-)
+    val summaryHolidays: List<String> = emptyList(),
+    val summaryAgenda: List<AgendaItemUi> = emptyList(),
+) {
+    /** [selected], or [today] when nothing is selected — the day the summary below the grid shows. */
+    val summaryDate: LocalDate? get() = selected ?: today
+}

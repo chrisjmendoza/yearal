@@ -1,5 +1,6 @@
 package io.github.chrisjmendoza.yearal.feature.events.list
 
+import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
 
 /**
@@ -57,6 +58,20 @@ sealed interface EventListUiState {
  * all-day event.
  * @property zoneLabel the fixed zone id, or `null` when floating or all-day; shown next to [timeLabel].
  * @property recurrenceSummary how the event repeats, or `null` for a one-off event.
+ * @property category what kind of entry this is (`docs/design-plan.md` §5.4); [EventCategory.EVENT]
+ * gets no chip, [EventCategory.OBSERVANCE] and [EventCategory.BIRTHDAY] each get their own.
+ * @property ifcDayLabel the start date named within its month, no year (`Sol 12`, `Year Day`,
+ * `Leap Day`) — half of the row's single combined date line (`docs/design-plan.md` §4.5).
+ * @property gregorianWeekdayShort the start date's actual weekday, short style (`Tue`) — the other half
+ * of the combined date line, alongside [gregorianDayLabel].
+ * @property gregorianDayLabel the start date's Gregorian month and day, no year (`Jun 18`).
+ * @property monthHeaderKey a stable key, constant across every row of the same IFC month header
+ * (`docs/design-plan.md` §4.5, §8 decision 5: grouped by IFC month, not Gregorian) — distinct for Year
+ * Day and Leap Day so each intercalary day gets its own header rather than joining December or June.
+ * Consecutive rows sharing this key sit under one header; [items] is already in date order, so the
+ * screen only has to watch for the key changing as it walks the list.
+ * @property monthHeaderLabel the header's text: the month and year (`Sol 2026`) for a regular month, or
+ * the intercalary day's name and year (`Year Day, 2026`) for Year Day or Leap Day.
  */
 data class EventListItem(
     val eventId: Long,
@@ -71,6 +86,12 @@ data class EventListItem(
     val timeLabel: String?,
     val zoneLabel: String?,
     val recurrenceSummary: RecurrenceSummary?,
+    val category: EventCategory = EventCategory.EVENT,
+    val ifcDayLabel: String = ifcLong,
+    val gregorianWeekdayShort: String = "",
+    val gregorianDayLabel: String = gregorianLong,
+    val monthHeaderKey: String = "",
+    val monthHeaderLabel: String = "",
 )
 
 /**

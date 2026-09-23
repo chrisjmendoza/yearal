@@ -15,8 +15,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -119,6 +121,16 @@ class DayScreenTest {
         compose.onAllNodesWithText("Today").assertCountEquals(0)
     }
 
+    // docs/design-plan.md §4.4: Year Day and Leap Day get the intercalary header instead of the plain
+    // title row a regular day shows.
+
+    @Test
+    fun `Year Day shows the intercalary header, a regular day does not`() {
+        show(LocalDate.of(2026, 12, 31))
+
+        compose.onNodeWithTag(DAY_INTERCALARY_HEADER_TEST_TAG).assertIsDisplayed()
+    }
+
     @Test
     fun `Leap Day shows no IFC weekday and can be today`() {
         show(LocalDate.of(2028, 6, 17), today = LocalDate.of(2028, 6, 17), holidays = listOf("Leap Day"))
@@ -130,6 +142,14 @@ class DayScreenTest {
         compose.onNodeWithText("Day 169 · outside the weeks · Q2").assertIsDisplayed()
         compose.onNodeWithText("Today").assertIsDisplayed()
         compose.onNodeWithText("Leap Day").assertIsDisplayed()
+        compose.onNodeWithTag(DAY_INTERCALARY_HEADER_TEST_TAG).assertIsDisplayed()
+    }
+
+    @Test
+    fun `a regular day does not show the intercalary header`() {
+        show(LocalDate.of(2026, 9, 17))
+
+        compose.onAllNodesWithTag(DAY_INTERCALARY_HEADER_TEST_TAG).assertCountEquals(0)
     }
 
     @Test

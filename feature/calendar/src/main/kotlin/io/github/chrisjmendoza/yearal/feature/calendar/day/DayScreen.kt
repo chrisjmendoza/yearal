@@ -1,5 +1,6 @@
 package io.github.chrisjmendoza.yearal.feature.calendar.day
 
+import android.content.res.Configuration
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -23,10 +24,12 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -43,6 +46,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -54,19 +59,27 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
 import io.github.chrisjmendoza.yearal.core.navigation.ConverterKey
 import io.github.chrisjmendoza.yearal.core.navigation.DayKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
 import io.github.chrisjmendoza.yearal.feature.calendar.R
 import io.github.chrisjmendoza.yearal.feature.calendar.agenda.AgendaItemUi
+import io.github.chrisjmendoza.yearal.feature.calendar.common.HolidayDiamondMark
 import kotlinx.coroutines.flow.collectLatest
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import io.github.chrisjmendoza.yearal.core.designsystem.R as DesignSystemR
+
+/** Test tag of [IntercalaryHeader]'s surface, present only on Year Day and Leap Day. */
+const val DAY_INTERCALARY_HEADER_TEST_TAG: String = "ifc:dayIntercalaryHeader"
 
 private val SheetHorizontalPadding = 24.dp
 private val SheetBottomPadding = 32.dp
@@ -77,6 +90,8 @@ private val ChipVerticalPadding = 4.dp
 private val LoadingHeight = 160.dp
 private val ColorDotSize = 12.dp
 private val AgendaRowSpacing = 12.dp
+private val IntercalaryIconSize = 24.dp
+private val HolidayRowSpacing = 8.dp
 
 /**
  * The Day detail sheet at compact and medium widths (docs/FEATURES.md C5; docs/ARCHITECTURE.md §4
@@ -347,32 +362,36 @@ private fun LoadedContent(
                 .padding(start = SheetHorizontalPadding, end = SheetHorizontalPadding, bottom = SheetBottomPadding),
         verticalArrangement = Arrangement.spacedBy(LineSpacing),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = state.ifcLong,
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.weight(1f).semantics { heading() },
-            )
-            IconButton(onClick = onClose) {
-                Icon(imageVector = Icons.Filled.Close, contentDescription = stringResource(R.string.day_close))
+        if (state.date is IfcDate.Regular) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = state.ifcLong,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.weight(1f).semantics { heading() },
+                )
+                IconButton(onClick = onClose) {
+                    Icon(imageVector = Icons.Filled.Close, contentDescription = stringResource(R.string.day_close))
+                }
             }
-        }
-        Text(
-            text = state.numeric,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = stringResource(R.string.day_gregorian, state.gregorianLong),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        if (state.isToday) {
-            TodayBadge()
-        }
+            Text(
+                text = state.numeric,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = stringResource(R.string.day_gregorian, state.gregorianLong),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            if (state.isToday) {
+                TodayBadge()
+            }
 
-        Spacer(modifier = Modifier.height(BlockSpacing))
+            Spacer(modifier = Modifier.height(BlockSpacing))
 
-        WeekdayBlock(state)
+            WeekdayBlock(state)
+        } else {
+            IntercalaryHeader(state, onClose)
+        }
 
         Spacer(modifier = Modifier.height(BlockSpacing))
 
@@ -388,8 +407,16 @@ private fun LoadedContent(
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.semantics { heading() },
             )
-            for (holiday in state.holidays) {
-                Text(text = holiday, style = MaterialTheme.typography.bodyLarge)
+            Column(verticalArrangement = Arrangement.spacedBy(HolidayRowSpacing)) {
+                for (holiday in state.holidays) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(HolidayRowSpacing),
+                    ) {
+                        HolidayDiamondMark()
+                        Text(text = holiday, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
             }
         }
 
@@ -414,12 +441,12 @@ private fun LoadedContent(
         Spacer(modifier = Modifier.height(BlockSpacing))
 
         Row(horizontalArrangement = Arrangement.spacedBy(BlockSpacing)) {
-            TextButton(onClick = onAddEvent) {
+            FilledTonalButton(onClick = onAddEvent) {
                 Icon(imageVector = Icons.Filled.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(ChipHorizontalPadding))
                 Text(text = stringResource(R.string.day_add_event))
             }
-            TextButton(onClick = onOpenInConverter) {
+            OutlinedButton(onClick = onOpenInConverter) {
                 Icon(imageVector = Icons.Filled.Refresh, contentDescription = null)
                 Spacer(modifier = Modifier.width(ChipHorizontalPadding))
                 Text(text = stringResource(R.string.day_open_in_converter))
@@ -499,6 +526,63 @@ private fun WeekdayBlock(state: DayUiState.Loaded) {
 }
 
 /**
+ * The header for Year Day and Leap Day (`docs/design-plan.md` §4.4): an `intercalaryContainer`
+ * surface with the [io.github.chrisjmendoza.yearal.core.designsystem.R.drawable.ic_intercalary] icon
+ * tinted [YearalTheme.colors]' `intercalary`, the date, and [WeekdayBlock]'s existing "no IFC weekday"
+ * explanation nested inside it — the same content a regular day's header shows, just gathered under
+ * one amber container instead of sitting on the bare sheet background, so the day reads as visibly
+ * different the moment the sheet opens.
+ */
+@Composable
+private fun IntercalaryHeader(
+    state: DayUiState.Loaded,
+    onClose: () -> Unit,
+) {
+    Surface(
+        color = YearalTheme.colors.intercalaryContainer,
+        contentColor = YearalTheme.colors.onIntercalaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth().testTag(DAY_INTERCALARY_HEADER_TEST_TAG),
+    ) {
+        Column(
+            modifier = Modifier.padding(BlockSpacing),
+            verticalArrangement = Arrangement.spacedBy(LineSpacing),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    painter = painterResource(DesignSystemR.drawable.ic_intercalary),
+                    contentDescription = null,
+                    tint = YearalTheme.colors.intercalary,
+                    modifier = Modifier.size(IntercalaryIconSize),
+                )
+                Spacer(modifier = Modifier.width(ChipHorizontalPadding))
+                Text(
+                    text = state.ifcLong,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.weight(1f).semantics { heading() },
+                )
+                IconButton(onClick = onClose) {
+                    Icon(imageVector = Icons.Filled.Close, contentDescription = stringResource(R.string.day_close))
+                }
+            }
+            Text(text = state.numeric, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = stringResource(R.string.day_gregorian, state.gregorianLong),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            if (state.isToday) {
+                Spacer(modifier = Modifier.height(LineSpacing))
+                TodayBadge()
+            }
+
+            Spacer(modifier = Modifier.height(BlockSpacing))
+
+            WeekdayBlock(state)
+        }
+    }
+}
+
+/**
  * One row of the day's agenda (FEATURES C5): a coloured dot (never colour alone — the title and time
  * carry the same information in text), the title with a localized placeholder when blank, and "All
  * day" or the locale-formatted time range. Tapping the row invokes [onClick] with nothing but the
@@ -568,28 +652,83 @@ private fun AgendaRow(
     }
 }
 
-// Previews of the sheet content — one per date shape (CLAUDE.md rule 6). A ModalBottomSheet opens a
-// window of its own, which the preview scanner cannot capture, so the previews render DayDetail.
-// Dynamic colour is off for determinism.
+// Previews of the sheet content — one per date shape (CLAUDE.md rule 6), each at light, dark and 200%
+// font scale. A ModalBottomSheet opens a window of its own, which the preview scanner cannot capture,
+// so the previews render DayDetail. Dynamic colour is off for determinism.
 
 /** IFC December 23, 2026 = Gregorian Friday, December 25, 2026, with its holiday. */
-@Preview(name = "Regular day", showBackground = true)
+@Preview(name = "Regular day — light", showBackground = true)
 @Composable
 internal fun DayDetailRegularPreview() {
     DayPreview(day = LocalDate.of(2026, 12, 25), today = LocalDate.of(2026, 12, 25), holidays = listOf("Christmas Day"))
 }
 
+@Preview(name = "Regular day — dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun DayDetailRegularDarkPreview() {
+    DayPreview(
+        day = LocalDate.of(2026, 12, 25),
+        today = LocalDate.of(2026, 12, 25),
+        holidays = listOf("Christmas Day"),
+        darkTheme = true,
+    )
+}
+
+@Preview(name = "Regular day — 200% font", showBackground = true, fontScale = 2f)
+@Composable
+internal fun DayDetailRegularLargeFontPreview() {
+    DayPreview(day = LocalDate.of(2026, 12, 25), today = LocalDate.of(2026, 12, 25), holidays = listOf("Christmas Day"))
+}
+
 /** Leap Day 2028 = Gregorian Saturday, June 17, 2028. */
-@Preview(name = "Leap Day", showBackground = true)
+@Preview(name = "Leap Day — light", showBackground = true)
 @Composable
 internal fun DayDetailLeapDayPreview() {
     DayPreview(day = LocalDate.of(2028, 6, 17), today = LocalDate.of(2026, 9, 17), holidays = listOf("Leap Day"))
 }
 
+@Preview(name = "Leap Day — dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun DayDetailLeapDayDarkPreview() {
+    DayPreview(
+        day = LocalDate.of(2028, 6, 17),
+        today = LocalDate.of(2026, 9, 17),
+        holidays = listOf("Leap Day"),
+        darkTheme = true,
+    )
+}
+
+@Preview(name = "Leap Day — 200% font", showBackground = true, fontScale = 2f)
+@Composable
+internal fun DayDetailLeapDayLargeFontPreview() {
+    DayPreview(day = LocalDate.of(2028, 6, 17), today = LocalDate.of(2026, 9, 17), holidays = listOf("Leap Day"))
+}
+
 /** Year Day 2026 = Gregorian Thursday, December 31, 2026. */
-@Preview(name = "Year Day", showBackground = true)
+@Preview(name = "Year Day — light", showBackground = true)
 @Composable
 internal fun DayDetailYearDayPreview() {
+    DayPreview(
+        day = LocalDate.of(2026, 12, 31),
+        today = LocalDate.of(2026, 9, 17),
+        holidays = listOf("Year Day", "New Year’s Eve"),
+    )
+}
+
+@Preview(name = "Year Day — dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun DayDetailYearDayDarkPreview() {
+    DayPreview(
+        day = LocalDate.of(2026, 12, 31),
+        today = LocalDate.of(2026, 9, 17),
+        holidays = listOf("Year Day", "New Year’s Eve"),
+        darkTheme = true,
+    )
+}
+
+@Preview(name = "Year Day — 200% font", showBackground = true, fontScale = 2f)
+@Composable
+internal fun DayDetailYearDayLargeFontPreview() {
     DayPreview(
         day = LocalDate.of(2026, 12, 31),
         today = LocalDate.of(2026, 9, 17),
@@ -602,8 +741,9 @@ private fun DayPreview(
     day: LocalDate,
     today: LocalDate,
     holidays: List<String>,
+    darkTheme: Boolean = false,
 ) {
-    IfcTheme(dynamicColor = false) {
+    IfcTheme(darkTheme = darkTheme, dynamicColor = false) {
         val formatter = rememberIfcDateFormatter()
         DayDetail(state = buildDayUiState(day, today, formatter, holidays), onClose = {})
     }

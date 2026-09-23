@@ -1,10 +1,14 @@
 package io.github.chrisjmendoza.yearal.feature.settings.more
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -16,14 +20,19 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.navigation.HolidaysKey
 import io.github.chrisjmendoza.yearal.core.navigation.LearnKey
@@ -101,28 +110,28 @@ fun MoreScreen(
             ListItem(
                 headlineContent = { Text(stringResource(R.string.more_holidays)) },
                 supportingContent = { Text(stringResource(R.string.more_holidays_detail)) },
-                leadingContent = { Icon(imageVector = Icons.Filled.DateRange, contentDescription = null) },
+                leadingContent = { HubIcon(Icons.Filled.DateRange) },
                 modifier = Modifier.clickable(role = Role.Button, onClick = onHolidaysClick),
             )
             HorizontalDivider()
             ListItem(
                 headlineContent = { Text(stringResource(R.string.more_settings)) },
                 supportingContent = { Text(stringResource(R.string.more_settings_detail)) },
-                leadingContent = { Icon(imageVector = Icons.Filled.Settings, contentDescription = null) },
+                leadingContent = { HubIcon(Icons.Filled.Settings) },
                 modifier = Modifier.clickable(role = Role.Button, onClick = onSettingsClick),
             )
             HorizontalDivider()
             ListItem(
                 headlineContent = { Text(stringResource(R.string.more_learn)) },
                 supportingContent = { Text(stringResource(R.string.more_learn_detail)) },
-                leadingContent = { Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = null) },
+                leadingContent = { HubIcon(Icons.AutoMirrored.Filled.List) },
                 modifier = Modifier.clickable(role = Role.Button, onClick = onLearnClick),
             )
             HorizontalDivider()
             ListItem(
                 headlineContent = { Text(stringResource(R.string.more_privacy)) },
                 supportingContent = { Text(stringResource(R.string.more_privacy_detail)) },
-                leadingContent = { Icon(imageVector = Icons.Filled.Lock, contentDescription = null) },
+                leadingContent = { HubIcon(Icons.Filled.Lock) },
                 modifier = Modifier.clickable(role = Role.Button, onClick = onPrivacyClick),
             )
             HorizontalDivider()
@@ -134,6 +143,32 @@ fun MoreScreen(
         }
     }
 }
+
+/**
+ * A row's leading glyph in a 40dp [MaterialTheme.colorScheme.secondaryContainer] circle, tinted
+ * [MaterialTheme.colorScheme.onSecondaryContainer] (`docs/design-plan.md` §4.8: "More hub rows get
+ * tinted leading icons"). The About row keeps its bare icon — it links nowhere and isn't one of the
+ * hub's navigation rows.
+ */
+@Composable
+private fun HubIcon(icon: ImageVector) {
+    Box(
+        modifier =
+            Modifier
+                .size(HubIconSize)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+    }
+}
+
+private val HubIconSize = 40.dp
 
 @Preview(name = "More hub", showBackground = true)
 @Composable

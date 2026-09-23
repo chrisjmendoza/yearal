@@ -59,8 +59,10 @@ class TodayScreenTest {
         show(LocalDate.of(2026, 9, 17))
 
         compose.onNodeWithText("September 8, 2026").assertIsDisplayed()
+        compose.onNodeWithText("IFC", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("IFC 2026-10-08").assertIsDisplayed()
-        compose.onNodeWithText("Gregorian: Thursday, September 17, 2026").assertIsDisplayed()
+        compose.onNodeWithText("GREGORIAN", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Thursday, September 17, 2026").assertIsDisplayed()
         compose.onNodeWithText("IFC weekday: Sunday", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Actual weekday: Thursday", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("IFC Sunday, actual Thursday").assertIsDisplayed()
@@ -120,20 +122,25 @@ class TodayScreenTest {
                 ),
         )
 
-        compose.onNodeWithText("Holidays").assertIsDisplayed()
+        compose.onNodeWithText("HOLIDAYS", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Independence Day (observed)").assertIsDisplayed()
         compose.onNodeWithText("1 day until Independence Day").assertIsDisplayed()
-        compose.onNodeWithText("Today’s events").assertIsDisplayed()
+        compose.onNodeWithText("TODAY’S EVENTS", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Picnic").assertIsDisplayed()
         compose.onNodeWithText("All day").assertIsDisplayed()
     }
 
+    // docs/design-plan.md §4.1: empty Today still shows both cards, each with one quiet line, rather
+    // than hiding them.
+
     @Test
-    fun `no holidays or agenda means neither section is shown`() {
+    fun `no holidays or agenda still shows both cards with a quiet line`() {
         show(LocalDate.of(2026, 9, 17))
 
-        compose.onAllNodesWithText("Holidays").assertCountEquals(0)
-        compose.onAllNodesWithText("Today’s events").assertCountEquals(0)
+        compose.onNodeWithText("HOLIDAYS", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("No holidays today.").assertIsDisplayed()
+        compose.onNodeWithText("TODAY’S EVENTS", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Nothing on your agenda today.").assertIsDisplayed()
     }
 
     // Left over from M4 T7 (docs/ROADMAP.md): today's agenda rows are tappable, id only (CLAUDE.md rule 8).

@@ -192,6 +192,7 @@ class HolidaysViewModel
                 ifcNumeric = ifcNumeric,
                 gregorianLong = gregorianLong,
                 description = format(R.string.holidays_row_description, name, ifcLine, gregorianLong),
+                isIntercalary = ifcDate.isIntercalary,
             )
         }
 

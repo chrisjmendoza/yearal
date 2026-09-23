@@ -7,13 +7,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.testTag
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
 
 /**
  * Semantics test tags of the month grid's parts that have no text of their own. They sit in the
@@ -63,7 +63,10 @@ private val MarkSpacing = Dimens.MarkSpacing
  * The row of marks under a day number: a holiday diamond first, then up to [MAX_EVENT_DOTS] round
  * event dots. Shapes differ so neither mark depends on colour alone (docs/ARCHITECTURE.md §4
  * "Accessibility"). The row keeps its height even when empty so every cell in a week is the same
- * height.
+ * height. Marks are [Dimens.MarkSize] (8dp, design-plan §4.2 "Marks grow"): the diamond uses
+ * [YearalTheme.colors]`.holidayMark` and the dots [YearalTheme.colors]`.eventMark` — this component
+ * has no per-event colour parameter today, so every dot shares one tone; a caller that resolves an
+ * event's own colour (design-plan §5.4, a later phase) draws it itself rather than through here.
  */
 @Composable
 internal fun DayMarks(
@@ -71,6 +74,7 @@ internal fun DayMarks(
     hasHoliday: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val yearalColors = YearalTheme.colors
     Row(
         modifier = modifier.height(MarkRowHeight),
         horizontalArrangement = Arrangement.spacedBy(MarkSpacing),
@@ -82,7 +86,7 @@ internal fun DayMarks(
                     Modifier
                         .size(MarkSize)
                         .rotate(degrees = 45f)
-                        .background(MaterialTheme.colorScheme.tertiary)
+                        .background(yearalColors.holidayMark)
                         .testTag(MonthGridTestTags.HOLIDAY_MARKER),
             )
         }
@@ -91,7 +95,7 @@ internal fun DayMarks(
                 modifier =
                     Modifier
                         .size(MarkSize)
-                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                        .background(yearalColors.eventMark, CircleShape)
                         .testTag(MonthGridTestTags.EVENT_DOT),
             )
         }

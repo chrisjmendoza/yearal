@@ -42,13 +42,17 @@ public object Dimens {
     /** Width of the ring drawn around today's cell or band. */
     public val TodayRingWidth = 2.dp
 
-    /** Diameter of a holiday diamond or event dot under a day number. */
-    public val MarkSize = 6.dp
+    /**
+     * Diameter of a holiday diamond or event dot under a day number: 8dp (design-plan §4.2 "Marks
+     * grow"), up from the incumbent's 6dp so a mark reads at a glance instead of needing the spoken
+     * description to confirm it.
+     */
+    public val MarkSize = 8.dp
 
     /** Horizontal gap between adjacent marks in [MarkSize]'s row. */
-    public val MarkSpacing = 3.dp
+    public val MarkSpacing = 4.dp
 
-    /** Height reserved for the marks row, kept even when a day has no marks. */
+    /** Height reserved for the marks row, kept even when a day has no marks. Matches [MarkSize]. */
     public val MarkRowHeight = 8.dp
 
     /** Minimum touch target of a day cell (docs/ARCHITECTURE.md §4 "Accessibility"). */

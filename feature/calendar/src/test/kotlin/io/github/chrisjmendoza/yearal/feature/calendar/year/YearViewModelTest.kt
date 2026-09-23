@@ -1,15 +1,24 @@
 package io.github.chrisjmendoza.yearal.feature.calendar.year
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.cash.turbine.test
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.DatePickerRange
+import io.github.chrisjmendoza.yearal.core.domain.holiday.HolidayEngine
+import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
+import io.github.chrisjmendoza.yearal.core.holidays.HolidayPackLoader
 import io.github.chrisjmendoza.yearal.core.testing.EventFixtures
 import io.github.chrisjmendoza.yearal.core.testing.FakeDateTicker
 import io.github.chrisjmendoza.yearal.core.testing.FakeObserveAgendaUseCase
+import io.github.chrisjmendoza.yearal.core.testing.FakeSettingsRepository
+import io.github.chrisjmendoza.yearal.feature.calendar.holiday.HolidayCatalog
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.maps.shouldContainKey
+import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -37,10 +46,17 @@ import java.time.LocalDate
 @RunWith(AndroidJUnit4::class)
 class YearViewModelTest {
     private val dispatcher = StandardTestDispatcher()
+    private lateinit var catalog: HolidayCatalog
 
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
+        catalog =
+            HolidayCatalog(
+                HolidayEngine(),
+                HolidayPackLoader(),
+                ApplicationProvider.getApplicationContext<Context>(),
+            )
     }
 
     @After
@@ -51,8 +67,9 @@ class YearViewModelTest {
     private fun viewModel(
         initialYear: Int,
         ticker: FakeDateTicker = FakeDateTicker(LocalDate.of(2026, 9, 17)),
+        settings: FakeSettingsRepository = FakeSettingsRepository(),
         observeAgenda: FakeObserveAgendaUseCase = FakeObserveAgendaUseCase(),
-    ) = YearViewModel(initialYear, ticker, observeAgenda)
+    ) = YearViewModel(initialYear, ticker, settings, catalog, observeAgenda)
 
     // spec §2.2: 13 months in calendar order, Sol between June and July.
 
@@ -172,6 +189,32 @@ class YearViewModelTest {
             viewModel(2026, observeAgenda = agenda).uiState.test {
                 awaitItem()
                 awaitItem().eventDates shouldBe emptySet()
+            }
+        }
+
+    // docs/design-plan.md §4.3: the year's holidays, ready for YearMiniMonthTile once C2's parallel
+    // restyle adds its (additive) holidays parameter — see the TODO(integration) in YearScreen.kt.
+
+    @Test
+    fun `the year's holidays cover the whole range, Year Day included`() =
+        runTest(dispatcher) {
+            viewModel(2026).uiState.test {
+                awaitItem()
+                val holidays = awaitItem().holidays
+                holidays[LocalDate.of(2026, 12, 25)] shouldBe "Christmas Day"
+                holidays shouldContainKey LocalDate.of(2026, 12, 31)
+            }
+        }
+
+    @Test
+    fun `disabling the us pack removes Christmas from the year's holidays`() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository(UserSettings(enabledHolidaySets = setOf("ifc")))
+            viewModel(2026, settings = settings).uiState.test {
+                awaitItem()
+                val holidays = awaitItem().holidays
+                holidays shouldNotContainKey LocalDate.of(2026, 12, 25)
+                holidays[LocalDate.of(2026, 12, 31)] shouldBe "Year Day"
             }
         }
 

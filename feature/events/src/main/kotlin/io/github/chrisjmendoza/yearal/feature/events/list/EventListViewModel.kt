@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
+import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.domain.event.Event
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCalendar
@@ -155,6 +156,7 @@ private fun buildEventListItem(
 ): EventListItem {
     val ifcDate = IfcDate.from(event.startDate)
     val timing = event.timing
+    val (headerKey, headerLabel) = monthHeaderFor(ifcDate, formatter)
     return EventListItem(
         eventId = event.id,
         title = event.title,
@@ -168,8 +170,40 @@ private fun buildEventListItem(
         timeLabel = (timing as? EventTiming.Timed)?.let { formatMinuteOfDay(it.startMinuteOfDay) },
         zoneLabel = (timing as? EventTiming.Timed)?.zone?.id,
         recurrenceSummary = recurrenceSummaryFor(event.recurrence, ifcDate, event.startDate, formatter),
+        category = event.category,
+        ifcDayLabel = formatter.formatDay(ifcDate),
+        gregorianWeekdayShort =
+            formatter.weekdayName(event.startDate.dayOfWeek, IfcDateFormatter.WeekdayNameStyle.SHORT),
+        gregorianDayLabel = formatter.formatGregorianMonthDay(event.startDate),
+        monthHeaderKey = headerKey,
+        monthHeaderLabel = headerLabel,
     )
 }
+
+/**
+ * The IFC-month grouping header for [date] (`docs/design-plan.md` §4.5, §8 decision 5 — grouped by IFC
+ * month, the app's own calendar, not Gregorian): a stable key and its localized label. A regular date
+ * groups with every other date in the same IFC year and month ("Sol 2026"); Year Day and Leap Day each
+ * get their own header per year, distinct from the month they follow, since neither belongs to a month
+ * (CLAUDE.md rule 6).
+ */
+private fun monthHeaderFor(
+    date: IfcDate,
+    formatter: IfcDateFormatter,
+): Pair<String, String> =
+    when (date) {
+        is IfcDate.Regular -> {
+            "${date.year}-${date.month.number}" to formatter.monthTitle(IfcYearMonth(date.year, date.month))
+        }
+
+        is IfcDate.YearDay -> {
+            "${date.year}-YEAR_DAY" to formatter.formatLong(date)
+        }
+
+        is IfcDate.LeapDay -> {
+            "${date.year}-LEAP_DAY" to formatter.formatLong(date)
+        }
+    }
 
 private fun formatMinuteOfDay(minuteOfDay: Int): String {
     val time = LocalTime.ofSecondOfDay(minuteOfDay * SECONDS_PER_MINUTE.toLong())

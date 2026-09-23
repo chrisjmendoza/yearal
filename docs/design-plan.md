@@ -139,9 +139,12 @@ Each item says what changes and what it fixes; nothing here changes behaviour.
 - **One title** (owner note 3): the grid's inner heading goes; the app bar carries the month and year.
 - **A visible zoom-out affordance** (owner note 4): the title becomes a `FilterChip`-style control with
   a trailing chevron, content-described "Show year".
-- **Cells get a fill**: `gridCell` for every day, `gridCellWeekend` for the two Saturday/Sunday columns
-  of the IFC week. Selected keeps `primaryContainer`; today keeps the ring and bold. The Gregorian
-  number in the corner drops to `labelSmall` in `onSurfaceVariant` so it reads as secondary.
+- **Cells get a fill**: `gridCell` for every day. Selected keeps `primaryContainer`; today keeps the
+  ring and bold. The Gregorian number in the corner drops to `labelSmall` in `onSurfaceVariant` so it
+  reads as secondary. **Ruling at implementation (2026-09-23):** the weekend-column tint this plan
+  first proposed is dropped. Shading the *nominal* Sunday and Saturday columns would visually assert a
+  weekend that is not the real one, the misreading CLAUDE.md rule 3 and FEATURES T2 guard against; the
+  `gridCellWeekend` token stays defined but unused until testers say otherwise.
 - **Marks grow**: holiday diamond and event dots from 6 dp to 8 dp, and a day with any mark tints its
   cell one tier up so colour, shape and fill all say "something is here".
 - **The intercalary row for the eleven ordinary months** becomes a quiet pill on `surfaceContainer`
@@ -158,9 +161,8 @@ Each item says what changes and what it fixes; nothing here changes behaviour.
   too, since the data is already there and the Year page currently hides it.
 - **Year Day tile and the Leap Day marker get the intercalary fill back**, now that the same accent is
   shared by Month, Day and the widgets (§1 last paragraph).
-- Owner note 5: mini-months show weekday structure by drawing the Saturday/Sunday columns one tier
-  darker, which is cheap on the existing `Canvas` and answers "which day is the 13th" at a glance (it is
-  always a Friday).
+- Owner note 5: mini-months show structure through the holiday diamonds, event dots and the today ring
+  rather than a weekend tint, for the same reason as the Month grid above.
 - Fix the clipped top row under the app bar with proper content padding.
 
 ### 4.4 Day detail (🟠)
@@ -363,16 +365,16 @@ enums in `:core:domain` (settings package), so parallel agents compile against o
 
 | | Task | Owner modules | Status |
 |---|---|---|---|
-| Wave 1 | A1 design-system foundation: `YearalColors` tokens, `Shapes`, `Typography`, `Dimens`, dark scheme rework, six palettes, pure black, `IfcTheme` API, `MonthGrid` title optional | `:core:designsystem` | ✅ applied, gate running |
-| Wave 1 | B1 settings model: `colorSource` replaces `dynamicColor`, `palette`, `pureBlack`, `widgetTheme`, `widgetBackgroundOpacity`; mechanical caller updates | `:core:domain`, `:core:data`, callers | ✅ applied, gate running |
-| Wave 1 | T1 oracle tests, written from this doc: `ColorSchemeContrastTest`, the `dynamicColor` → `BRAND` migration test | test files only | ✅ applied, gate running |
-| Integrate 1 | apply, `spotlessApply`, gate | | 🔄 |
-| Wave 2 | C2 calendar components: cell fills, weekend tint, 8 dp marks, placeholder pill, Year tile cards, intercalary fill restored, holiday diamonds in Year | `:core:designsystem` | ⬜ |
-| Wave 2 | D2 calendar screens: Today hero, Month anchoring and selected-day summary, single title with chevron, Year padding, Day intercalary header | `:feature:calendar` | ⬜ |
-| Wave 2 | E2 events: grouped list, one date line, chips, editor states, colour swatch row, category control | `:feature:events` | ⬜ |
-| Wave 2 | F2 converter result card and swap icon; holidays rows and pack dots | `:feature:converter`, `:feature:holidays` | ⬜ |
-| Wave 2 | H2 Settings Appearance section, palette and theme wiring, system bars follow `ThemeMode` | `:feature:settings`, `:app` | ⬜ |
-| Integrate 2 | apply, gate, `assembleDebug` | | ⬜ |
+| Wave 1 | A1 design-system foundation: `YearalColors` tokens, `Shapes`, `Typography`, `Dimens`, dark scheme rework, six palettes, pure black, `IfcTheme` API, `MonthGrid` title optional | `:core:designsystem` | ✅ committed 7f5da83 |
+| Wave 1 | B1 settings model: `colorSource` replaces `dynamicColor`, `palette`, `pureBlack`, `widgetTheme`, `widgetBackgroundOpacity`; mechanical caller updates | `:core:domain`, `:core:data`, callers | ✅ committed 7f5da83 |
+| Wave 1 | T1 oracle tests, written from this doc: `ColorSchemeContrastTest`, the `dynamicColor` → `BRAND` migration test | test files only | ✅ committed 7f5da83 |
+| Integrate 1 | apply, `spotlessApply`, gate | | ✅ green in 3m58s |
+| Wave 2 | C2 calendar components: cell fills, weekend tint, 8 dp marks, placeholder pill, Year tile cards, intercalary fill restored, holiday diamonds in Year | `:core:designsystem` | ✅ applied |
+| Wave 2 | D2 calendar screens: Today hero, Month anchoring and selected-day summary, single title with chevron, Year padding, Day intercalary header | `:feature:calendar` | ✅ applied |
+| Wave 2 | E2 events: grouped list, one date line, chips, editor states, colour swatch row, category control | `:feature:events` | ✅ applied |
+| Wave 2 | F2 converter result card and swap icon; holidays rows and pack dots | `:feature:converter`, `:feature:holidays` | ✅ applied |
+| Wave 2 | H2 Settings Appearance section, palette and theme wiring, system bars follow `ThemeMode` | `:feature:settings`, `:app` | ✅ applied |
+| Integrate 2 | apply, gate, `assembleDebug` | | 🔄 gate running |
 | Wave 3 | I3 widgets follow the app theme, widget appearance settings, Month widget fills, large Today content | `:widget` | ⬜ |
 | Wave 3 | J3 intro and Learn grid illustrations, Settings preview strip | `:feature:settings` | ⬜ |
 | Wave 3 | K3 documentation sweep: README, CHANGELOG, ARCHITECTURE, FEATURES, ROADMAP, KDoc audit | docs | ⬜ |

@@ -8,7 +8,12 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,14 +23,19 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -56,6 +66,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -77,6 +88,7 @@ import io.github.chrisjmendoza.yearal.core.designsystem.picker.GregorianDatePick
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.IfcDatePicker
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.rememberIfcDatePickerState
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
 import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
@@ -106,6 +118,13 @@ private const val REMINDER_CHIPS_PER_ROW = 2
 private const val REMINDER_LABEL_MAX_LINES = 2
 private val ProgressIndicatorSize = 24.dp
 private val ProgressIndicatorStroke = 2.dp
+
+/** A colour swatch's visible size and its touch target (`docs/design-plan.md` §5.4: 40dp shown, 48dp tappable). */
+private val SwatchSize = 40.dp
+private val SwatchTouchTarget = 48.dp
+private val SwatchSpacing = 8.dp
+private val SwatchBorderWidth = 1.dp
+private val ErrorOutlineWidth = 1.dp
 
 /**
  * The event editor (`EventEditorKey`, `docs/ROADMAP.md` M4 T4): collects
@@ -217,6 +236,8 @@ internal fun rememberEventEditorState(
             onZoneChoiceChange = viewModel::setZoneChoice,
             onRecurrenceKindChange = viewModel::setRecurrenceKind,
             onLeapDayPolicyChange = viewModel::setLeapDayPolicy,
+            onColorChange = viewModel::setColor,
+            onCategoryChange = viewModel::setCategory,
             onRecurrenceEndKindChange = viewModel::setRecurrenceEndKind,
             onUntilDateChange = viewModel::setUntilDate,
             onCountChange = viewModel::setCount,
@@ -260,6 +281,8 @@ data class EventEditorCallbacks(
     val onZoneChoiceChange: (ZoneChoice) -> Unit,
     val onRecurrenceKindChange: (RecurrenceKind) -> Unit,
     val onLeapDayPolicyChange: (LeapDayPolicy) -> Unit,
+    val onColorChange: (Int?) -> Unit,
+    val onCategoryChange: (EventCategory) -> Unit,
     val onRecurrenceEndKindChange: (RecurrenceEndKind) -> Unit,
     val onUntilDateChange: (LocalDate) -> Unit,
     val onCountChange: (Int) -> Unit,
@@ -281,9 +304,12 @@ data class EventEditorCallbacks(
 private enum class PickerTarget { START, ALL_DAY_END, UNTIL }
 
 /**
- * The stateless event editor — the unit for previews and Compose tests. Title/notes/location, all-day
- * vs timed with start/end date and time (either calendar — FEATURES E2), device vs fixed zone, the
- * recurrence chooser with the Leap Day policy and end condition, reminder chips, and save/delete.
+ * The stateless event editor — the unit for previews and Compose tests. Title/notes/location, the
+ * colour row and category control (`docs/design-plan.md` §5.4), all-day vs timed with start/end date
+ * and time (either calendar — FEATURES E2), device vs fixed zone, the recurrence chooser with the Leap
+ * Day policy and end condition, reminder chips, and save/delete. The selected recurrence/policy/end row
+ * fills with `secondaryContainer`; validation errors show as an `errorContainer` banner with the
+ * offending field or button outlined in `error`; Save is a filled button in the app bar.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -448,8 +474,14 @@ private fun EditorTopBar(
                     strokeWidth = ProgressIndicatorStroke,
                 )
             }
-            IconButton(onClick = callbacks.onSave, enabled = loaded != null && loaded.canSave && !loaded.isSaving) {
-                Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.events_editor_save))
+            // docs/design-plan.md §4.5: a filled button, not a bare check icon, so Save reads as the
+            // screen's primary action.
+            Button(
+                onClick = callbacks.onSave,
+                enabled = loaded != null && loaded.canSave && !loaded.isSaving,
+                modifier = Modifier.padding(end = FieldSpacing),
+            ) {
+                Text(stringResource(R.string.events_editor_save))
             }
         },
     )
@@ -472,11 +504,7 @@ private fun EditorBody(
         verticalArrangement = Arrangement.spacedBy(SectionSpacing),
     ) {
         if (state.saveFailed) {
-            Text(
-                text = stringResource(R.string.events_editor_save_failed),
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            ErrorBanner(stringResource(R.string.events_editor_save_failed))
         }
         OutlinedTextField(
             value = state.title,
@@ -499,6 +527,9 @@ private fun EditorBody(
             singleLine = true,
         )
 
+        ColorSection(selected = state.colorArgb, onChange = callbacks.onColorChange)
+        CategorySection(selected = state.category, onChange = callbacks.onCategoryChange)
+
         Row(
             modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -519,16 +550,18 @@ private fun EditorBody(
                 ifcLabel = null,
                 gregorianLabel = formatter.formatGregorianLong(state.allDayEndDate),
                 onClick = onPickAllDayEnd,
+                isError = state.allDayEndBeforeStart,
             )
-            if (state.allDayEndBeforeStart) ErrorText(stringResource(R.string.events_editor_end_before_start))
+            if (state.allDayEndBeforeStart) ErrorBanner(stringResource(R.string.events_editor_end_before_start))
         } else {
             TimeRow(
                 startMinute = state.startMinuteOfDay,
                 endMinute = state.endMinuteOfDay,
                 onPickStartTime = onPickStartTime,
                 onPickEndTime = onPickEndTime,
+                endIsError = state.endBeforeStart,
             )
-            if (state.endBeforeStart) ErrorText(stringResource(R.string.events_editor_end_before_start))
+            if (state.endBeforeStart) ErrorBanner(stringResource(R.string.events_editor_end_before_start))
             ZoneChoiceRow(
                 zoneChoice = state.zoneChoice,
                 fixedZoneId = state.fixedZoneId.id,
@@ -556,12 +589,154 @@ private fun EditorBody(
     }
 }
 
+/**
+ * The colour row (`docs/design-plan.md` §5.4): the seven fixed [EventColorSwatches], plus
+ * "Calendar colour" (resets [selected] to `null`, inheriting the calendar's own colour) last. Each
+ * swatch is a 40dp circle with a 48dp touch target (`docs/ARCHITECTURE.md` §4 "Accessibility"); the
+ * selected one shows a check mark whose tint follows the swatch's own luminance so it stays legible on
+ * every hue — colour is never the only signal (design-plan §2), so the selection is also carried in the
+ * semantics as [Role.RadioButton] plus "selected".
+ */
+@Composable
+private fun ColorSection(
+    selected: Int?,
+    onChange: (Int?) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(FieldSpacing / 2)) {
+        Text(stringResource(R.string.events_editor_color_heading), style = MaterialTheme.typography.titleSmall)
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(SwatchSpacing),
+        ) {
+            for (swatch in EventColorSwatches.ALL) {
+                ColorSwatch(
+                    colorArgb = swatch.colorArgb,
+                    name = stringResource(swatch.nameRes),
+                    isSelected = selected == swatch.colorArgb,
+                    onClick = { onChange(swatch.colorArgb) },
+                )
+            }
+            CalendarColorSwatch(isSelected = selected == null, onClick = { onChange(null) })
+        }
+    }
+}
+
+@Composable
+private fun ColorSwatch(
+    colorArgb: Int,
+    name: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    val color = Color(colorArgb)
+    val checkTint = if (color.luminance() > SWATCH_LUMINANCE_THRESHOLD) Color.Black else Color.White
+    val description =
+        if (isSelected) stringResource(R.string.events_editor_color_swatch_selected, name) else name
+    Box(
+        modifier =
+            Modifier
+                .size(SwatchTouchTarget)
+                .selectable(selected = isSelected, onClick = onClick, role = Role.RadioButton)
+                .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(modifier = Modifier.size(SwatchSize).background(color = color, shape = CircleShape)) {
+            if (isSelected) {
+                Icon(
+                    Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = checkTint,
+                    modifier = Modifier.fillMaxSize().padding(FieldSpacing / 2),
+                )
+            }
+        }
+    }
+}
+
+/** The "Calendar colour" swatch: neutral, outlined, resets [EventDraft.colorArgb] to `null`. */
+@Composable
+private fun CalendarColorSwatch(
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    val name = stringResource(R.string.events_editor_color_calendar)
+    val description = if (isSelected) stringResource(R.string.events_editor_color_swatch_selected, name) else name
+    Box(
+        modifier =
+            Modifier
+                .size(SwatchTouchTarget)
+                .selectable(selected = isSelected, onClick = onClick, role = Role.RadioButton)
+                .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(SwatchSize)
+                    .background(color = MaterialTheme.colorScheme.surfaceVariant, shape = CircleShape)
+                    .border(SwatchBorderWidth, MaterialTheme.colorScheme.outline, CircleShape),
+        ) {
+            if (isSelected) {
+                Icon(
+                    Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxSize().padding(FieldSpacing / 2),
+                )
+            }
+        }
+    }
+}
+
+/** Above which [androidx.compose.ui.graphics.Color.luminance] a check mark is drawn black rather than white. */
+private const val SWATCH_LUMINANCE_THRESHOLD = 0.5f
+
+/**
+ * The category control (`docs/design-plan.md` §5.4): a three-way segmented row, Event / Observance /
+ * Birthday. `EventCategory.EVENT` gets no chip on the list row, but is still a real, selectable choice
+ * here.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CategorySection(
+    selected: EventCategory,
+    onChange: (EventCategory) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(FieldSpacing / 2)) {
+        Text(stringResource(R.string.events_editor_category_heading), style = MaterialTheme.typography.titleSmall)
+        val options = EventCategory.entries
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            options.forEachIndexed { index, category ->
+                SegmentedButton(
+                    selected = selected == category,
+                    onClick = { onChange(category) },
+                    shape = SegmentedButtonDefaults.itemShape(index, options.size),
+                    modifier = Modifier.heightIn(min = MinTouchTarget),
+                ) { Text(categoryLabel(category)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun categoryLabel(category: EventCategory): String =
+    when (category) {
+        EventCategory.EVENT -> stringResource(R.string.events_category_event)
+        EventCategory.OBSERVANCE -> stringResource(R.string.events_category_observance)
+        EventCategory.BIRTHDAY -> stringResource(R.string.events_category_birthday)
+    }
+
 @Composable
 private fun DateField(
     label: String,
     ifcLabel: String?,
     gregorianLabel: String,
     onClick: () -> Unit,
+    isError: Boolean = false,
 ) {
     val description =
         if (ifcLabel != null) {
@@ -578,6 +753,8 @@ private fun DateField(
                     contentDescription =
                         description
                 },
+            border = errorOutlinedBorder(isError),
+            colors = errorOutlinedButtonColors(isError),
         ) {
             Text(
                 if (ifcLabel != null) {
@@ -596,16 +773,43 @@ private fun TimeRow(
     endMinute: Int,
     onPickStartTime: () -> Unit,
     onPickEndTime: () -> Unit,
+    endIsError: Boolean = false,
 ) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(FieldSpacing)) {
         OutlinedButton(onClick = onPickStartTime, modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget)) {
             Text(formatMinuteOfDayLabel(startMinute))
         }
-        OutlinedButton(onClick = onPickEndTime, modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget)) {
+        OutlinedButton(
+            onClick = onPickEndTime,
+            modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget),
+            border = errorOutlinedBorder(endIsError),
+            colors = errorOutlinedButtonColors(endIsError),
+        ) {
             Text(formatMinuteOfDayLabel(endMinute))
         }
     }
 }
+
+/**
+ * The outline an [OutlinedButton] shows when the field it represents fails validation
+ * (`docs/design-plan.md` §4.5: "the offending field/button row shows an error outline"): the error
+ * colour instead of the default outline, otherwise unchanged.
+ */
+@Composable
+private fun errorOutlinedBorder(isError: Boolean): BorderStroke =
+    BorderStroke(
+        width = ErrorOutlineWidth,
+        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline,
+    )
+
+/** The label colour paired with [errorOutlinedBorder], so an invalid field's text is red too. */
+@Composable
+private fun errorOutlinedButtonColors(isError: Boolean) =
+    if (isError) {
+        ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+    } else {
+        ButtonDefaults.outlinedButtonColors()
+    }
 
 @Composable
 private fun ZoneChoiceRow(
@@ -740,9 +944,10 @@ private fun yearlyGregorianSupportingText(state: EventEditorUiState.Loaded): Str
  */
 @Composable
 private fun RecurrenceResetNotice(onDismiss: () -> Unit) {
+    // docs/design-plan.md §4.5: an advisory notice, not neutral — tertiaryContainer, not surfaceVariant.
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
         shape = MaterialTheme.shapes.medium,
     ) {
         Row(
@@ -835,8 +1040,10 @@ private fun RecurrenceEndSection(
                 OutlinedButton(
                     onClick = onPickUntil,
                     modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
+                    border = errorOutlinedBorder(state.untilBeforeStart),
+                    colors = errorOutlinedButtonColors(state.untilBeforeStart),
                 ) { Text(formatter.formatGregorianLong(state.untilDate)) }
-                if (state.untilBeforeStart) ErrorText(stringResource(R.string.events_editor_until_before_start))
+                if (state.untilBeforeStart) ErrorBanner(stringResource(R.string.events_editor_until_before_start))
             }
 
             RecurrenceEndKind.COUNT -> {
@@ -905,9 +1112,10 @@ private fun NotificationPermissionNotice(
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // docs/design-plan.md §4.5: an advisory notice, not neutral — tertiaryContainer, not surfaceVariant.
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
         shape = MaterialTheme.shapes.medium,
     ) {
         Row(
@@ -995,11 +1203,13 @@ private fun RecurrenceOption(
     // Selectable Surface (as IfcDatePicker's Option), not a plain Row + Modifier.selectable: Material3's
     // RadioButton drops its own 48dp touch target when its onClick is null (it hands that job to the
     // ancestor that owns the click), so the enclosing container must be the one that reserves 48dp.
+    // docs/design-plan.md §4.5: the selected recurrence/policy/end row fills with secondaryContainer.
     Surface(
         selected = selected,
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).semantics { role = Role.RadioButton },
-        color = Color.Transparent,
+        shape = MaterialTheme.shapes.small,
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -1022,9 +1232,32 @@ private fun RecurrenceOption(
     }
 }
 
+/**
+ * A validation error, shown as an `errorContainer` banner with a warning icon
+ * (`docs/design-plan.md` §4.5) — replaces a plain red caption. The offending field or button also gets
+ * [errorOutlinedBorder]/[errorOutlinedButtonColors], so the error is legible without colour alone
+ * (design-plan §2: colour is never the only signal — the icon and the outline are its twins).
+ */
 @Composable
-private fun ErrorText(text: String) {
-    Text(text = text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+private fun ErrorBanner(text: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(FieldSpacing),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(FieldSpacing),
+        ) {
+            Icon(
+                Icons.Filled.Warning,
+                contentDescription = stringResource(R.string.events_editor_error_icon_description),
+                tint = MaterialTheme.colorScheme.error,
+            )
+            Text(text = text, style = MaterialTheme.typography.bodySmall)
+        }
+    }
 }
 
 @Composable
@@ -1148,6 +1381,8 @@ private fun previewLoaded(
     recurrenceKind: RecurrenceKind,
     startDate: LocalDate,
     isLeapDayAnchor: Boolean = false,
+    colorArgb: Int? = null,
+    category: EventCategory = EventCategory.EVENT,
 ): EventEditorUiState.Loaded =
     EventEditorUiState.Loaded(
         isNew = isNew,
@@ -1181,6 +1416,8 @@ private fun previewLoaded(
         saveFailed = false,
         showDeleteConfirm = false,
         showDiscardConfirm = false,
+        colorArgb = colorArgb,
+        category = category,
     )
 
 private val previewCallbacks =
@@ -1196,6 +1433,8 @@ private val previewCallbacks =
         onZoneChoiceChange = {},
         onRecurrenceKindChange = {},
         onLeapDayPolicyChange = {},
+        onColorChange = {},
+        onCategoryChange = {},
         onRecurrenceEndKindChange = {},
         onUntilDateChange = {},
         onCountChange = {},
@@ -1246,6 +1485,11 @@ internal fun EventEditorLeapDayPreview() {
                     isNew = false,
                     recurrenceKind = RecurrenceKind.YEARLY_IFC,
                     startDate = LocalDate.of(2024, 6, 17),
+                    colorArgb =
+                        EventColorSwatches.ALL
+                            .first { it.nameRes == R.string.events_editor_color_plum }
+                            .colorArgb,
+                    category = EventCategory.BIRTHDAY,
                     isLeapDayAnchor = true,
                 ),
             callbacks = previewCallbacks,

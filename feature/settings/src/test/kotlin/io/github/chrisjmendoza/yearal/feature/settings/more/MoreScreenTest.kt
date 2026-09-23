@@ -67,7 +67,7 @@ class MoreScreenTest {
             .performClick()
 
         settingsClicks shouldBe 1
-        compose.onNodeWithText("Weekday headers, theme").assertIsDisplayed()
+        compose.onNodeWithText("Weekday headers, appearance").assertIsDisplayed()
     }
 
     @Test

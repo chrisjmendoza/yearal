@@ -5,6 +5,7 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.domain.event.Event
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCalendar
+import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.EventTiming
 import io.github.chrisjmendoza.yearal.core.domain.event.IfcRecurrence
 import io.github.chrisjmendoza.yearal.core.domain.event.IntercalaryDay
@@ -125,6 +126,50 @@ class EventDraftTest {
         val event = buildEvent(draft, LocalDate.of(2026, 3, 8), existing = null, draftUid = uid)
 
         (event.timing as EventTiming.Timed).zone shouldBe EventFixtures.NEW_YORK
+    }
+
+    // ----- docs/design-plan.md §5.4: per-event colour and category -----
+
+    @Test
+    fun `a new event defaults to no colour of its own and EVENT category`() {
+        val draft = EventDraft(fixedZoneId = ZoneId.of("UTC"))
+        val event = buildEvent(draft, LocalDate.of(2026, 6, 30), existing = null, draftUid = uid)
+
+        event.colorArgb shouldBe null
+        event.category shouldBe EventCategory.EVENT
+    }
+
+    @Test
+    fun `the chosen colour and category are carried onto the built event`() {
+        val draft =
+            EventDraft(
+                fixedZoneId = ZoneId.of("UTC"),
+                colorArgb = 0xFF993A7A.toInt(),
+                category = EventCategory.BIRTHDAY,
+            )
+        val event = buildEvent(draft, LocalDate.of(2026, 6, 30), existing = null, draftUid = uid)
+
+        event.colorArgb shouldBe 0xFF993A7A.toInt()
+        event.category shouldBe EventCategory.BIRTHDAY
+    }
+
+    @Test
+    fun `resetting to Calendar colour saves null even for an event that had its own colour`() {
+        val existing = EventFixtures.allDay().copy(colorArgb = 0xFF993A7A.toInt())
+        val draft = EventDraft.from(existing, deviceZoneId = ZoneId.of("UTC")).copy(colorArgb = null)
+
+        val event = buildEvent(draft, requireNotNull(draft.startDate), existing, uid)
+
+        event.colorArgb shouldBe null
+    }
+
+    @Test
+    fun `EventDraft from reads the event's own colour and category back`() {
+        val stored = EventFixtures.allDay().copy(colorArgb = 0xFF286B3F.toInt(), category = EventCategory.OBSERVANCE)
+        val draft = EventDraft.from(stored, deviceZoneId = ZoneId.of("UTC"))
+
+        draft.colorArgb shouldBe 0xFF286B3F.toInt()
+        draft.category shouldBe EventCategory.OBSERVANCE
     }
 
     // ----- Multi-day all-day -----
