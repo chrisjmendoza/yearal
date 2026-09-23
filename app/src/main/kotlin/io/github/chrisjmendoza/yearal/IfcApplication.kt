@@ -3,6 +3,7 @@ package io.github.chrisjmendoza.yearal
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
 import io.github.chrisjmendoza.yearal.core.domain.event.ReminderScheduler
+import io.github.chrisjmendoza.yearal.core.domain.widget.WidgetUpdater
 import io.github.chrisjmendoza.yearal.core.scheduling.DayRolloverScheduler
 import io.github.chrisjmendoza.yearal.time.AndroidTimeChangeSignal
 import io.github.chrisjmendoza.yearal.widget.preview.WidgetPreviewUpdater
@@ -30,6 +31,17 @@ class IfcApplication : Application() {
     /** Injected by Hilt during `super.onCreate()`. */
     @Inject
     lateinit var widgetPreviewUpdater: WidgetPreviewUpdater
+
+    /**
+     * Injected by Hilt during `super.onCreate()` and never read: the point is construction. The
+     * production [WidgetUpdater] is a process singleton whose collectors watch event storage and the
+     * appearance settings and refresh placed widgets when either changes
+     * (`docs/ARCHITECTURE.md` §5 "Refresh"). Without an eager injection it would only start once
+     * something else first asked for it, so an appearance change made before any event was touched
+     * in this process would not reach the widgets until the next midnight.
+     */
+    @Inject
+    lateinit var widgetUpdater: WidgetUpdater
 
     /**
      * Injected by Hilt during `super.onCreate()`. The concrete type, not just the `TimeChangeSignal`

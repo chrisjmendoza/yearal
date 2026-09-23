@@ -3,9 +3,13 @@ package io.github.chrisjmendoza.yearal.core.designsystem.calendar
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PixelMap
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -17,6 +21,8 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.LightPrimary
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.LightTertiary
 import io.kotest.matchers.shouldBe
 import org.junit.Rule
 import org.junit.Test
@@ -24,6 +30,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
+import kotlin.math.abs
 
 /**
  * [YearMiniMonthTile] under Robolectric, written from `docs/calendar-spec.md` §2.2, §7.2 and
@@ -211,6 +218,46 @@ class YearOverviewTilesTest {
         )
 
         tile().assert(hasContentDescription("October 2026 1 day with events. 1 day with a holiday."))
+    }
+
+    // Fix design-pass 9: a day marked with both a holiday and an event used to draw only the diamond,
+    // silently dropping the event mark. The merged description above can't tell the two cases apart —
+    // its event/holiday counts are computed independently of what the Canvas actually draws, so a day
+    // carrying both would already speak correctly even with the bug. Only the rendered pixels can prove
+    // the corner event dot is actually there, so this renders the tile at a higher density (xxhdpi,
+    // still the same w200dp-h300dp layout) for a reliable colour sample.
+
+    @Test
+    @Config(qualifiers = "w200dp-h300dp-xxhdpi")
+    fun `a day with both a holiday and an event draws both marks, not just the diamond`() {
+        // IFC October 5, 2026 is Gregorian October 12, 2026. October (unlike June) has no Leap Day
+        // indicator competing for the tertiary/holiday colour.
+        val markedDate = LocalDate.of(2026, 10, 12)
+        show(IfcYearMonth(2026, IfcMonth.OCTOBER), eventDates = setOf(markedDate), holidays = setOf(markedDate))
+
+        val pixels = tile().captureToImage().toPixelMap()
+
+        pixels.containsColorNear(LightTertiary) shouldBe true // the holiday diamond, centred in the cell
+        pixels.containsColorNear(LightPrimary) shouldBe true // the smaller event dot in the cell's corner
+    }
+
+    /** Whether any pixel is within [tolerance] of [target] on every RGB channel (0f..1f each). */
+    private fun PixelMap.containsColorNear(
+        target: Color,
+        tolerance: Float = 0.08f,
+    ): Boolean {
+        for (x in 0 until width) {
+            for (y in 0 until height) {
+                val pixel = this[x, y]
+                if (abs(pixel.red - target.red) < tolerance &&
+                    abs(pixel.green - target.green) < tolerance &&
+                    abs(pixel.blue - target.blue) < tolerance
+                ) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     // YearDayTile (docs/design-plan.md §4.3/§8 decision 4: the intercalary fill returned).

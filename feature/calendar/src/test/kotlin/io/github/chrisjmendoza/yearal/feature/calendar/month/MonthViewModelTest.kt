@@ -432,15 +432,49 @@ class MonthViewModelTest {
                 viewModel.select(christmas2026)
 
                 // The summary's own agenda comes from a separately keyed flow
-                // (MonthViewModel.summaryAgenda), so its settled value can land an emission or two
-                // after the one that already shows the new selection (the same "two combined flows"
-                // shape as event counts around a page change, see the comment above).
-                var loaded = awaitItem()
-                while (loaded.summaryAgenda.isEmpty()) {
-                    loaded = awaitItem()
-                }
-                loaded.summaryDate shouldBe christmas2026
-                loaded.summaryAgenda.map { it.title } shouldBe listOf("Party")
+                // (MonthViewModel.summaryAgenda), so its settled value lands an emission after the one
+                // that already shows the new selection — see the regression test below for what that
+                // first emission must (and must not) show.
+                awaitItem()
+                val settled = awaitItem()
+                settled.summaryDate shouldBe christmas2026
+                settled.summaryAgenda.map { it.title } shouldBe listOf("Party")
+            }
+        }
+
+    // Design-pass fix 1: select() updates the partial state immediately, but summaryAgenda (a flatMapLatest keyed
+    // on the summary date) settles later, so the emission in between must never pair the new date with
+    // the previous day's rows.
+
+    @Test
+    fun `selecting a new day never pairs its date with the previous day's agenda rows`() =
+        runTest(dispatcher) {
+            val today = LocalDate.of(2026, 9, 17)
+            val agenda = FakeObserveAgendaUseCase()
+            agenda.putEntry(EventFixtures.entry(EventFixtures.allDay(date = today, title = "Standup")))
+            agenda.putEntry(EventFixtures.entry(EventFixtures.allDay(date = christmas2026, title = "Party")))
+            val viewModel = viewModel(december2026, observeAgenda = agenda)
+            viewModel.uiState.test {
+                awaitItem()
+                val initial = awaitItem()
+                initial.summaryDate shouldBe today
+                initial.summaryAgenda.map { it.title } shouldBe listOf("Standup")
+
+                viewModel.select(christmas2026)
+
+                // The very next emission already carries the new summary date. It must not show
+                // "Standup" (today's rows, still the only value MonthViewModel.summaryAgenda had ready)
+                // under christmas2026 — that pairing was the bug; the fix shows no rows for the date
+                // mismatch instead.
+                val justSelected = awaitItem()
+                justSelected.summaryDate shouldBe christmas2026
+                justSelected.summaryAgenda shouldBe emptyList()
+
+                // Once the re-issued subscription for christmas2026's range delivers its own value, the
+                // correct rows settle.
+                val settled = awaitItem()
+                settled.summaryDate shouldBe christmas2026
+                settled.summaryAgenda.map { it.title } shouldBe listOf("Party")
             }
         }
 

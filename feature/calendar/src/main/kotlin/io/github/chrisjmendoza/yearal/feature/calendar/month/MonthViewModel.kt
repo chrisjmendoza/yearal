@@ -83,10 +83,10 @@ class MonthViewModel
         private val summaryDate: Flow<LocalDate> =
             combine(dateTicker.today, selected) { today, sel -> sel ?: today }.distinctUntilChanged()
 
-        private val summaryAgenda: Flow<List<AgendaItemUi>> =
+        private val summaryAgenda: Flow<SummaryAgendaSnapshot> =
             summaryDate.flatMapLatest { date ->
                 observeAgenda(date..date).map { agendas ->
-                    agendas[date]?.entries.orEmpty().map { it.toAgendaItemUi() }
+                    SummaryAgendaSnapshot(date, agendas[date]?.entries.orEmpty().map { it.toAgendaItemUi() })
                 }
             }
 
@@ -103,8 +103,13 @@ class MonthViewModel
                 eventCountsByPage,
             ) { today, settings, page, selected, eventCounts ->
                 MonthPartialState(today, settings, page, selected, eventCounts)
-            }.combine(summaryAgenda) { partial, summaryAgenda ->
+            }.combine(summaryAgenda) { partial, agendaSnapshot ->
                 val summaryDate = partial.selected ?: partial.today
+                // The two combined flows can settle out of step: when the summary date just changed,
+                // the previous agendaSnapshot (still keyed to the old date) must not be shown under the
+                // new date — that would pair the new day with the old day's rows for a frame. Emit
+                // nothing until agendaSnapshot itself catches up to summaryDate (see design-pass fix 1).
+                val rows = if (agendaSnapshot.date == summaryDate) agendaSnapshot.rows else emptyList()
                 MonthUiState(
                     currentPage = partial.page,
                     today = partial.today,
@@ -117,7 +122,7 @@ class MonthViewModel
                         catalog
                             .labels(partial.settings.enabledHolidaySets, summaryDate..summaryDate)[summaryDate]
                             .orEmpty(),
-                    summaryAgenda = summaryAgenda,
+                    summaryAgenda = rows,
                 )
             }.stateIn(
                 viewModelScope,
@@ -213,4 +218,15 @@ private data class MonthPartialState(
     val page: Int,
     val selected: LocalDate?,
     val eventCounts: Map<IfcYearMonth, Map<LocalDate, Int>>,
+)
+
+/**
+ * One emission of [MonthViewModel.summaryAgenda]: [rows] are only valid for [date]. Carrying the date
+ * alongside the rows lets the `uiState` combine stage detect a stale emission — one still keyed to the
+ * previous summary date — and show no rows for a frame instead of pairing the new date with the old
+ * day's agenda (design-pass fix 1).
+ */
+private data class SummaryAgendaSnapshot(
+    val date: LocalDate,
+    val rows: List<AgendaItemUi>,
 )

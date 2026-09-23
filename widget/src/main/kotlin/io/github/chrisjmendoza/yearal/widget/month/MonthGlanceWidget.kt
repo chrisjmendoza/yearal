@@ -27,7 +27,6 @@ import androidx.glance.layout.fillMaxHeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
-import androidx.glance.material3.ColorProviders
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.text.FontWeight
@@ -40,14 +39,16 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.GRID_COLUMNS
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.GRID_ROWS
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
-import io.github.chrisjmendoza.yearal.core.designsystem.theme.BrandDarkColorScheme
-import io.github.chrisjmendoza.yearal.core.designsystem.theme.BrandLightColorScheme
 import io.github.chrisjmendoza.yearal.core.domain.ZoneProvider
+import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.widget.R
 import io.github.chrisjmendoza.yearal.widget.di.WidgetEntryPoint
+import io.github.chrisjmendoza.yearal.widget.theme.applyWidgetBackgroundOpacity
+import io.github.chrisjmendoza.yearal.widget.theme.resolveWidgetColors
 import io.github.chrisjmendoza.yearal.widget.today.dayLaunchIntent
 import io.github.chrisjmendoza.yearal.widget.today.monthLaunchIntent
 import io.github.chrisjmendoza.yearal.widget.today.todayDate
+import kotlinx.coroutines.flow.first
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -112,8 +113,20 @@ class MonthGlanceWidget : GlanceAppWidget() {
         val monthRange = IfcYearMonth.from(today.ifcDate).gregorianRange
         val eventDates = fetchMonthEventPresence(entryPoint.observeAgendaUseCase(), monthRange)
         val holidayDates = fetchMonthHolidays(entryPoint.holidaySetProvider(), entryPoint.holidayEngine(), monthRange)
+        // The first (current) value only; see TodayGlanceWidget.provideGlance's identical comment --
+        // DebouncedWidgetUpdater is what makes a later settings change reach a later render.
+        val settings = entryPoint.settingsRepository().settings.first()
         provideContent {
-            MonthWidgetContent(clock, zoneProvider, formatter, tapHint, eventDates, hasEventsLabel, holidayDates)
+            MonthWidgetContent(
+                clock,
+                zoneProvider,
+                formatter,
+                tapHint,
+                eventDates,
+                hasEventsLabel,
+                holidayDates,
+                settings,
+            )
         }
     }
 
@@ -133,6 +146,8 @@ class MonthGlanceWidget : GlanceAppWidget() {
         val tapHint = context.getString(R.string.today_widget_tap_hint)
         val hasEventsLabel = context.getString(R.string.month_widget_has_events_hint)
         provideContent {
+            // A fixed UserSettings.DEFAULT, not a live SettingsRepository read -- a picker preview must
+            // not depend on live data, matching PREVIEW_EVENT_DATES/PREVIEW_HOLIDAY_DATES above.
             MonthWidgetContent(
                 PREVIEW_CLOCK,
                 PREVIEW_ZONE_PROVIDER,
@@ -141,6 +156,7 @@ class MonthGlanceWidget : GlanceAppWidget() {
                 PREVIEW_EVENT_DATES,
                 hasEventsLabel,
                 PREVIEW_HOLIDAY_DATES,
+                UserSettings.DEFAULT,
             )
         }
     }
@@ -197,6 +213,17 @@ class MonthGlanceWidget : GlanceAppWidget() {
  *   [fetchMonthEventPresence]); empty when the presence snapshot timed out or failed, which simply
  *   renders every cell without a dot.
  * @param hasEventsLabel the localized "has events" hint for [MonthWidgetState.contentDescription].
+ * @param settings the user's appearance settings (`docs/design-plan.md` §4.9, §5.6), read once per
+ *   [MonthGlanceWidget.provideGlance] call like the other parameters above. Resolves this widget's
+ *   colours through [resolveWidgetColors] and [UserSettings.monthWidgetTheme] -- `null` there means
+ *   Material You dynamic colour, exactly like [io.github.chrisjmendoza.yearal.widget.today.TodayGlanceWidget]'s
+ *   own use of the same function -- and its [UserSettings.widgetBackgroundOpacity] is applied only to
+ *   the outermost background. Day cells and the intercalary band keep their own **opaque** fill
+ *   regardless of the opacity setting (`docs/design-plan.md` §5.6's "transparent widget" concern is
+ *   about the surrounding chrome), which is this widget's answer to the "keep text readable at low
+ *   opacity" requirement -- the cheaper option next to
+ *   [io.github.chrisjmendoza.yearal.widget.today.TodayGlanceWidget]'s solid chip, since here the grid
+ *   already gives every number and mark its own opaque patch to sit on.
  */
 @Composable
 private fun MonthWidgetContent(
@@ -207,15 +234,9 @@ private fun MonthWidgetContent(
     eventDates: Set<LocalDate>,
     hasEventsLabel: String,
     holidayDates: Set<LocalDate>,
+    settings: UserSettings,
 ) {
-    val colors =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Material You dynamic colour (FEATURES S4).
-            GlanceTheme.colors
-        } else {
-            // Brand palette fallback below API 31 (docs/ARCHITECTURE.md §5, §1).
-            ColorProviders(light = BrandLightColorScheme, dark = BrandDarkColorScheme)
-        }
+    val colors = resolveWidgetColors(settings, settings.monthWidgetTheme, Build.VERSION.SDK_INT) ?: GlanceTheme.colors
     GlanceTheme(colors = colors) {
         val context = LocalContext.current
         // Read fresh on every composition, per CLAUDE.md rule 2 -- never `remember`, never a value
@@ -225,10 +246,17 @@ private fun MonthWidgetContent(
         val size = LocalSize.current
         val isFull = size.width >= MonthGlanceWidget.FULL.width && size.height >= MonthGlanceWidget.FULL.height
 
+        val translucentBackground =
+            ColorProvider(
+                applyWidgetBackgroundOpacity(
+                    GlanceTheme.colors.widgetBackground.getColor(context),
+                    settings.widgetBackgroundOpacity,
+                ),
+            )
         var modifier =
             GlanceModifier
                 .fillMaxSize()
-                .background(GlanceTheme.colors.widgetBackground)
+                .background(translucentBackground)
                 .padding(8.dp)
                 .semantics { contentDescription = state.contentDescription }
         // monthLaunchIntent is null only if the platform cannot resolve this app's own launcher
@@ -337,9 +365,15 @@ private fun WeekdayHeaderRow(
  * number, which is consistent on its own terms. [isFull] also sizes the type: the numbers are set
  * larger there so they fill the taller cells instead of floating in them.
  *
- * The cell insets itself by [GRID_LINE] and paints [GlanceTheme] `widgetBackground` inside that inset,
- * which is what turns the grid container's own background into the rule lines around this cell -- see
- * the grid's comment in `MonthWidgetContent`.
+ * The cell insets itself by [GRID_LINE] and paints its own faint fill inside that inset --
+ * `surfaceVariant` (standing in for the design token `gridCellMarked`) when [dayCell] carries a
+ * holiday or event mark, `surface` (standing in for `gridCell`) otherwise (design-plan §4.9, §3.1's
+ * token table) -- with a [CELL_CORNER_RADIUS], which is also what turns the grid container's own
+ * background into the rule lines around this cell -- see the grid's comment in `MonthWidgetContent`.
+ * `androidx.glance.color.ColorProviders` has no `surfaceContainer*` role (`docs/ARCHITECTURE.md` §5's
+ * Glance section), so this reads the nearest available roles instead of the app's own tonal tiers --
+ * an approximation, not the exact tokens `:core:designsystem`'s `YearalColors` uses for the same idea
+ * in Compose.
  *
  * Its own tap target (ROADMAP M3 T5; FEATURES S5) opens [dayCell.gregorianDate] specifically, through
  * [dayLaunchIntent] -- overriding the whole-widget [monthLaunchIntent] fallback for this cell's own
@@ -357,9 +391,14 @@ private fun RowScope.DayNumberCell(
     dayLaunchIntent(context, dayCell.gregorianDate.toEpochDay())?.let { intent ->
         cellModifier = cellModifier.clickable(actionStartActivity(intent))
     }
+    val hasMark = dayCell.hasHoliday || dayCell.hasEvent
     Box(modifier = cellModifier) {
         Box(
-            modifier = GlanceModifier.fillMaxSize().background(colors.widgetBackground),
+            modifier =
+                GlanceModifier
+                    .fillMaxSize()
+                    .background(if (hasMark) colors.surfaceVariant else colors.surface)
+                    .cornerRadius(CELL_CORNER_RADIUS),
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
@@ -369,6 +408,8 @@ private fun RowScope.DayNumberCell(
                         TextStyle(
                             fontSize = if (isFull) 15.sp else 12.sp,
                             fontWeight = if (dayCell.isToday) FontWeight.Bold else FontWeight.Normal,
+                            // todayRing (design-plan §4.9's answer to owner note 6): the filled pill
+                            // uses the same `primary` role the app's own today ring is derived from.
                             color = if (dayCell.isToday) colors.onPrimary else colors.onSurface,
                             textAlign = TextAlign.Center,
                         ),
@@ -395,23 +436,32 @@ private fun RowScope.DayNumberCell(
                         modifier = GlanceModifier.fillMaxWidth(),
                     )
                 }
-                Text(
-                    text = dayMarks(dayCell.hasHoliday, dayCell.hasEvent),
-                    style =
-                        TextStyle(
-                            fontSize = if (isFull) 9.sp else 8.sp,
-                            // onSurfaceVariant even on today: the pill's background stops at the number
-                            // above, so this line sits on the cell background whatever the day is, and
-                            // onPrimary here would be near-invisible against it.
-                            color = colors.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        ),
-                    modifier = GlanceModifier.fillMaxWidth(),
-                )
+                // Shape first (CLAUDE.md rule 3): holiday diamond and event dot are two Texts, not one,
+                // so each can carry its own tint (holidayMark/eventMark, design-plan §4.9) -- Glance's
+                // plain Text has no rich-span support for mixing colours within one string. Both render
+                // even when empty, so a mark appearing never shifts the grid's row height.
+                Row(modifier = GlanceModifier.fillMaxWidth()) {
+                    val markFontSize = if (isFull) 9.sp else 8.sp
+                    Text(
+                        text = if (dayCell.hasHoliday) HOLIDAY_MARK_GLYPH else "",
+                        style =
+                            TextStyle(fontSize = markFontSize, color = colors.tertiary, textAlign = TextAlign.Center),
+                        modifier = GlanceModifier.defaultWeight(),
+                    )
+                    Text(
+                        text = if (dayCell.hasEvent) EVENT_DOT_GLYPH else "",
+                        style =
+                            TextStyle(fontSize = markFontSize, color = colors.primary, textAlign = TextAlign.Center),
+                        modifier = GlanceModifier.defaultWeight(),
+                    )
+                }
             }
         }
     }
 }
+
+/** The 4dp corner radius every day cell's own fill is drawn with (design-plan §4.9). */
+private val CELL_CORNER_RADIUS = 4.dp
 
 /**
  * A small, non-linguistic bullet marking a day with an event (ROADMAP M5 T6). Not a translatable string
@@ -431,31 +481,13 @@ private const val HOLIDAY_MARK_GLYPH: String = "◆"
 private val GRID_LINE = 1.dp
 
 /**
- * The marks line under a day: the holiday diamond first, then the event dot, matching the app's own
- * `DayMarks` order. Every cell renders this line even when it is empty, so a mark appearing never
- * shifts the grid's row height.
- *
- * The widget shows *presence*, so at most one event dot, where the app's cell shows up to three: the
- * widget's snapshot (`ObserveAgendaUseCase.presence`) is deliberately a boolean per day and carries no
- * count, because a count is closer to event content than a home screen should hold (CLAUDE.md rule 8).
- */
-private fun dayMarks(
-    hasHoliday: Boolean,
-    hasEvent: Boolean,
-): String =
-    when {
-        hasHoliday && hasEvent -> "$HOLIDAY_MARK_GLYPH$EVENT_DOT_GLYPH"
-        hasHoliday -> HOLIDAY_MARK_GLYPH
-        hasEvent -> EVENT_DOT_GLYPH
-        else -> ""
-    }
-
-/**
  * The full-width Leap Day / Year Day band, [intercalary]. Uses the tertiary-container colour, matching
  * the app's own `IntercalaryBand` (`:core:designsystem`); when today falls on this day it switches to
  * the primary container plus bold text -- shape and weight, not colour alone, matching [DayNumberCell].
- * [intercalary.hasEvent] appends the same [EVENT_DOT_GLYPH] used on a regular day cell (ROADMAP M5 T6),
- * since Leap Day and Year Day can carry events like any other day (CLAUDE.md rule 6).
+ * [intercalary.hasHoliday]/[intercalary.hasEvent] append the same tinted [HOLIDAY_MARK_GLYPH]/
+ * [EVENT_DOT_GLYPH] a regular day cell shows (ROADMAP M5 T6; design-plan §4.9's holidayMark/eventMark
+ * tints), each its own `Text` for the same rich-span reason [DayNumberCell] documents, since Leap Day
+ * and Year Day can carry events and holidays like any other day (CLAUDE.md rule 6).
  *
  * Its own tap target (ROADMAP M3 T5) opens [intercalary.gregorianDate] specifically, exactly like
  * [DayNumberCell] -- the day belongs to no week, but it is still one specific day.
@@ -477,17 +509,24 @@ private fun IntercalaryRow(intercalary: MonthIntercalaryState) {
         bandModifier = bandModifier.clickable(actionStartActivity(intent))
     }
     Column(modifier = bandModifier) {
-        Text(
-            text =
-                dayMarks(intercalary.hasHoliday, intercalary.hasEvent)
-                    .let { marks -> if (marks.isEmpty()) intercalary.label else "${intercalary.label} $marks" },
-            style =
-                TextStyle(
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = contentColor,
-                ),
-        )
+        Row(verticalAlignment = Alignment.Vertical.CenterVertically) {
+            Text(
+                text = intercalary.label,
+                style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = contentColor),
+            )
+            if (intercalary.hasHoliday) {
+                Text(
+                    text = " $HOLIDAY_MARK_GLYPH",
+                    style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.tertiary),
+                )
+            }
+            if (intercalary.hasEvent) {
+                Text(
+                    text = " $EVENT_DOT_GLYPH",
+                    style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.primary),
+                )
+            }
+        }
         Text(
             text = intercalary.subtitle,
             style = TextStyle(fontSize = 10.sp, color = contentColor),

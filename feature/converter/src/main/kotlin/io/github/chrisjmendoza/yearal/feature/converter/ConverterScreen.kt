@@ -35,7 +35,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +66,7 @@ import io.github.chrisjmendoza.yearal.core.designsystem.picker.IfcDatePickerValu
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.navigation.ConverterKey
 import io.github.chrisjmendoza.yearal.core.navigation.DayKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
@@ -177,10 +177,7 @@ fun ConverterScreen(
                         TextButton(onClick = onResetToToday) { Text(stringResource(R.string.converter_today)) }
                     }
                 },
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    ),
+                colors = yearalTopAppBarColors(),
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },

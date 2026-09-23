@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
 import io.github.chrisjmendoza.yearal.feature.settings.R
 
@@ -73,6 +74,7 @@ fun PrivacyScreen(
                         )
                     }
                 },
+                colors = yearalTopAppBarColors(),
             )
         },
     ) { padding ->

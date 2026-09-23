@@ -75,9 +75,9 @@ class ColorSchemeContrastTest {
             Pair("tertiary/surface", scheme.tertiary, scheme.surface, TEXT_MIN),
             Pair("error/surface", scheme.error, scheme.surface, TEXT_MIN),
             Pair("onSurfaceVariant/surface", scheme.onSurfaceVariant, scheme.surface, TEXT_MIN),
-            // Material role pair, non-text: 3:1.
-            Pair("outline/surface", scheme.outline, scheme.surface, NON_TEXT_MIN),
-            // YearalColors pairs, text: 4.5:1.
+            // YearalColors pairs, text: 4.5:1 — exactly the pairs the grid, cards and headers draw
+            // text or a legible label over (design-pass fix 6; the previous list missed weekdayActualText over
+            // its own header fill and the today badge's text over both cell fills it actually sits on).
             Pair("onHero/heroContainer", yc.onHero, yc.heroContainer, TEXT_MIN),
             Pair(
                 "onIntercalaryContainer/intercalaryContainer",
@@ -91,14 +91,28 @@ class ColorSchemeContrastTest {
                 yc.weekdayNominalContainer,
                 TEXT_MIN,
             ),
+            Pair(
+                "weekdayActualText/weekdayNominalContainer",
+                yc.weekdayActualText,
+                yc.weekdayNominalContainer,
+                TEXT_MIN,
+            ),
             Pair("onCard/cardContainer", yc.onCard, yc.cardContainer, TEXT_MIN),
             Pair("weekdayActualText/pageBackground", yc.weekdayActualText, yc.pageBackground, TEXT_MIN),
-            // YearalColors pairs, non-text (marks on cell fills): 3:1.
+            Pair("todayText/gridCell", yc.todayText, yc.gridCell, TEXT_MIN),
+            Pair("todayText/gridCellMarked", yc.todayText, yc.gridCellMarked, TEXT_MIN),
+            // YearalColors pairs, non-text (marks and rings on the cell fills they are actually drawn
+            // on): 3:1. todayRing/gridCellWeekend and eventMark/gridCell are gone — the grid never
+            // draws those combinations (the today ring and the event dot both sit on gridCellMarked
+            // once a cell has a mark, not on the plain or weekend fill).
+            Pair("outline/surface", scheme.outline, scheme.surface, NON_TEXT_MIN),
             Pair("todayRing/gridCell", yc.todayRing, yc.gridCell, NON_TEXT_MIN),
+            Pair("todayRing/gridCellMarked", yc.todayRing, yc.gridCellMarked, NON_TEXT_MIN),
             Pair("holidayMark/gridCell", yc.holidayMark, yc.gridCell, NON_TEXT_MIN),
-            Pair("eventMark/gridCell", yc.eventMark, yc.gridCell, NON_TEXT_MIN),
-            Pair("todayRing/gridCellWeekend", yc.todayRing, yc.gridCellWeekend, NON_TEXT_MIN),
             Pair("holidayMark/gridCellMarked", yc.holidayMark, yc.gridCellMarked, NON_TEXT_MIN),
+            Pair("eventMark/gridCellMarked", yc.eventMark, yc.gridCellMarked, NON_TEXT_MIN),
+            Pair("intercalary/intercalaryContainer", yc.intercalary, yc.intercalaryContainer, NON_TEXT_MIN),
+            Pair("intercalary/pageBackground", yc.intercalary, yc.pageBackground, NON_TEXT_MIN),
         )
     }
 

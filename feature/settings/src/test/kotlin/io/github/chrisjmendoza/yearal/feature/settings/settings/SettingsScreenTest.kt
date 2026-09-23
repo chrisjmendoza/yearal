@@ -198,6 +198,22 @@ class SettingsScreenTest {
         paletteSelections shouldContainExactly listOf(ColorPalette.NIGHT)
     }
 
+    // docs/design-plan.md §4.8 (ROADMAP wave 3 J3): a live preview strip beneath the swatches, in
+    // whichever palette is currently selected — even while the row above is disabled.
+    @Test
+    fun `the palette preview strip names the selected palette and follows it`() {
+        show(UserSettings(colorSource = ColorSource.BRAND, palette = ColorPalette.MOSS))
+
+        compose.onNodeWithContentDescription("Preview of the Moss palette").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun `the palette preview strip still reflects the palette while Material You is selected`() {
+        show(UserSettings(colorSource = ColorSource.DYNAMIC, palette = ColorPalette.INK))
+
+        compose.onNodeWithContentDescription("Preview of the Ink palette").performScrollTo().assertIsDisplayed()
+    }
+
     @Test
     fun `the palette row is disabled and explained while Material You is the colour source`() {
         show(UserSettings(colorSource = ColorSource.DYNAMIC))
@@ -211,6 +227,20 @@ class SettingsScreenTest {
         compose.onNodeWithText("Teal").performClick()
 
         paletteSelections shouldBe emptyList()
+    }
+
+    // Review finding: below API 31 the theme falls back to the palette even while ColorSource.DYNAMIC is
+    // stored (e.g. restored from a backup made on a newer device), so a palette choice still has a
+    // visible effect and the row must not read as disabled with "no visible effect".
+    @Test
+    fun `the palette row stays enabled while Material You is stored but unsupported on this device`() {
+        show(UserSettings(colorSource = ColorSource.DYNAMIC), dynamicColorSupported = false)
+
+        compose.onNodeWithText("Teal").performScrollTo().assertIsEnabled()
+
+        compose.onNodeWithText("Night").performScrollTo().performClick()
+
+        paletteSelections shouldContainExactly listOf(ColorPalette.NIGHT)
     }
 
     @Test
@@ -259,6 +289,35 @@ class SettingsScreenTest {
             .performSemanticsAction(SemanticsActions.SetProgress) { it(35f) }
 
         widgetBackgroundOpacityChanges shouldContainExactly listOf(35)
+    }
+
+    // Review finding: the slider used to bind `value` straight to the stored percentage and persist on
+    // every `onValueChange`, so one drag from 0 to 100 could write to DataStore up to 20 times and the
+    // thumb lagged a step behind the finger. `SetProgress` is the accessibility action Robolectric can
+    // reliably exercise for a Slider (a real multi-frame touch drag isn't simulated by this test host);
+    // it drives the same onValueChange/onValueChangeFinished pair a drag's last frame and release would,
+    // so it stands in for "the drag has ended" — the point being that exactly one value is reported, not
+    // one per intermediate position, for a value that never equalled the stored one before this action.
+    @Test
+    fun `setting the widget background slider away from its stored value persists exactly one update`() {
+        show(UserSettings(widgetBackgroundOpacity = 0))
+
+        compose
+            .onNodeWithTag(SettingsTestTags.WIDGET_BACKGROUND_SLIDER)
+            .performScrollTo()
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(80f) }
+
+        widgetBackgroundOpacityChanges shouldContainExactly listOf(80)
+    }
+
+    @Test
+    fun `the widget background slider carries an accessible label`() {
+        show(UserSettings(widgetBackgroundOpacity = 60))
+
+        compose
+            .onNodeWithContentDescription("Background opacity")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test

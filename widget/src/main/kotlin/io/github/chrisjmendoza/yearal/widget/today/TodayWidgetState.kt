@@ -1,10 +1,12 @@
 package io.github.chrisjmendoza.yearal.widget.today
 
+import android.content.res.Resources
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.domain.ZoneProvider
 import java.time.Clock
 import java.time.LocalDate
+import java.util.Locale
 
 /**
  * Today's date in both calendars (CLAUDE.md rule 1: the IFC date comes from [IfcDate.from], nothing
@@ -52,6 +54,12 @@ fun todayDate(
  *   beneath the primary label on wider or taller sizes.
  * @property actualWeekdayLabel the real-world weekday, explicitly labelled so it is never mistaken for
  *   an IFC weekday (CLAUDE.md rule 3), shown only at the largest size.
+ * @property yearProgressLabel how far through the year today is (`Day 260 of 365 · 71%`,
+ *   [io.github.chrisjmendoza.yearal.widget.today.yearProgressLabel]), shown only at
+ *   [TodayGlanceWidget.LARGE] (design-plan §4.9, "large widgets should show more").
+ * @property countdownLabel the countdown to the next Leap Day or Year Day (`Year Day in 105 days`,
+ *   [io.github.chrisjmendoza.yearal.widget.today.countdownLabel]), shown alongside
+ *   [yearProgressLabel]; `null` only past [IfcDate.MAX_YEAR].
  * @property contentDescription the merged TalkBack description for the whole tappable widget: both
  *   dates, the labelled weekdays, "Today.", and a hint that double-tapping opens the app.
  */
@@ -60,18 +68,26 @@ data class TodayWidgetState(
     val primaryLabel: String,
     val gregorianLabel: String,
     val actualWeekdayLabel: String,
+    val yearProgressLabel: String,
+    val countdownLabel: String?,
     val contentDescription: String,
 )
 
 /**
  * Builds the [TodayWidgetState] for [date]. Every word comes from [formatter] (bundled resources and
- * `java.time` locale-aware names) or [tapHint] (a string resource the caller reads); this function
- * itself formats and computes nothing.
+ * `java.time` locale-aware names), [tapHint] (a string resource the caller reads), or [resources]/
+ * [locale] (the LARGE-size extras, formatted by this module's own
+ * [io.github.chrisjmendoza.yearal.widget.today.yearProgressLabel] and
+ * [io.github.chrisjmendoza.yearal.widget.today.countdownLabel] rather than [formatter], since those
+ * strings live in `:widget`'s own resources, not `:core:designsystem`'s); this function itself formats
+ * and computes nothing.
  */
 fun buildTodayWidgetState(
     date: TodayDate,
     formatter: IfcDateFormatter,
     tapHint: String,
+    resources: Resources,
+    locale: Locale,
 ): TodayWidgetState {
     val ifcDate = date.ifcDate
     val primaryLabel = if (ifcDate.isIntercalary) formatter.formatLong(ifcDate) else formatter.formatDay(ifcDate)
@@ -80,6 +96,8 @@ fun buildTodayWidgetState(
         primaryLabel = primaryLabel,
         gregorianLabel = formatter.formatGregorianMedium(date.gregorianDate),
         actualWeekdayLabel = formatter.actualWeekday(ifcDate),
+        yearProgressLabel = yearProgressLabel(ifcDate, resources, locale),
+        countdownLabel = countdownLabel(ifcDate, resources, locale),
         contentDescription = "${formatter.dayDescription(ifcDate, isToday = true)} $tapHint",
     )
 }

@@ -28,7 +28,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,6 +65,7 @@ import io.github.chrisjmendoza.yearal.core.designsystem.picker.rememberIfcDatePi
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.PillShape
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.navigation.ConverterKey
 import io.github.chrisjmendoza.yearal.core.navigation.DayKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
@@ -272,10 +272,7 @@ fun MonthScreen(
                         }
                     }
                 },
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    ),
+                colors = yearalTopAppBarColors(),
             )
         },
     ) { padding ->
@@ -368,6 +365,18 @@ fun MonthScreen(
  * year" (a new string) so TalkBack announces it as a control, not a plain heading; still a heading
  * ([Role.Button] plus [androidx.compose.ui.semantics.heading]) so [onClick]'s target reads as the
  * page's own title, exactly as the grid's own (now hidden, `showTitle = false`) heading used to.
+ *
+ * [Modifier.heightIn] floors the tap target at 48dp (docs/ARCHITECTURE.md §4 "Accessibility") without
+ * inflating the pill's own visual height beyond what it needs: the vertical padding is kept small so
+ * the content plus padding stays well under 48dp on its own, `heightIn` pads the *click target*
+ * (the whole `selectable` Row) up to 48dp, and `Alignment.CenterVertically` keeps the pill's content
+ * centred in the taller row rather than pinned to its top (design-pass fix 5). **Not**
+ * `Modifier.minimumInteractiveComponentSize()`, Material3's usual tool for this: under this project's
+ * Robolectric `createComposeRule()` harness it measured no effect at all — reproduced with a minimal
+ * `Modifier.minimumInteractiveComponentSize().size(4.dp)` case matching `IconButton`'s own pattern,
+ * which stayed 4dp instead of reaching 48dp — so `heightIn`, already used the same way in
+ * `EventListScreen`'s row and this screen's own jump-to-date dialog buttons, is what actually measures
+ * ≥48dp under test.
  */
 @Composable
 private fun MonthTitlePill(
@@ -377,11 +386,12 @@ private fun MonthTitlePill(
     Row(
         modifier =
             Modifier
+                .heightIn(min = Dimens.DayCellMinSize)
                 .clip(PillShape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                 .selectable(selected = false, role = Role.Button, onClick = onClick)
                 .semantics(mergeDescendants = true) { heading() }
-                .padding(horizontal = Dimens.SpaceM, vertical = Dimens.SpaceS),
+                .padding(horizontal = Dimens.SpaceM, vertical = Dimens.SpaceXs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceXs),
     ) {

@@ -231,6 +231,28 @@ class EventListScreenTest {
         opened shouldContainExactly listOf(42L)
     }
 
+    // Design-pass fix 2: AssistChip(onClick = {}) swallowed a tap over the recurrence/category pill instead of
+    // letting it reach the row underneath. The chips are now non-interactive labels, so a tap anywhere
+    // on the row — including where a chip sits — opens the event through the row's own click.
+
+    @Test
+    fun `tapping the recurrence chip opens the event because the row is the only click target`() {
+        show(EventListUiState.Loaded(items = listOf(sol13), query = "", hasAnyEvents = true))
+
+        compose.onNodeWithText("Every Sol 13").performClick()
+
+        opened shouldContainExactly listOf(42L)
+    }
+
+    @Test
+    fun `tapping the category chip opens the event because the row is the only click target`() {
+        show(EventListUiState.Loaded(items = listOf(hiddenTimed), query = "", hasAnyEvents = true))
+
+        compose.onNodeWithText("Observance").performClick()
+
+        opened shouldContainExactly listOf(7L)
+    }
+
     @Test
     fun `the empty state differs for no events at all and for no search matches`() {
         show(EventListUiState.Loaded(items = emptyList(), query = "", hasAnyEvents = false))

@@ -88,6 +88,7 @@ import io.github.chrisjmendoza.yearal.core.designsystem.picker.GregorianDatePick
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.IfcDatePicker
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.rememberIfcDatePickerState
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
 import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
@@ -484,6 +485,7 @@ private fun EditorTopBar(
                 Text(stringResource(R.string.events_editor_save))
             }
         },
+        colors = yearalTopAppBarColors(),
     )
 }
 
@@ -595,7 +597,10 @@ private fun EditorBody(
  * swatch is a 40dp circle with a 48dp touch target (`docs/ARCHITECTURE.md` §4 "Accessibility"); the
  * selected one shows a check mark whose tint follows the swatch's own luminance so it stays legible on
  * every hue — colour is never the only signal (design-plan §2), so the selection is also carried in the
- * semantics as [Role.RadioButton] plus "selected".
+ * semantics via [Role.RadioButton]'s own `selected` state (from `Modifier.selectable`). The content
+ * description is just the swatch's name — never suffixed with ", selected" — because `selectable`
+ * already exposes that state on its own; saying it in the description too made TalkBack announce it
+ * twice (design-pass fix 4).
  */
 @Composable
 private fun ColorSection(
@@ -634,14 +639,12 @@ private fun ColorSwatch(
 ) {
     val color = Color(colorArgb)
     val checkTint = if (color.luminance() > SWATCH_LUMINANCE_THRESHOLD) Color.Black else Color.White
-    val description =
-        if (isSelected) stringResource(R.string.events_editor_color_swatch_selected, name) else name
     Box(
         modifier =
             Modifier
                 .size(SwatchTouchTarget)
                 .selectable(selected = isSelected, onClick = onClick, role = Role.RadioButton)
-                .semantics { contentDescription = description },
+                .semantics { contentDescription = name },
         contentAlignment = Alignment.Center,
     ) {
         Box(modifier = Modifier.size(SwatchSize).background(color = color, shape = CircleShape)) {
@@ -657,20 +660,23 @@ private fun ColorSwatch(
     }
 }
 
-/** The "Calendar colour" swatch: neutral, outlined, resets [EventDraft.colorArgb] to `null`. */
+/**
+ * The "Calendar colour" swatch: neutral, outlined, resets [EventDraft.colorArgb] to `null`. Same
+ * "selected" semantics as [ColorSwatch] (design-pass fix 4): `selectable` already carries the selection state, so
+ * the description is just the swatch's own name, never suffixed.
+ */
 @Composable
 private fun CalendarColorSwatch(
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {
     val name = stringResource(R.string.events_editor_color_calendar)
-    val description = if (isSelected) stringResource(R.string.events_editor_color_swatch_selected, name) else name
     Box(
         modifier =
             Modifier
                 .size(SwatchTouchTarget)
                 .selectable(selected = isSelected, onClick = onClick, role = Role.RadioButton)
-                .semantics { contentDescription = description },
+                .semantics { contentDescription = name },
         contentAlignment = Alignment.Center,
     ) {
         Box(

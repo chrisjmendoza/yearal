@@ -191,8 +191,6 @@
     <string name="events_editor_color_moss">Moss</string>
     <string name="events_editor_color_plum">Plum</string>
     <string name="events_editor_color_slate">Slate</string>
-    <!-- Appended to a swatch's own name when it is the selected one. %1$s = the swatch name. -->
-    <string name="events_editor_color_swatch_selected">%1$s, selected</string>
 
     <!-- Category (docs/design-plan.md §5.4): a three-way segmented control, Event / Observance / Birthday. -->
     <string name="events_editor_category_heading">Category</string>

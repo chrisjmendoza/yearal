@@ -5,7 +5,7 @@
   `DarkOnSurface` / `DarkOnSurfaceVariant` / `DarkTertiaryContainer` / `DarkOnTertiaryContainer`).
 -->
 <resources>
-    <color name="widget_preview_surface">#0E1615</color>
+    <color name="widget_preview_surface">#121C1B</color>
     <color name="widget_preview_on_surface">#DDE4E0</color>
     <color name="widget_preview_on_surface_variant">#BEC9C4</color>
     <color name="widget_preview_primary">#8FD4CA</color>

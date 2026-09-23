@@ -46,6 +46,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -64,6 +67,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.colorSchemes
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.domain.settings.ColorPalette
 import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
@@ -129,8 +133,10 @@ fun SettingsRoute(
  * @param onColorSourceSelected the colour-source segmented row's action (design-plan §5.1); the
  * `DYNAMIC` segment is shown disabled below API 31 but the callback is still wired, so a caller never
  * needs to special-case it.
- * @param onPaletteSelected a palette swatch's action (design-plan §5.2); the whole row is disabled
- * while [ColorSource.DYNAMIC] is active, so this only actually fires while [ColorSource.BRAND] is.
+ * @param onPaletteSelected a palette swatch's action (design-plan §5.2); the row is disabled while
+ * [ColorSource.DYNAMIC] is active and the platform actually honours it (API 31+) — below that, dynamic
+ * colour silently falls back to the palette (e.g. [ColorSource.DYNAMIC] restored from a backup on an
+ * older device), so the row stays enabled and this can still fire.
  * @param onPureBlackChanged the AMOLED pure-black switch's action (design-plan §5.3).
  * @param onTodayWidgetThemeSelected the Today widget's light/dark/follow-app segmented row (design-plan
  * §5.6).
@@ -178,6 +184,7 @@ fun SettingsScreen(
                         )
                     }
                 },
+                colors = yearalTopAppBarColors(),
             )
         },
     ) { padding ->
@@ -406,8 +413,8 @@ private fun AppearanceSection(
     ThemeModeGroup(state.settings.themeMode, onThemeModeSelected)
     ColorSourceRow(state, onColorSourceSelected)
     PaletteRow(
-        selected = state.settings.palette,
-        enabled = state.settings.colorSource == ColorSource.BRAND,
+        settings = state.settings,
+        enabled = state.settings.colorSource == ColorSource.BRAND || !state.dynamicColorSupported,
         onSelected = onPaletteSelected,
     )
     SwitchRow(
@@ -508,7 +515,8 @@ private fun ColorSource.labelRes(): Int =
         ColorSource.DYNAMIC -> R.string.settings_color_source_dynamic
     }
 
-private fun ColorPalette.labelRes(): Int =
+/** Shared with [PalettePreviewStrip], whose content description names the selected palette. */
+internal fun ColorPalette.labelRes(): Int =
     when (this) {
         ColorPalette.TEAL -> R.string.settings_palette_teal
         ColorPalette.SOL -> R.string.settings_palette_sol
@@ -523,11 +531,16 @@ private fun ColorPalette.labelRes(): Int =
  * palette's light `primary` and a smaller inner dot of its light `tertiary`, labelled by name; the
  * selected swatch shows a check mark. The whole row is disabled — dimmed and not clickable, with an
  * explanatory subtitle — while [enabled] is false, i.e. while [ColorSource.DYNAMIC] is the active
- * colour source and a palette choice has no visible effect.
+ * colour source *and* the platform actually honours it. Below API 31, dynamic colour is unavailable and
+ * the theme falls back to the palette regardless of the stored [ColorSource] (e.g. [ColorSource.DYNAMIC]
+ * restored from a backup made on a newer device), so a palette choice still has a visible effect there
+ * and the caller passes [enabled] as `true` in that case. Beneath the swatches, [PalettePreviewStrip]
+ * shows the live effect of [settings] regardless of [enabled] — design-plan §4.8's wave-3 follow-up,
+ * so a user sees the palette (or Material You) before committing to it.
  */
 @Composable
 private fun PaletteRow(
-    selected: ColorPalette,
+    settings: UserSettings,
     enabled: Boolean,
     onSelected: (ColorPalette) -> Unit,
 ) {
@@ -548,15 +561,13 @@ private fun PaletteRow(
         ColorPalette.entries.forEach { palette ->
             PaletteSwatch(
                 palette = palette,
-                selected = palette == selected,
+                selected = palette == settings.palette,
                 enabled = enabled,
                 onClick = { onSelected(palette) },
             )
         }
     }
-    // Wave 3 (design-plan §4.8): a live preview strip goes here — a miniature 7-day row with a today
-    // ring and a holiday diamond, drawn with the design system's own grid components in whichever
-    // palette/theme combination is currently selected — once those components are ready to reuse.
+    PalettePreviewStrip(settings = settings, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
     Spacer(modifier = Modifier.height(8.dp))
 }
 
@@ -648,26 +659,38 @@ private fun WidgetTheme.labelRes(): Int =
  * The widget background opacity slider, 0–100% in steps of 5 (design-plan §5.6). [onChange] receives
  * the value already rounded to the nearest step, since Material 3's [Slider] snaps the drag position
  * before invoking its callback whenever [Slider]'s `steps` is nonzero.
+ *
+ * The thumb tracks an in-drag [mutableIntStateOf] rather than binding straight to [percent], so it
+ * moves smoothly on every `onValueChange` callback during a drag instead of waiting for a round trip
+ * through the DataStore-backed [percent]; that local value is re-seeded from [percent] whenever the
+ * stored value itself changes (i.e. it is keyed on it via `remember(percent)`). [onChange] — which
+ * persists — fires only from `onValueChangeFinished`, once per completed drag or discrete step, instead
+ * of on every intermediate `onValueChange`, which would otherwise write to the store up to 20 times for
+ * one drag from 0 to 100.
  */
 @Composable
 private fun WidgetBackgroundSlider(
     percent: Int,
     onChange: (Int) -> Unit,
 ) {
+    var dragValue by remember(percent) { mutableIntStateOf(percent) }
+    val accessibleLabel = stringResource(R.string.settings_widget_background_content_description)
     Text(
-        text = stringResource(R.string.settings_widget_background_label, percent),
+        text = stringResource(R.string.settings_widget_background_label, dragValue),
         style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
     )
     Slider(
-        value = percent.toFloat(),
-        onValueChange = { onChange(it.roundToInt()) },
+        value = dragValue.toFloat(),
+        onValueChange = { dragValue = it.roundToInt() },
+        onValueChangeFinished = { onChange(dragValue) },
         valueRange = MIN_WIDGET_OPACITY..MAX_WIDGET_OPACITY,
         steps = WIDGET_OPACITY_STEPS,
         modifier =
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
+                .semantics { contentDescription = accessibleLabel }
                 .testTag(SettingsTestTags.WIDGET_BACKGROUND_SLIDER),
     )
 }

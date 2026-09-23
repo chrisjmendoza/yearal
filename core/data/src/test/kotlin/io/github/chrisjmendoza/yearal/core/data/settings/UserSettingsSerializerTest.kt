@@ -131,10 +131,35 @@ class UserSettingsSerializerTest {
             shouldThrow<CorruptionException> { read("{not json") }
         }
 
+    // Design-pass fix 7: an unknown enum value — a downgrade after a newer version wrote a constant this version
+    // does not know, or a hand-edited file — used to throw SerializationException, which readFrom could
+    // not tell apart from real corruption, so ReplaceFileCorruptionHandler reset every other setting
+    // along with it. coerceInputValues now falls back to that one field's default and keeps the rest of
+    // the document intact.
+
     @Test
-    fun `an unknown enum constant is reported as corruption`() =
+    fun `an unknown enum constant falls back to that field's default instead of corrupting the file`() =
         runTest {
-            shouldThrow<CorruptionException> { read("""{"themeMode":"SEPIA"}""") }
+            read("""{"themeMode":"SEPIA"}""") shouldBe UserSettings.DEFAULT.copy(themeMode = ThemeMode.SYSTEM)
+        }
+
+    @Test
+    fun `a downgrade - an unknown palette reads as the default palette with every other field intact`() =
+        runTest {
+            val text =
+                """{"weekdayDisplay":"ACTUAL","palette":"NEON","pureBlack":true,""" +
+                    """"enabledHolidaySets":["ifc","us"],"hasSeenIntro":true}"""
+
+            val settings = read(text)
+
+            settings.palette shouldBe ColorPalette.TEAL
+            settings shouldBe
+                UserSettings.DEFAULT.copy(
+                    weekdayDisplay = WeekdayDisplay.ACTUAL,
+                    pureBlack = true,
+                    enabledHolidaySets = setOf("ifc", "us"),
+                    hasSeenIntro = true,
+                )
         }
 
     @Test

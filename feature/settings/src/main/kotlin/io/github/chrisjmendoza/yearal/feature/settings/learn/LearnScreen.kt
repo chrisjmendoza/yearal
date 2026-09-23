@@ -40,10 +40,14 @@ import androidx.compose.ui.unit.dp
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.navigation.IntroKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
 import io.github.chrisjmendoza.yearal.feature.settings.R
+import io.github.chrisjmendoza.yearal.feature.settings.art.GridIllustration
+import io.github.chrisjmendoza.yearal.feature.settings.art.GridIllustrationVariant
 
 /**
  * The Learn / About screen (docs/FEATURES.md L2; docs/ROADMAP.md M3 T3): what the IFC is, why the
@@ -103,6 +107,7 @@ fun LearnScreen(
                         )
                     }
                 },
+                colors = yearalTopAppBarColors(),
             )
         },
     ) { padding ->
@@ -150,6 +155,11 @@ private fun ReplayIntroSection(onReplayIntro: () -> Unit) {
 /** What the IFC is: 13 months of 28 days, Sol, and the "every month is the same" identity. */
 @Composable
 private fun WhatIsIfcSection() {
+    GridIllustration(
+        variant = GridIllustrationVariant.THIRTEEN_MONTHS,
+        contentDescription = stringResource(R.string.illustration_thirteen_months_description),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = Dimens.SpaceS),
+    )
     SectionHeading(stringResource(R.string.learn_section_what))
     BodyParagraph(stringResource(R.string.learn_what_months))
     BodyParagraph(stringResource(R.string.learn_what_sol))
@@ -159,6 +169,11 @@ private fun WhatIsIfcSection() {
 /** Year Day and Leap Day: where they live, with a computed worked example of each (calendar-spec §2.4). */
 @Composable
 private fun FloatingDaysSection(formatter: IfcDateFormatter) {
+    GridIllustration(
+        variant = GridIllustrationVariant.YEAR_DAY,
+        contentDescription = stringResource(R.string.illustration_year_day_description),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = Dimens.SpaceS),
+    )
     SectionHeading(stringResource(R.string.learn_section_floating))
     BodyParagraph(stringResource(R.string.learn_floating_intro))
     BodyParagraph(
@@ -180,16 +195,26 @@ private fun FloatingDaysSection(formatter: IfcDateFormatter) {
 /** Why nominal and actual weekdays differ, with the spec's own worked example (calendar-spec §4.1). */
 @Composable
 private fun WeekdaySection(formatter: IfcDateFormatter) {
+    val nominal = requireNotNull(LearnFacts.weekdayExampleIfc.nominalDayOfWeek)
+    val nominalName = formatter.weekdayName(nominal)
+    val actualName = formatter.weekdayName(LearnFacts.weekdayExampleIfc.actualDayOfWeek)
+    GridIllustration(
+        variant = GridIllustrationVariant.NOMINAL_VS_ACTUAL,
+        contentDescription =
+            stringResource(R.string.illustration_nominal_vs_actual_description, nominalName, actualName),
+        nominalWeekdayLabel = nominalName,
+        actualWeekdayLabel = actualName,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = Dimens.SpaceS),
+    )
     SectionHeading(stringResource(R.string.learn_section_weekday))
     BodyParagraph(stringResource(R.string.learn_weekday_intro))
-    val nominal = requireNotNull(LearnFacts.weekdayExampleIfc.nominalDayOfWeek)
     BodyParagraph(
         stringResource(
             R.string.learn_weekday_worked_example,
             formatter.formatGregorianLong(LearnFacts.weekdayExampleGregorian),
             formatter.formatLong(LearnFacts.weekdayExampleIfc),
-            formatter.weekdayName(nominal),
-            formatter.weekdayName(LearnFacts.weekdayExampleIfc.actualDayOfWeek),
+            nominalName,
+            actualName,
         ),
     )
     BodyParagraph(stringResource(R.string.learn_weekday_conclusion))

@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -66,7 +67,16 @@ class IntroScreenTest {
                 "The International Fixed Calendar reshapes the year into 13 months of exactly 28 days " +
                     "each — every month laid out exactly the same, forever.",
             ).assertIsDisplayed()
-        compose.onNodeWithText("An extra month, Sol, sits between June and July.").assertIsDisplayed()
+        compose
+            .onNodeWithText("An extra month, Sol, sits between June and July.")
+            .performScrollTo()
+            .assertIsDisplayed()
+        // docs/design-plan.md §4.8 (ROADMAP wave 3 J3): each page opens with a grid illustration.
+        compose
+            .onNodeWithContentDescription(
+                "A row of 13 equal month blocks. One of them, Sol, is highlighted to show it sits " +
+                    "between June and July.",
+            ).assertIsDisplayed()
     }
 
     @Test
@@ -85,13 +95,19 @@ class IntroScreenTest {
         compose.onNodeWithText("Next").performClick()
 
         compose.onNodeWithText("Screen 2 of 3").assertIsDisplayed()
+        compose
+            .onNodeWithContentDescription(
+                "A 4 by 7 grid of dots standing in for one IFC month, with one weekday column ringed. " +
+                    "That column's IFC weekday is Sunday; the same day's actual weekday is Thursday.",
+            ).assertIsDisplayed()
         heading("Two weekdays for every date").assertIsDisplayed()
         // The spec's own worked example (calendar-spec §4.1), same reference date LearnScreenTest checks.
         compose
             .onNodeWithText(
                 "For example, Thursday, September 17, 2026 is IFC September 8, 2026. Its IFC weekday is " +
                     "Sunday — but its real weekday is Thursday.",
-            ).assertIsDisplayed()
+            ).performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test
@@ -111,16 +127,23 @@ class IntroScreenTest {
         compose.onNodeWithText("Next").performClick()
 
         compose.onNodeWithText("Screen 3 of 3").assertIsDisplayed()
+        compose
+            .onNodeWithContentDescription(
+                "A 4 by 7 grid of dots standing in for one IFC month, with a Year Day pill shown outside " +
+                    "the grid, since Year Day belongs to no week.",
+            ).assertIsDisplayed()
         heading("Two days outside the week").assertIsDisplayed()
         compose
             .onNodeWithText(
                 "Year Day, 2026 happens every year. It is always Gregorian Thursday, December 31, 2026, " +
                     "and it belongs to no week.",
-            ).assertIsDisplayed()
+            ).performScrollTo()
+            .assertIsDisplayed()
         compose
             .onNodeWithText(
                 "Leap Day, 2024 happens only in leap years. It is always Gregorian Monday, June 17, 2024.",
-            ).assertIsDisplayed()
+            ).performScrollTo()
+            .assertIsDisplayed()
         compose.onNodeWithText("Find my IFC birthday").assertIsDisplayed()
     }
 

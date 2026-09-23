@@ -12,6 +12,8 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -519,13 +521,23 @@ class EventEditorScreenTest {
         colors shouldContainExactly listOf(0xFF1E6962.toInt())
     }
 
+    // Design-pass fix 4: "selected" used to be appended to the description text AND carried by `selectable`'s own
+    // Selected semantic, so TalkBack said it twice. The description is now just the swatch's name; the
+    // Selected state is asserted directly instead.
     @Test
-    fun `the selected swatch is announced as selected, and the others are not`() {
+    fun `the selected swatch carries the Selected semantic, not a repeated description`() {
         show(baseState(colorArgb = 0xFF1E6962.toInt()))
 
-        compose.onNodeWithContentDescription("Teal, selected").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithContentDescription("Calendar colour").performScrollTo().assertIsDisplayed()
+        val teal = compose.onNodeWithContentDescription("Teal").performScrollTo()
+        teal.assertIsDisplayed()
+        teal.assertIsSelected()
+        teal.fetchSemanticsNode().config[SemanticsProperties.ContentDescription].single() shouldBe "Teal"
+
+        val calendarColor = compose.onNodeWithContentDescription("Calendar colour").performScrollTo()
+        calendarColor.assertIsDisplayed()
+        calendarColor.assertIsNotSelected()
         compose.onAllNodesWithContentDescription("Calendar colour, selected").assertCountEquals(0)
+        compose.onAllNodesWithContentDescription("Teal, selected").assertCountEquals(0)
     }
 
     @Test

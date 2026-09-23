@@ -71,6 +71,13 @@ private const val EVENT_DOT_RADIUS_FRACTION = 0.16f
 private const val TODAY_RING_RADIUS_FRACTION = 0.32f
 
 /**
+ * Scale of the corner event dot drawn on a cell that also has a holiday diamond, relative to the full
+ * [EVENT_DOT_RADIUS_FRACTION] dot a plain event-only cell gets (fix design-pass 9): smaller so it reads
+ * as a secondary mark in the corner the diamond does not reach, rather than crowding the cell.
+ */
+private const val BOTH_MARKED_EVENT_DOT_SCALE = 0.6f
+
+/**
  * One tile of the Year overview's `LazyVerticalGrid` (docs/FEATURES.md C6; docs/ARCHITECTURE.md §4
  * "Screen behaviors", "Intercalary days in a 7-column grid"; `docs/calendar-spec.md` §7.2): the
  * month's name and a compact 4 × 7 grid of its 28 regular days, drawn with a single [Canvas] rather
@@ -94,7 +101,10 @@ private const val TODAY_RING_RADIUS_FRACTION = 0.32f
  * holiday gets a `.holidayMark` diamond, since [holidays] carries the data already (design-plan §4.3
  * "a holiday diamond appears in the mini grid too" — reversing the earlier state where the Year view's
  * presence bitmap was events only). A day that is both marked steps its cell fill up to
- * `.gridCellMarked`, the same convention [DayCell] uses.
+ * `.gridCellMarked`, the same convention [DayCell] uses, and draws **both** marks rather than picking
+ * one: the diamond stays centred and a smaller `.eventMark` dot goes in the cell's lower-right corner
+ * (fix design-pass 9) — the mini cell (about 19dp at the grid's 160dp minimum tile width) is small, but
+ * still legible at that corner scale, so nothing needs to be dropped.
  *
  * @param month the month this tile shows.
  * @param today the real today as a Gregorian date, or `null` to mark nothing.
@@ -194,6 +204,21 @@ fun YearMiniMonthTile(
                             color = yearalColors.holidayMark,
                             topLeft = Offset(center.x - markRadius, center.y - markRadius),
                             size = Size(markRadius * 2, markRadius * 2),
+                        )
+                    }
+                    if (hasEvent) {
+                        // Fix design-pass 9: a day with both marks used to draw the diamond only, silently
+                        // dropping the event dot. A smaller dot in the lower-right corner the diamond
+                        // doesn't reach keeps both marks visible without the two overlapping.
+                        val cornerDotRadius = markRadius * BOTH_MARKED_EVENT_DOT_SCALE
+                        drawCircle(
+                            color = yearalColors.eventMark,
+                            radius = cornerDotRadius,
+                            center =
+                                Offset(
+                                    cellWidth * (column + 1) - inset - cornerDotRadius,
+                                    cellHeight * (row + 1) - inset - cornerDotRadius,
+                                ),
                         )
                     }
                 } else if (hasEvent) {

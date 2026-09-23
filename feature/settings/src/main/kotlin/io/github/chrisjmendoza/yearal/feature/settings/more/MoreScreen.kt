@@ -34,6 +34,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.navigation.HolidaysKey
 import io.github.chrisjmendoza.yearal.core.navigation.LearnKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
@@ -98,7 +99,12 @@ fun MoreScreen(
 ) {
     Scaffold(
         modifier = modifier,
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.more_title)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.more_title)) },
+                colors = yearalTopAppBarColors(),
+            )
+        },
     ) { padding ->
         Column(
             modifier =

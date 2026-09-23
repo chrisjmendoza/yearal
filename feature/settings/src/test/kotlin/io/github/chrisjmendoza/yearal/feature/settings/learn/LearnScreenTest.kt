@@ -64,6 +64,32 @@ class LearnScreenTest {
         heading("Frequently asked questions").performScrollTo().assertIsDisplayed()
     }
 
+    // docs/design-plan.md §4.8 (ROADMAP wave 3 J3): the same three grid illustrations the intro shows
+    // are reused here as section headers, computed from the same LearnFacts the text beside them uses.
+    @Test
+    fun `the three grid illustrations from the intro are reused as section headers`() {
+        show()
+
+        compose
+            .onNodeWithContentDescription(
+                "A row of 13 equal month blocks. One of them, Sol, is highlighted to show it sits " +
+                    "between June and July.",
+            ).performScrollTo()
+            .assertIsDisplayed()
+        compose
+            .onNodeWithContentDescription(
+                "A 4 by 7 grid of dots standing in for one IFC month, with a Year Day pill shown outside " +
+                    "the grid, since Year Day belongs to no week.",
+            ).performScrollTo()
+            .assertIsDisplayed()
+        compose
+            .onNodeWithContentDescription(
+                "A 4 by 7 grid of dots standing in for one IFC month, with one weekday column ringed. " +
+                    "That column's IFC weekday is Sunday; the same day's actual weekday is Thursday.",
+            ).performScrollTo()
+            .assertIsDisplayed()
+    }
+
     @Test
     fun `the floating-day worked examples are computed, not hard-coded text`() {
         show()

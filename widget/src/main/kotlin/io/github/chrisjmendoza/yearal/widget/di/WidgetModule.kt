@@ -12,6 +12,7 @@ import io.github.chrisjmendoza.yearal.core.domain.event.ObserveAgendaUseCase
 import io.github.chrisjmendoza.yearal.core.domain.holiday.HolidayEngine
 import io.github.chrisjmendoza.yearal.core.domain.holiday.HolidaySetProvider
 import io.github.chrisjmendoza.yearal.core.domain.rollover.DayRolloverListener
+import io.github.chrisjmendoza.yearal.core.domain.settings.SettingsRepository
 import io.github.chrisjmendoza.yearal.core.domain.widget.WidgetUpdater
 import io.github.chrisjmendoza.yearal.widget.DebouncedWidgetUpdater
 import io.github.chrisjmendoza.yearal.widget.GlanceWidgetRefresher
@@ -121,4 +122,16 @@ interface WidgetEntryPoint {
      * shown month is a map lookup rather than a fresh computation (docs/ARCHITECTURE.md §3.3).
      */
     fun holidayEngine(): HolidayEngine
+
+    /**
+     * The user's appearance settings, so a widget can resolve its own colours and background opacity
+     * from the same [io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings] the app screens
+     * read (`docs/design-plan.md` §4.9 "Follow the app's theme", §5.6). `provideGlance` reads the
+     * first value of [SettingsRepository.settings] once per render, exactly like [holidaySetProvider]
+     * and [observeAgendaUseCase] above -- never collected continuously from inside a widget's own
+     * composable. [DebouncedWidgetUpdater][io.github.chrisjmendoza.yearal.widget.DebouncedWidgetUpdater]
+     * is the one place in this module that *does* collect it continuously, so a settings change
+     * re-renders placed widgets without waiting for the next rollover or event write.
+     */
+    fun settingsRepository(): SettingsRepository
 }

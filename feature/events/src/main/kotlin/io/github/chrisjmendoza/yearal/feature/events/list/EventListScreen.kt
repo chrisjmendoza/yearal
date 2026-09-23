@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -32,7 +31,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -53,6 +51,7 @@ import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.currentWindowWi
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCalendar
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
@@ -184,10 +183,7 @@ fun EventListScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.events_list_title)) },
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    ),
+                colors = yearalTopAppBarColors(),
             )
         },
         floatingActionButton = {
@@ -327,7 +323,7 @@ private fun EventRow(
             else -> item.timeLabel.orEmpty()
         }
     val recurrenceText = item.recurrenceSummary?.let { recurrenceSummaryText(it) }
-    val categoryText = if (item.category != EventCategory.EVENT) categoryChipText(item.category) else null
+    val categoryText = categoryChipText(item.category)
     val hiddenCalendarText = stringResource(R.string.events_calendar_hidden)
     val gregorianShort =
         stringResource(R.string.events_row_date_gregorian_short, item.gregorianWeekdayShort, item.gregorianDayLabel)
@@ -394,10 +390,10 @@ private fun EventRow(
                 if (recurrenceText != null || categoryText != null) {
                     Row(horizontalArrangement = Arrangement.spacedBy(ChipSpacing)) {
                         if (recurrenceText != null) {
-                            AssistChip(onClick = {}, label = { Text(recurrenceText) })
+                            ChipLabel(text = recurrenceText)
                         }
                         if (categoryText != null) {
-                            AssistChip(onClick = {}, label = { Text(categoryText) })
+                            ChipLabel(text = categoryText)
                         }
                     }
                 }
@@ -413,11 +409,32 @@ private fun EventRow(
     }
 }
 
-/** Turns an [EventCategory] other than [EventCategory.EVENT] into its chip label. */
+/**
+ * A non-interactive pill for the recurrence and category labels on an [EventRow] (design-pass fix 2): the row
+ * itself is the tap target ([Role.Button] on the whole [Surface]), so these carry no click semantics —
+ * a clickable [androidx.compose.material3.AssistChip] here swallowed the row's tap and read to
+ * TalkBack as a dead button.
+ */
 @Composable
-private fun categoryChipText(category: EventCategory): String =
+private fun ChipLabel(text: String) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = Dimens.SpaceS, vertical = Dimens.SpaceXs),
+        )
+    }
+}
+
+/** Turns an [EventCategory] into its chip label, or `null` for [EventCategory.EVENT] (no chip). */
+@Composable
+private fun categoryChipText(category: EventCategory): String? =
     when (category) {
-        EventCategory.EVENT -> error("EventCategory.EVENT never gets a chip")
+        EventCategory.EVENT -> null
         EventCategory.OBSERVANCE -> stringResource(R.string.events_category_observance)
         EventCategory.BIRTHDAY -> stringResource(R.string.events_category_birthday)
     }

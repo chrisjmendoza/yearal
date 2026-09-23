@@ -89,22 +89,31 @@ internal data class UserSettingsDto(
  * - **Backward:** a document missing a field (written before that field existed) reads with the
  *   [UserSettings.DEFAULT] value for it.
  * - **Forward:** a document with a key this version does not know (written by a newer version) reads
- *   normally; the unknown key is dropped on the next write.
+ *   normally; the unknown key is dropped on the next write. An *enum* field holding a value this
+ *   version does not know — a pack downgrade, or a value a newer version added — reads with that
+ *   field's own [UserSettings.DEFAULT] value instead of failing the whole document (`coerceInputValues`
+ *   below); every other field in the same document is unaffected. This is what keeps a downgrade from
+ *   nuking every setting: without it, one unrecognised enum constant threw [SerializationException],
+ *   which [readFrom] cannot tell apart from a genuinely corrupt file, so DataStore's
+ *   `ReplaceFileCorruptionHandler` reset the whole file to defaults over a single unknown value.
  *
- * Anything that is not a valid document — malformed JSON, an unknown enum constant, a wrong value
- * type, an empty file — is reported as [CorruptionException] and nothing else, so DataStore's
- * `ReplaceFileCorruptionHandler` (wired in `SettingsModule`) can replace the file with the defaults.
- * An empty file counts as corruption rather than "no settings yet": DataStore never calls [readFrom]
- * for a file that does not exist, so a zero-length file means an interrupted or foreign write.
+ * Anything that is still not a valid document — malformed JSON, a wrong value type (a string where a
+ * number is expected, say), an empty file — is reported as [CorruptionException] and nothing else, so
+ * `ReplaceFileCorruptionHandler` (wired in `SettingsModule`) can replace the file with the defaults. An
+ * empty file counts as corruption rather than "no settings yet": DataStore never calls [readFrom] for a
+ * file that does not exist, so a zero-length file means an interrupted or foreign write.
  */
 public object UserSettingsSerializer : Serializer<UserSettings> {
     /**
-     * `ignoreUnknownKeys` gives forward compatibility; `encodeDefaults` writes every field so the file
-     * is self-describing and a later change of a default does not silently alter stored settings.
+     * `ignoreUnknownKeys` gives forward compatibility for unknown *fields*; `coerceInputValues` gives
+     * it for unknown *enum values* within a known field, falling back to that field's default instead
+     * of failing the document (design-pass fix 7); `encodeDefaults` writes every field so the file is
+     * self-describing and a later change of a default does not silently alter stored settings.
      */
     internal val json: Json =
         Json {
             ignoreUnknownKeys = true
+            coerceInputValues = true
             encodeDefaults = true
         }
 

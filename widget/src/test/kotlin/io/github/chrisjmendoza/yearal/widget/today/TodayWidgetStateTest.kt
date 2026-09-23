@@ -24,8 +24,10 @@ class TodayWidgetStateTest {
         IfcDateFormatter(ApplicationProvider.getApplicationContext<android.content.Context>().resources, Locale.US)
     private val tapHint = "Double-tap to open Yearal."
 
+    private val resources = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+
     private fun stateFor(gregorian: LocalDate) =
-        buildTodayWidgetState(TodayDate(IfcDate.from(gregorian), gregorian), formatter, tapHint)
+        buildTodayWidgetState(TodayDate(IfcDate.from(gregorian), gregorian), formatter, tapHint, resources, Locale.US)
 
     @Test
     fun `a regular day shows the month and day, no year`() {
@@ -71,5 +73,21 @@ class TodayWidgetStateTest {
         val state = stateFor(LocalDate.of(2026, 12, 31))
 
         state.contentDescription shouldContain "no IFC weekday"
+    }
+
+    @Test
+    fun `the LARGE-size extras are carried on the state for a regular day`() {
+        val state = stateFor(LocalDate.of(2026, 9, 17))
+
+        state.yearProgressLabel shouldBe "Day 260 of 365 · 71%"
+        state.countdownLabel shouldBe "Year Day in 105 days"
+    }
+
+    @Test
+    fun `the LARGE-size extras handle Year Day itself`() {
+        val state = stateFor(LocalDate.of(2026, 12, 31))
+
+        state.yearProgressLabel shouldBe "Day 365 of 365 · 100%"
+        state.countdownLabel shouldBe "Year Day in 365 days"
     }
 }

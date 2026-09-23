@@ -132,6 +132,10 @@
          background: 75%". -->
     <string name="settings_widget_background_label">Widget background: %1$d%%</string>
 
+    <!-- The widget background opacity slider\'s accessible name (TalkBack), stable regardless of the
+         current percentage — the announced value comes from the slider\'s own progress semantics. -->
+    <string name="settings_widget_background_content_description">Background opacity</string>
+
     <!-- Section heading above the row that links to the Holidays screen (FEATURES H5). The switches
          themselves live only on that screen (ROADMAP M6 T2) so there is one place to turn a set on or
          off; this row is a link, not a duplicate control. -->
@@ -401,5 +405,43 @@
     <!-- The closing hook (docs/FEATURES.md L1, D3): opens the converter so the user can pick their own
          birthday; marks the intro seen. -->
     <string name="intro_find_birthday">Find my IFC birthday</string>
+
+    <!-- ===== Grid illustrations (docs/design-plan.md §4.8, ROADMAP wave 3 J3) =====
+         Shared by the first-run intro (one per page) and the Learn screen (the same three, reused as
+         section headers), so the two can never describe the same fact differently. -->
+
+    <!-- Content description of the "what the IFC is" illustration: 13 month blocks, one highlighted. -->
+    <string name="illustration_thirteen_months_description">A row of 13 equal month blocks. One of them, Sol, is highlighted to show it sits between June and July.</string>
+
+    <!-- Content description of the nominal-vs-actual weekday illustration: a 4 by 7 dot grid with one
+         weekday column ringed. %1$s = the worked example's IFC (nominal) weekday name.
+         %2$s = the same date's real (actual) weekday name. -->
+    <string name="illustration_nominal_vs_actual_description">A 4 by 7 grid of dots standing in for one IFC month, with one weekday column ringed. That column\'s IFC weekday is %1$s; the same day\'s actual weekday is %2$s.</string>
+
+    <!-- Content description of the Year Day illustration: a 4 by 7 dot grid with the Year Day pill
+         shown outside it. -->
+    <string name="illustration_year_day_description">A 4 by 7 grid of dots standing in for one IFC month, with a Year Day pill shown outside the grid, since Year Day belongs to no week.</string>
+
+    <!-- Visible label in the nominal-vs-actual illustration's first caption row. -->
+    <string name="illustration_nominal_weekday_label">IFC weekday</string>
+
+    <!-- Visible label in the nominal-vs-actual illustration's second caption row. -->
+    <string name="illustration_actual_weekday_label">Actual weekday</string>
+
+    <!-- One caption row: "<label>: <value>". %1$s = illustration_nominal_weekday_label or
+         illustration_actual_weekday_label. %2$s = the computed weekday name. -->
+    <string name="illustration_weekday_caption">%1$s: %2$s</string>
+
+    <!-- Visible label inside the Year Day illustration's pill. -->
+    <string name="illustration_year_day_pill_label">Year Day</string>
+
+    <!-- ===== Palette preview strip (docs/design-plan.md §4.8, ROADMAP wave 3 J3) ===== -->
+
+    <!-- Content description of the live palette preview strip under the palette swatches in Settings.
+         %1$s = the currently selected palette's name, e.g. "Sol". -->
+    <string name="settings_palette_preview_description">Preview of the %1$s palette</string>
+
+    <!-- Visible label inside the preview strip's intercalary pill. -->
+    <string name="settings_palette_preview_intercalary_label">Year Day</string>
 
 </resources>

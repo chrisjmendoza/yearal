@@ -30,11 +30,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.navigation.ConverterKey
 import io.github.chrisjmendoza.yearal.core.navigation.LearnKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
 import io.github.chrisjmendoza.yearal.feature.settings.R
+import io.github.chrisjmendoza.yearal.feature.settings.art.GridIllustration
+import io.github.chrisjmendoza.yearal.feature.settings.art.GridIllustrationVariant
 
 /** How many screens the intro has (`docs/FEATURES.md` L1: "at most three screens"). */
 private const val PAGE_COUNT = 3
@@ -109,6 +113,7 @@ fun IntroScreen(
                 actions = {
                     TextButton(onClick = onSkip) { Text(stringResource(R.string.intro_skip)) }
                 },
+                colors = yearalTopAppBarColors(),
             )
         },
         bottomBar = {
@@ -180,6 +185,11 @@ private fun IntroNavigationBar(
 /** Screen 1: what the IFC is (calendar-spec §2.2 R4) — month count, day count, and where Sol sits. */
 @Composable
 private fun WhatIsIfcPage() {
+    GridIllustration(
+        variant = GridIllustrationVariant.THIRTEEN_MONTHS,
+        contentDescription = stringResource(R.string.illustration_thirteen_months_description),
+        modifier = Modifier.padding(bottom = Dimens.SpaceL),
+    )
     PageHeading(stringResource(R.string.intro_what_heading))
     BodyParagraph(stringResource(R.string.intro_what_months, IntroFacts.monthCount, IntroFacts.daysPerMonth))
     BodyParagraph(stringResource(R.string.intro_what_sol))
@@ -188,16 +198,26 @@ private fun WhatIsIfcPage() {
 /** Screen 2: nominal vs. actual weekday (calendar-spec §4.1), with the spec's own worked example. */
 @Composable
 private fun WeekdayPage(formatter: IfcDateFormatter) {
+    val nominal = requireNotNull(IntroFacts.weekdayExampleIfc.nominalDayOfWeek)
+    val nominalName = formatter.weekdayName(nominal)
+    val actualName = formatter.weekdayName(IntroFacts.weekdayExampleIfc.actualDayOfWeek)
+    GridIllustration(
+        variant = GridIllustrationVariant.NOMINAL_VS_ACTUAL,
+        contentDescription =
+            stringResource(R.string.illustration_nominal_vs_actual_description, nominalName, actualName),
+        nominalWeekdayLabel = nominalName,
+        actualWeekdayLabel = actualName,
+        modifier = Modifier.padding(bottom = Dimens.SpaceL),
+    )
     PageHeading(stringResource(R.string.intro_weekday_heading))
     BodyParagraph(stringResource(R.string.intro_weekday_intro))
-    val nominal = requireNotNull(IntroFacts.weekdayExampleIfc.nominalDayOfWeek)
     BodyParagraph(
         stringResource(
             R.string.intro_weekday_example,
             formatter.formatGregorianLong(IntroFacts.weekdayExampleGregorian),
             formatter.formatLong(IntroFacts.weekdayExampleIfc),
-            formatter.weekdayName(nominal),
-            formatter.weekdayName(IntroFacts.weekdayExampleIfc.actualDayOfWeek),
+            nominalName,
+            actualName,
         ),
     )
     BodyParagraph(stringResource(R.string.intro_weekday_warning))
@@ -206,6 +226,11 @@ private fun WeekdayPage(formatter: IfcDateFormatter) {
 /** Screen 3: Year Day and Leap Day (calendar-spec §2.4 R8, R9), ending with the birthday hook's prompt. */
 @Composable
 private fun FloatingDaysPage(formatter: IfcDateFormatter) {
+    GridIllustration(
+        variant = GridIllustrationVariant.YEAR_DAY,
+        contentDescription = stringResource(R.string.illustration_year_day_description),
+        modifier = Modifier.padding(bottom = Dimens.SpaceL),
+    )
     PageHeading(stringResource(R.string.intro_floating_heading))
     BodyParagraph(
         stringResource(

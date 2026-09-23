@@ -1,6 +1,7 @@
 package io.github.chrisjmendoza.yearal.widget.today
 
 import android.content.Context
+import android.content.res.Resources
 import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.DpSize
@@ -15,25 +16,29 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.padding
-import androidx.glance.material3.ColorProviders
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
 import dagger.hilt.android.EntryPointAccessors
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
-import io.github.chrisjmendoza.yearal.core.designsystem.theme.BrandDarkColorScheme
-import io.github.chrisjmendoza.yearal.core.designsystem.theme.BrandLightColorScheme
 import io.github.chrisjmendoza.yearal.core.domain.ZoneProvider
+import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.widget.R
 import io.github.chrisjmendoza.yearal.widget.di.WidgetEntryPoint
+import io.github.chrisjmendoza.yearal.widget.theme.LOW_OPACITY_CHIP_THRESHOLD
+import io.github.chrisjmendoza.yearal.widget.theme.applyWidgetBackgroundOpacity
+import io.github.chrisjmendoza.yearal.widget.theme.resolveWidgetColors
+import kotlinx.coroutines.flow.first
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -71,10 +76,16 @@ class TodayGlanceWidget : GlanceAppWidget() {
         // locale change, but Glance content never does either way -- a LOCALE_CHANGED broadcast reaches
         // this widget through WidgetRolloverListener, which calls updateAll and re-invokes
         // provideGlance from scratch, so reading it once per call already self-corrects (CLAUDE.md rule 9).
-        val formatter = IfcDateFormatter(context.resources, Locale.getDefault())
+        val locale = Locale.getDefault()
+        val formatter = IfcDateFormatter(context.resources, locale)
         val tapHint = context.getString(R.string.today_widget_tap_hint)
+        // The first (current) value only, matching holidaySetProvider/observeAgendaUseCase's own
+        // single-snapshot-per-render treatment above: DebouncedWidgetUpdater is what makes a *later*
+        // settings change reach this render, by requesting a fresh provideGlance call, not a collection
+        // kept open here (docs/design-plan.md §4.9, §5.6).
+        val settings = entryPoint.settingsRepository().settings.first()
         provideContent {
-            TodayWidgetContent(clock, zoneProvider, formatter, tapHint)
+            TodayWidgetContent(clock, zoneProvider, formatter, tapHint, settings, context.resources, locale)
         }
     }
 
@@ -90,10 +101,21 @@ class TodayGlanceWidget : GlanceAppWidget() {
         context: Context,
         widgetCategory: Int,
     ) {
-        val formatter = IfcDateFormatter(context.resources, Locale.getDefault())
+        val locale = Locale.getDefault()
+        val formatter = IfcDateFormatter(context.resources, locale)
         val tapHint = context.getString(R.string.today_widget_tap_hint)
         provideContent {
-            TodayWidgetContent(PREVIEW_CLOCK, PREVIEW_ZONE_PROVIDER, formatter, tapHint)
+            // A fixed UserSettings.DEFAULT, not a live SettingsRepository read: a picker preview must
+            // not depend on live data (see this class's own KDoc for PREVIEW_CLOCK/PREVIEW_ZONE_PROVIDER).
+            TodayWidgetContent(
+                PREVIEW_CLOCK,
+                PREVIEW_ZONE_PROVIDER,
+                formatter,
+                tapHint,
+                UserSettings.DEFAULT,
+                context.resources,
+                locale,
+            )
         }
     }
 
@@ -125,8 +147,25 @@ class TodayGlanceWidget : GlanceAppWidget() {
 /**
  * The widget's content. Recomputes "today" itself on every composition, from [clock] and
  * [zoneProvider] — no parameter here is a cached date — and reads [LocalSize] to decide which lines
- * fit, matching [TodayGlanceWidget]'s responsive breakpoints. [formatter] and [tapHint] are read once
- * per [TodayGlanceWidget.provideGlance] call, since neither depends on the date.
+ * fit, matching [TodayGlanceWidget]'s responsive breakpoints. [formatter], [tapHint], [settings],
+ * [resources] and [locale] are read once per [TodayGlanceWidget.provideGlance] call, since none of them
+ * depend on the date.
+ *
+ * **Colours** follow the app's appearance (`docs/design-plan.md` §4.9, §5.6):
+ * [io.github.chrisjmendoza.yearal.widget.theme.resolveWidgetColors] resolves [settings] and
+ * [UserSettings.todayWidgetTheme] to a forced or system-following [androidx.glance.material3.ColorProviders],
+ * or `null` when Material You dynamic colour applies, in which case `GlanceTheme.colors` is used exactly
+ * as before this widget followed appearance settings at all.
+ *
+ * **Background opacity** ([UserSettings.widgetBackgroundOpacity]) is applied only to the widget's own
+ * outer background -- never to the text itself -- via
+ * [io.github.chrisjmendoza.yearal.widget.theme.applyWidgetBackgroundOpacity]. Below
+ * [io.github.chrisjmendoza.yearal.widget.theme.LOW_OPACITY_CHIP_THRESHOLD] the text block sits on its
+ * own solid chip (the *opaque* widget-background colour, unaffected by the opacity setting) so it stays
+ * legible however transparent the widget itself is -- `:widget` has no `surfaceContainer` role to draw
+ * this chip from (`androidx.glance.color.ColorProviders` only exposes the pre-tonal-surface Material 3
+ * roles), so the opaque widget-background colour is the nearest available one, the same substitution
+ * [io.github.chrisjmendoza.yearal.widget.month.MonthGlanceWidget] makes for its day cells.
  */
 @Composable
 private fun TodayWidgetContent(
@@ -134,27 +173,27 @@ private fun TodayWidgetContent(
     zoneProvider: ZoneProvider,
     formatter: IfcDateFormatter,
     tapHint: String,
+    settings: UserSettings,
+    resources: Resources,
+    locale: Locale,
 ) {
-    val colors =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Material You dynamic colour (FEATURES S4).
-            GlanceTheme.colors
-        } else {
-            // Brand palette fallback below API 31 (docs/ARCHITECTURE.md §5, §1).
-            ColorProviders(light = BrandLightColorScheme, dark = BrandDarkColorScheme)
-        }
+    val colors = resolveWidgetColors(settings, settings.todayWidgetTheme, Build.VERSION.SDK_INT) ?: GlanceTheme.colors
     GlanceTheme(colors = colors) {
         val context = LocalContext.current
         // Read fresh on every composition, per CLAUDE.md rule 2 -- never `remember`, never a value
         // computed once outside this function and passed down.
         val date = todayDate(clock, zoneProvider)
-        val state = buildTodayWidgetState(date, formatter, tapHint)
+        val state = buildTodayWidgetState(date, formatter, tapHint, resources, locale)
         val size = LocalSize.current
+
+        val opaqueBackground = GlanceTheme.colors.widgetBackground.getColor(context)
+        val translucentBackground =
+            ColorProvider(applyWidgetBackgroundOpacity(opaqueBackground, settings.widgetBackgroundOpacity))
 
         var modifier =
             GlanceModifier
                 .fillMaxSize()
-                .background(GlanceTheme.colors.widgetBackground)
+                .background(translucentBackground)
                 .padding(12.dp)
                 .semantics { contentDescription = state.contentDescription }
         // todayLaunchIntent is null only if the platform cannot resolve this app's own launcher activity
@@ -164,30 +203,53 @@ private fun TodayWidgetContent(
             modifier = modifier.clickable(actionStartActivity(intent))
         }
 
+        val lowOpacity = settings.widgetBackgroundOpacity < LOW_OPACITY_CHIP_THRESHOLD
+        val textBlockModifier =
+            if (lowOpacity) {
+                GlanceModifier.background(ColorProvider(opaqueBackground)).cornerRadius(8.dp).padding(6.dp)
+            } else {
+                GlanceModifier
+            }
+
         Column(
             modifier = modifier,
             verticalAlignment = Alignment.Vertical.CenterVertically,
         ) {
-            Text(
-                text = state.primaryLabel,
-                style =
-                    TextStyle(
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = GlanceTheme.colors.onSurface,
-                    ),
-            )
-            if (size.height > TodayGlanceWidget.SMALL.height || size.width > TodayGlanceWidget.SMALL.width) {
+            Column(modifier = textBlockModifier) {
                 Text(
-                    text = state.gregorianLabel,
-                    style = TextStyle(fontSize = 14.sp, color = GlanceTheme.colors.onSurfaceVariant),
+                    text = state.primaryLabel,
+                    style =
+                        TextStyle(
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = GlanceTheme.colors.onSurface,
+                        ),
                 )
-            }
-            if (size.height >= TodayGlanceWidget.LARGE.height) {
-                Text(
-                    text = state.actualWeekdayLabel,
-                    style = TextStyle(fontSize = 14.sp, color = GlanceTheme.colors.onSurfaceVariant),
-                )
+                if (size.height > TodayGlanceWidget.SMALL.height || size.width > TodayGlanceWidget.SMALL.width) {
+                    Text(
+                        text = state.gregorianLabel,
+                        style = TextStyle(fontSize = 14.sp, color = GlanceTheme.colors.onSurfaceVariant),
+                    )
+                }
+                if (size.height >= TodayGlanceWidget.LARGE.height) {
+                    Text(
+                        text = state.actualWeekdayLabel,
+                        style = TextStyle(fontSize = 14.sp, color = GlanceTheme.colors.onSurfaceVariant),
+                    )
+                    // The LARGE-size extras (design-plan §4.9, "large widgets should show more"): the
+                    // year-progress line always has a value; the countdown is null only past
+                    // IfcDate.MAX_YEAR (CLAUDE.md rule 6 -- handled, not silently dropped).
+                    Text(
+                        text = state.yearProgressLabel,
+                        style = TextStyle(fontSize = 12.sp, color = GlanceTheme.colors.onSurfaceVariant),
+                    )
+                    state.countdownLabel?.let { countdown ->
+                        Text(
+                            text = countdown,
+                            style = TextStyle(fontSize = 12.sp, color = GlanceTheme.colors.tertiary),
+                        )
+                    }
+                }
             }
         }
     }

@@ -7,6 +7,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.hasAnyDescendant
@@ -21,6 +22,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
@@ -112,6 +114,16 @@ class MonthScreenTest {
         compose.onNode(hasContentDescription("Show year", substring = true)).assertIsDisplayed().performClick()
 
         clickedYear shouldBe 2026
+    }
+
+    // Design-pass fix 5: the pill's own visual height (its padding trimmed to fit the 64dp app bar at 200% font)
+    // no longer guarantees a 48dp touch target on its own, so `minimumInteractiveComponentSize` floors
+    // it directly.
+    @Test
+    fun `the title pill's tap target is at least 48dp tall`() {
+        show(state(october2026))
+
+        compose.onNode(hasText("October 2026").and(hasClickAction())).assertHeightIsAtLeast(48.dp)
     }
 
     @Test

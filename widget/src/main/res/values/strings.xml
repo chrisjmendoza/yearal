@@ -12,6 +12,24 @@
          Shared by the Month widget (ROADMAP M5 T3): the hint is not Today-specific wording. -->
     <string name="today_widget_tap_hint">Double-tap to open Yearal.</string>
 
+    <!-- The LARGE-size Today widget's year-progress line (design-plan §4.9, "large widgets should show
+         more"): day of year, the year's length (365 or 366), and the rounded percent, e.g.
+         "Day 260 of 365 · 71%". %% escapes a literal percent sign. -->
+    <string name="today_widget_year_progress">Day %1$d of %2$d · %3$d%%</string>
+
+    <!-- The bare intercalary day names, without a year, for the countdown line below: distinct from
+         `:core:designsystem`'s own copies of these words (CLAUDE.md rule 9: every module's user-visible
+         strings live in its own resources). -->
+    <string name="today_widget_leap_day">Leap Day</string>
+    <string name="today_widget_year_day">Year Day</string>
+
+    <!-- The LARGE-size Today widget's next-intercalary countdown, e.g. "Year Day in 105 days",
+         "Leap Day in 1 day". %1$s is one of the two names above. -->
+    <plurals name="today_widget_intercalary_countdown">
+        <item quantity="one">%1$s in 1 day</item>
+        <item quantity="other">%1$s in %2$d days</item>
+    </plurals>
+
     <!-- Month-grid widget (ROADMAP M5 T3). Widget-picker label and the provider's picker description. -->
     <string name="month_widget_label">Month (IFC)</string>
     <string name="month_widget_description">The current International Fixed Calendar month, with today highlighted. Updates automatically at midnight.</string>
