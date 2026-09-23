@@ -146,6 +146,30 @@ class MonthGridTest {
             ).assertIsDisplayed()
     }
 
+    // showTitle (docs/design-plan.md §4.2 "one title"): the Month screen's own app bar carries the
+    // month and year, so MonthGrid must be able to render without its inner heading.
+
+    @Test
+    fun `showTitle false hides the month heading`() {
+        compose.setContent {
+            IfcTheme(dynamicColor = false) {
+                MonthGrid(sol2026, null, null, WeekdayDisplay.BOTH, onDayClick = {}, showTitle = false)
+            }
+        }
+
+        compose.onAllNodesWithText("Sol 2026").assertCountEquals(0)
+        compose.onAllNodesWithTag(MonthGridTestTags.WEEKDAY_EXPLAINER).assertCountEquals(0)
+        // The rest of the grid is unaffected.
+        compose.onAllNodes(dayButtons).assertCountEquals(IfcMonth.DAYS_PER_MONTH)
+    }
+
+    @Test
+    fun `showTitle defaults to true, so existing callers are unaffected`() {
+        show(sol2026)
+
+        compose.onNodeWithText("Sol 2026").assertIsDisplayed()
+    }
+
     // §4.1 item 3, FEATURES C2: the header modes.
 
     @Test

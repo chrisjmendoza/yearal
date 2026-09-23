@@ -1,9 +1,12 @@
 package io.github.chrisjmendoza.yearal.core.data.settings
 
 import androidx.datastore.core.CorruptionException
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorPalette
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
+import io.github.chrisjmendoza.yearal.core.domain.settings.WidgetTheme
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -23,9 +26,14 @@ class UserSettingsSerializerTest {
         UserSettings(
             weekdayDisplay = WeekdayDisplay.ACTUAL,
             themeMode = ThemeMode.DARK,
-            dynamicColor = false,
+            colorSource = ColorSource.DYNAMIC,
+            palette = ColorPalette.SOL,
+            pureBlack = true,
             enabledHolidaySets = setOf("ifc", "us", "gb"),
             hasSeenIntro = true,
+            todayWidgetTheme = WidgetTheme.DARK,
+            monthWidgetTheme = WidgetTheme.LIGHT,
+            widgetBackgroundOpacity = 50,
         )
 
     private suspend fun write(settings: UserSettings): ByteArray =
@@ -55,9 +63,14 @@ class UserSettingsSerializerTest {
             listOf(
                 "weekdayDisplay",
                 "themeMode",
-                "dynamicColor",
+                "colorSource",
+                "palette",
+                "pureBlack",
                 "enabledHolidaySets",
                 "hasSeenIntro",
+                "todayWidgetTheme",
+                "monthWidgetTheme",
+                "widgetBackgroundOpacity",
             ).forEach {
                 text shouldContain
                     "\"$it\""
@@ -86,7 +99,6 @@ class UserSettingsSerializerTest {
                 UserSettings(
                     weekdayDisplay = WeekdayDisplay.NOMINAL,
                     themeMode = ThemeMode.LIGHT,
-                    dynamicColor = true,
                     enabledHolidaySets = setOf("ifc"),
                 )
         }
@@ -128,8 +140,16 @@ class UserSettingsSerializerTest {
     @Test
     fun `a wrongly typed field is reported as corruption`() =
         runTest {
-            shouldThrow<CorruptionException> { read("""{"dynamicColor":"yes"}""") }
+            shouldThrow<CorruptionException> { read("""{"pureBlack":"yes"}""") }
             shouldThrow<CorruptionException> { read("""{"enabledHolidaySets":"ifc"}""") }
+        }
+
+    @Test
+    fun `widgetBackgroundOpacity outside 0 to 100 is coerced into range, not corruption`() =
+        runTest {
+            read("""{"widgetBackgroundOpacity":-20}""").widgetBackgroundOpacity shouldBe 0
+            read("""{"widgetBackgroundOpacity":150}""").widgetBackgroundOpacity shouldBe 100
+            read("""{"widgetBackgroundOpacity":40}""").widgetBackgroundOpacity shouldBe 40
         }
 
     @Test

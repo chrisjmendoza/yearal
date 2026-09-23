@@ -1,5 +1,6 @@
 package io.github.chrisjmendoza.yearal.feature.settings.settings
 
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 
 /**
@@ -31,8 +32,9 @@ sealed interface SettingsUiState {
      * @property settings the stored value; every control reflects it and nothing else. Holiday sets
      * (FEATURES H5) are browsed and toggled on the Holidays screen now (ROADMAP M6 T2); this screen
      * only links there, so it no longer needs the bundled pack catalogue itself.
-     * @property dynamicColorSupported whether the device can honour [UserSettings.dynamicColor]
-     * (API 31+); when `false` the switch is shown disabled and the stored value is left untouched.
+     * @property dynamicColorSupported whether the device can honour [ColorSource.DYNAMIC]
+     * (API 31+); when `false` the switch is shown disabled and [UserSettings.colorSource] is left
+     * untouched.
      * @property deleteAllDataStep which step of the "Delete all data" confirmation is open, if any
      * (FEATURES W6).
      */

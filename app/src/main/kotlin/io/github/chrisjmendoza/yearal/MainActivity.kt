@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.ui.IfcApp
 
@@ -44,7 +45,8 @@ class MainActivity : ComponentActivity() {
                     ThemeMode.LIGHT -> false
                     ThemeMode.DARK -> true
                 }
-            IfcTheme(darkTheme = darkTheme, dynamicColor = settings.dynamicColor) {
+            // TODO(H2): pass palette and pureBlack once IfcTheme takes them (A1, :core:designsystem).
+            IfcTheme(darkTheme = darkTheme, dynamicColor = settings.colorSource == ColorSource.DYNAMIC) {
                 IfcApp(viewModel = viewModel)
             }
         }

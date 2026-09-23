@@ -13,7 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 
 /**
  * Semantics test tags of the month grid's parts that have no text of their own. They sit in the
@@ -54,9 +54,10 @@ object MonthGridTestTags {
 /** The most event dots a cell shows; the spoken description still gives the exact count (FEATURES C4). */
 const val MAX_EVENT_DOTS: Int = 3
 
-private val MarkRowHeight = 8.dp
-private val MarkSize = 6.dp
-private val MarkSpacing = 3.dp
+// Values live in Dimens (docs/design-plan.md §3.1).
+private val MarkRowHeight = Dimens.MarkRowHeight
+private val MarkSize = Dimens.MarkSize
+private val MarkSpacing = Dimens.MarkSpacing
 
 /**
  * The row of marks under a day number: a holiday diamond first, then up to [MAX_EVENT_DOTS] round

@@ -2,9 +2,12 @@ package io.github.chrisjmendoza.yearal.core.data.settings
 
 import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.Serializer
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorPalette
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
+import io.github.chrisjmendoza.yearal.core.domain.settings.WidgetTheme
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -17,27 +20,47 @@ import java.io.OutputStream
  * app version (missing newer fields) still reads; unknown keys from a newer version are ignored by
  * [UserSettingsSerializer.json]. Renaming a field here changes the file format: add `@SerialName`
  * with the old name instead.
+ *
+ * **The visual-design-pass migration (`docs/design-plan.md` §5.1, §8.1):** this DTO deliberately has
+ * no `dynamicColor` field any more. A file written before this change still carries that boolean key;
+ * `ignoreUnknownKeys` (below) drops it silently, so the document decodes as if the key were never
+ * there and [colorSource] takes its declared default, [ColorSource.BRAND] — the one-time, intentional
+ * pre-1.0 switch to the brand palette. Do not re-add a `dynamicColor` field to reverse this.
  */
 @Serializable
 internal data class UserSettingsDto(
     val weekdayDisplay: WeekdayDisplay = UserSettings.DEFAULT.weekdayDisplay,
     val themeMode: ThemeMode = UserSettings.DEFAULT.themeMode,
-    val dynamicColor: Boolean = UserSettings.DEFAULT.dynamicColor,
+    val colorSource: ColorSource = UserSettings.DEFAULT.colorSource,
+    val palette: ColorPalette = UserSettings.DEFAULT.palette,
+    val pureBlack: Boolean = UserSettings.DEFAULT.pureBlack,
     val enabledHolidaySets: Set<String> = UserSettings.DEFAULT.enabledHolidaySets,
     // Added for the first-run intro (docs/FEATURES.md L1). Defaulting to false is what makes a file
     // written before this field existed read as "intro not seen" instead of failing to parse — see
     // UserSettings.hasSeenIntro's KDoc for why that default is correct for both a fresh install and a
     // pre-intro install alike.
     val hasSeenIntro: Boolean = UserSettings.DEFAULT.hasSeenIntro,
+    val todayWidgetTheme: WidgetTheme = UserSettings.DEFAULT.todayWidgetTheme,
+    val monthWidgetTheme: WidgetTheme = UserSettings.DEFAULT.monthWidgetTheme,
+    val widgetBackgroundOpacity: Int = UserSettings.DEFAULT.widgetBackgroundOpacity,
 ) {
-    /** This DTO's fields as a [UserSettings]. */
+    /**
+     * This DTO's fields as a [UserSettings]. [widgetBackgroundOpacity] is coerced into `0..100`
+     * rather than passed through: a value outside that range (a hand-edited or foreign file) must not
+     * trip [UserSettingsSerializer]'s corruption handler and wipe every other setting along with it.
+     */
     fun toDomain(): UserSettings =
         UserSettings(
             weekdayDisplay = weekdayDisplay,
             themeMode = themeMode,
-            dynamicColor = dynamicColor,
+            colorSource = colorSource,
+            palette = palette,
+            pureBlack = pureBlack,
             enabledHolidaySets = enabledHolidaySets,
             hasSeenIntro = hasSeenIntro,
+            todayWidgetTheme = todayWidgetTheme,
+            monthWidgetTheme = monthWidgetTheme,
+            widgetBackgroundOpacity = widgetBackgroundOpacity.coerceIn(0, 100),
         )
 
     companion object {
@@ -46,9 +69,14 @@ internal data class UserSettingsDto(
             UserSettingsDto(
                 weekdayDisplay = settings.weekdayDisplay,
                 themeMode = settings.themeMode,
-                dynamicColor = settings.dynamicColor,
+                colorSource = settings.colorSource,
+                palette = settings.palette,
+                pureBlack = settings.pureBlack,
                 enabledHolidaySets = settings.enabledHolidaySets,
                 hasSeenIntro = settings.hasSeenIntro,
+                todayWidgetTheme = settings.todayWidgetTheme,
+                monthWidgetTheme = settings.monthWidgetTheme,
+                widgetBackgroundOpacity = settings.widgetBackgroundOpacity,
             )
     }
 }

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,16 +29,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.R
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.PillShape
 
-private val BandVerticalPadding = 8.dp
-private val BandHorizontalPadding = 16.dp
-private val BandContentSpacing = 12.dp
-private val BandGap = 4.dp
+// Values live in Dimens (docs/design-plan.md §3.1).
+private val BandVerticalPadding = Dimens.SpaceS
+private val BandHorizontalPadding = Dimens.SpaceL
+private val BandContentSpacing = Dimens.SpaceM
+private val BandGap = Dimens.SpaceXs
 private const val SUBTITLE_MAX_LINES = 2
 
 /**
@@ -79,7 +80,7 @@ fun IntercalaryBand(
     require(day.isIntercalary) { "IntercalaryBand takes Leap Day or Year Day, not $day" }
     val formatter = rememberIfcDateFormatter()
     val colors = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(percent = 50)
+    val shape = PillShape
     val containerColor = if (isSelected) colors.primaryContainer else colors.tertiaryContainer
     val contentColor = if (isSelected) colors.onPrimaryContainer else colors.onTertiaryContainer
     val description = formatter.dayDescription(day, isToday, eventCount, holidayName)

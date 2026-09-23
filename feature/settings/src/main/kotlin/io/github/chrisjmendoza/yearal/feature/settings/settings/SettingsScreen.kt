@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
@@ -74,7 +75,11 @@ fun SettingsRoute(
         onBack = navigator::goBack,
         onWeekdayDisplaySelected = viewModel::setWeekdayDisplay,
         onThemeModeSelected = viewModel::setThemeMode,
-        onDynamicColorChanged = viewModel::setDynamicColor,
+        // The switch is still a boolean control (H2 restyles Settings' Appearance section); it maps
+        // checked/unchecked to ColorSource.DYNAMIC / ColorSource.BRAND, which setColorSource stores.
+        onDynamicColorChanged = { enabled ->
+            viewModel.setColorSource(if (enabled) ColorSource.DYNAMIC else ColorSource.BRAND)
+        },
         onOpenHolidays = { navigator.navigate(HolidaysKey) },
         onRequestDeleteAllData = viewModel::requestDeleteAllData,
         onContinueDeleteAllData = viewModel::continueDeleteAllData,
@@ -362,7 +367,7 @@ private fun ThemeSection(
                     R.string.settings_dynamic_color_unavailable
                 },
             ),
-        checked = state.settings.dynamicColor,
+        checked = state.settings.colorSource == ColorSource.DYNAMIC,
         enabled = state.dynamicColorSupported,
         onCheckedChange = onDynamicColorChanged,
     )

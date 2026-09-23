@@ -1,5 +1,6 @@
 package io.github.chrisjmendoza.yearal.feature.settings.intro
 
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.testing.FakeSettingsRepository
 import io.kotest.matchers.shouldBe
@@ -61,7 +62,7 @@ class IntroViewModelTest {
     @Test
     fun `markSeen never touches any other setting`() =
         runTest(dispatcher) {
-            val nonDefault = UserSettings.DEFAULT.copy(dynamicColor = false)
+            val nonDefault = UserSettings.DEFAULT.copy(colorSource = ColorSource.DYNAMIC)
             val repository = FakeSettingsRepository(nonDefault)
             val viewModel = IntroViewModel(repository)
 

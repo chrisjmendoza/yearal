@@ -54,7 +54,9 @@ private val TitleBottomPadding = 8.dp
  * which spans all seven columns and so aligns to nothing. The band and its [IntercalaryPlaceholder]
  * are wrapped in one full-width slot ([MonthGridTestTags.INTERCALARY_SLOT]) that is the same size in
  * every month, which is what keeps a pager of months from jumping — the band itself is narrower than
- * the placeholder by the width of the button beside it.
+ * the placeholder by the width of the button beside it. **Trap:** the weekday explainer lives in the
+ * title row, so a caller passing `showTitle = false` (see below) loses it along with the heading; the
+ * caller then owns showing an equivalent explainer next to its own app bar title.
  *
  * @param month the month to show.
  * @param today the real today as a Gregorian date, or `null` to mark no cell.
@@ -65,6 +67,10 @@ private val TitleBottomPadding = 8.dp
  * @param modifier applied to the grid; it fills the available width itself.
  * @param eventCounts number of events per Gregorian date; absent dates have none.
  * @param holidays holiday name per Gregorian date; absent dates have none.
+ * @param showTitle whether to render the inner month heading and its weekday explainer button.
+ * Defaults to `true`, the grid's original behaviour. The Month screen (`docs/design-plan.md` §4.2,
+ * owner note 3, "one title") passes `false` because its own app bar already shows the month and
+ * year, so the two titles never compete for the same space.
  */
 @Composable
 fun MonthGrid(
@@ -76,6 +82,7 @@ fun MonthGrid(
     modifier: Modifier = Modifier,
     eventCounts: Map<LocalDate, Int> = emptyMap(),
     holidays: Map<LocalDate, String> = emptyMap(),
+    showTitle: Boolean = true,
 ) {
     val formatter = rememberIfcDateFormatter()
     // The 28 (IfcDate, LocalDate) pairs depend only on `month`, but `today`, `selected`, `eventCounts`
@@ -95,20 +102,22 @@ fun MonthGrid(
             }
         }
     Column(modifier = modifier.fillMaxWidth().semantics { isTraversalGroup = true }) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = TitleBottomPadding),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = formatter.monthTitle(month),
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.weight(1f).semantics { heading() },
-            )
-            ExplainerInfoButton(
-                title = stringResource(R.string.weekday_explainer_title),
-                explanation = stringResource(R.string.weekday_explainer_body),
-                modifier = Modifier.testTag(MonthGridTestTags.WEEKDAY_EXPLAINER),
-            )
+        if (showTitle) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = TitleBottomPadding),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = formatter.monthTitle(month),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f).semantics { heading() },
+                )
+                ExplainerInfoButton(
+                    title = stringResource(R.string.weekday_explainer_title),
+                    explanation = stringResource(R.string.weekday_explainer_body),
+                    modifier = Modifier.testTag(MonthGridTestTags.WEEKDAY_EXPLAINER),
+                )
+            }
         }
         WeekdayHeaders(month = month, display = weekdayDisplay)
         for (row in 0 until GRID_ROWS) {

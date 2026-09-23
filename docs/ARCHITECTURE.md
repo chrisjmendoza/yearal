@@ -135,7 +135,7 @@ declare Java toolchains of their own, so compilation never triggers JDK provisio
 | glance | androidx.glance:glance-appwidget, glance-material3, glance-appwidget-testing, glance-preview, glance-appwidget-preview | 1.2.0 | Stable (2026-08-26). Adds `providePreview` and `setWidgetPreview`. |
 | room3 | androidx.room3:room3-runtime, room3-compiler, plugin `androidx.room3` | 3.0.3 | See the decision below. |
 | sqlite | androidx.sqlite:sqlite-bundled | 2.7.1 | The bundled driver gives the same SQLite on every device and allows plain JVM DAO tests. |
-| datastore | androidx.datastore:datastore | 1.2.1 | Typed `DataStore<UserSettings>` with a kotlinx-serialization JSON serializer. No protobuf toolchain. |
+| datastore | androidx.datastore:datastore | 1.2.1 | Typed `DataStore<UserSettings>` with a kotlinx-serialization JSON serializer. No protobuf toolchain. `UserSettings` holds the grid, theme and colour prefs (`weekdayDisplay`, `themeMode`, `colorSource`, `palette`, `pureBlack`, `todayWidgetTheme`, `monthWidgetTheme`, `widgetBackgroundOpacity` — `docs/design-plan.md` §5), plus `enabledHolidaySets` and `hasSeenIntro`. `colorSource` (`ColorSource.BRAND` / `DYNAMIC`) replaced a `dynamicColor` boolean pre-1.0; an old file's `dynamicColor` key is simply ignored and reads as `BRAND`, since `ignoreUnknownKeys` is on. |
 | nav3 | androidx.navigation3:navigation3-runtime, navigation3-ui | 1.1.7 | See the decision below. |
 | lifecycle | lifecycle-runtime-compose, lifecycle-viewmodel-compose, lifecycle-viewmodel-navigation3 | 2.11.0 | Needs compileSdk 37, which is fine here. |
 | activity | activity-compose | 1.13.0 | |
@@ -531,6 +531,53 @@ months that stay warm" pins the query count.
     - **Wired into `MonthGrid`** (done, ROADMAP R8). Because both call sites are inside `MonthGrid`, the copy lives in `:core:designsystem`'s own `strings.xml` (`weekday_explainer_*`, `intercalary_explainer_*`) next to the grid's other user-visible strings, not in a feature module — an earlier note here said "feature-owned string resources", which was wrong: `:feature:calendar` cannot reach into this module's resources, and this module already owns the grid's whole calendar vocabulary (`weekday_header_nominal`, `intercalary_band_subtitle`, `IfcDateFormatter`'s patterns). `MonthGrid` takes no new parameter and no call site changed.
     - **Placement.** Neither button sits *inside* the row it explains. The seven weekday headers and the 28 day cells share one set of column widths, so a 48dp button among them would pull the headers out of alignment with the days beneath. The weekday explainer therefore goes at the end of the month-title row, immediately above the headers it describes, where the heading leaves the space free; the intercalary explainer goes beside the band, which spans all seven columns and so aligns to nothing. The weekday copy is worded to hold for all three `WeekdayDisplay` settings, since a user may have hidden either row.
     - **The band slot.** The band and its `IntercalaryPlaceholder` are now wrapped in one full-width row, `MonthGridTestTags.INTERCALARY_SLOT`. *That slot*, not the band, is what must be identical in every month for a pager of months never to jump; the band itself is narrower than the placeholder by the button's 48dp touch target. `MonthGridTest` asserts the slot equality (at font scale 1 and 2), that the placeholder fills its slot, and that the band gives up exactly that 48dp.
+
+### Theme and design tokens
+
+The visual design pass ([`docs/design-plan.md`](design-plan.md), phase 1 "Foundation") layers a token
+system on top of Material 3 rather than styling screens off raw `ColorScheme`/`Typography` values, and
+flips the app's default look from the wallpaper to the brand.
+
+- **`IfcTheme`** (`:core:designsystem`, `theme` package) resolves a `ColorScheme` from, in order:
+  dynamic (wallpaper) colour when `dynamicColor` is on and the device is API 31+; otherwise the active
+  `ColorPalette`'s scheme (`ColorPalette.colorSchemes()`, design-plan §5.2) for the requested light or
+  dark mode; then, if dark mode and `pureBlack` are both set, `ColorScheme.pureBlack()` overrides the
+  surfaces with AMOLED black (design-plan §5.3) on top of *whichever* scheme was chosen — brand or
+  dynamic. **`dynamicColor` now defaults to `false`** (design-plan §5.1/§8.1 decision 1): the curated
+  `ColorPalette.TEAL` brand scheme is what a fresh install shows without the user touching Settings,
+  reversing the previous default that made the wallpaper the accidental default look.
+- **Six curated palettes** (`ColorPalette` in `:core:domain`, the schemes in `:core:designsystem`'s
+  `theme/Palette*.kt`): `TEAL` (default, the launcher-icon brand scheme, `Color.kt`), `SOL`, `NIGHT`,
+  `MOSS`, `ROSE`, `INK` (design-plan §5.2). Each is a hand-tuned light/dark `ColorScheme` pair, not a
+  generated seed, so every role pairing the app draws — every `on*` colour on its own colour or
+  container, `onSurface` on every `surfaceContainer` tier, `primary`/`secondary`/`tertiary`/`error`/
+  `onSurfaceVariant` on `surface`, `outline` on `surface` — is guaranteed rather than merely likely to
+  meet WCAG AA (4.5:1 text, 3:1 non-text). `ColorSchemeContrastTest` (a separate task, written from
+  `docs/design-plan.md` rather than from this code) turns that guarantee into a gate assertion.
+- **`YearalColors`**, provided through `LocalYearalColors` and read via `YearalTheme.colors` (mirroring
+  `MaterialTheme.colorScheme`), is a small set of semantic tokens — `todayRing`, `heroContainer`,
+  `intercalaryContainer`, `gridCell`, `gridCellWeekend`, `gridCellMarked`, and the rest — each
+  *derived* from a Material role (`yearalColorsFrom`, design-plan §3.1's token table) rather than a
+  brand constant, so the same token names produce a coherent look under any palette or under dynamic
+  colour. `YearalShapes` (`extraSmall`…`extraLarge`, 4–28dp) and `PillShape` (the intercalary band's
+  fully rounded corner) replace the ad hoc `RoundedCornerShape` literals components used to declare for
+  themselves; `YearalTypography` adds tabular figures to the numeral-bearing styles and a heavier
+  `displayMedium` for the Today hero date, built on Roboto (the owner's choice, design-plan §8 decision
+  3 — no bundled font). `Dimens` centralises the spacing and sizing scale, including the grid's own
+  `CellGap`/`CellPadding`/`TodayRingWidth`/mark sizes, which used to be private constants duplicated
+  per component.
+- **`MonthGrid`'s inner heading is optional** (`showTitle: Boolean = true`): the Month screen (phase 2)
+  passes `false` once its own app bar shows the month and year, so the grid and the app bar stop
+  showing the same title twice; every other caller is unaffected by the default.
+- **Pure black** (`ColorScheme.pureBlack()`, design-plan §5.3) is a `ColorScheme` transform, not a
+  seventh palette, because it applies on top of whichever dark scheme is active. It replaces
+  `background`/`surface`/`surfaceDim`/`surfaceContainerLowest` with true black and steps the remaining
+  container tiers up from it, keeping every `on*` colour — a darker background can only improve an
+  already-passing contrast ratio.
+- **Dark scheme rework** (design-plan §3.1, finding D3): the brand dark scheme's surfaces moved from a
+  near-black that read as plain black (`#0E1615` down to `#090F0E`) to a visibly teal-tinted set
+  (`#121C1B` down to `#0D1514`, `surfaceBright` `#334542`) with a real step between tiers;
+  `DarkPrimaryContainer` stays the brand teal unchanged so the hero card is unmistakably teal at night.
 
 ### State management
 

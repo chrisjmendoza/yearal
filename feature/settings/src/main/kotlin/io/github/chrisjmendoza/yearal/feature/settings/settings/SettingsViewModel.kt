@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.chrisjmendoza.yearal.core.domain.event.EventRepository
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.SettingsRepository
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
@@ -94,11 +95,12 @@ class SettingsViewModel
         }
 
         /**
-         * Stores the Material You preference (FEATURES W2). The value is stored even on devices that
-         * cannot honour it, but the screen disables the control there, so this is only reached on API 31+.
+         * Stores where the colour scheme comes from (FEATURES W2, W6; `docs/design-plan.md` §5.1). The
+         * value is stored even on devices that cannot honour [ColorSource.DYNAMIC], but the screen
+         * disables the control there, so [ColorSource.DYNAMIC] is only ever passed in on API 31+.
          */
-        fun setDynamicColor(enabled: Boolean) {
-            update { it.copy(dynamicColor = enabled) }
+        fun setColorSource(source: ColorSource) {
+            update { it.copy(colorSource = source) }
         }
 
         private fun update(transform: (UserSettings) -> UserSettings) {

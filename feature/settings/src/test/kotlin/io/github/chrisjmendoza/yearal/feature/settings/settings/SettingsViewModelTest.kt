@@ -1,6 +1,7 @@
 package io.github.chrisjmendoza.yearal.feature.settings.settings
 
 import app.cash.turbine.test
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
@@ -57,7 +58,7 @@ class SettingsViewModelTest {
                 UserSettings(
                     weekdayDisplay = WeekdayDisplay.NOMINAL,
                     themeMode = ThemeMode.DARK,
-                    dynamicColor = false,
+                    colorSource = ColorSource.DYNAMIC,
                     enabledHolidaySets = setOf("us"),
                 )
             val viewModel = viewModel(FakeSettingsRepository(stored))
@@ -71,14 +72,14 @@ class SettingsViewModelTest {
         }
 
     @Test
-    fun `a fresh install shows the defaults - BOTH, system theme, dynamic colour, IFC and US packs`() =
+    fun `a fresh install shows the defaults - BOTH, system theme, brand colour, IFC and US packs`() =
         runTest(dispatcher) {
             viewModel(FakeSettingsRepository()).uiState.test {
                 awaitItem() shouldBe SettingsUiState.Loading
                 val loaded = awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>()
                 loaded.settings.weekdayDisplay shouldBe WeekdayDisplay.BOTH
                 loaded.settings.themeMode shouldBe ThemeMode.SYSTEM
-                loaded.settings.dynamicColor shouldBe true
+                loaded.settings.colorSource shouldBe ColorSource.BRAND
                 loaded.settings.enabledHolidaySets shouldBe setOf("ifc", "us")
             }
         }
@@ -129,18 +130,20 @@ class SettingsViewModelTest {
         }
 
     @Test
-    fun `setDynamicColor updates the repository and the state`() =
+    fun `setColorSource updates the repository and the state`() =
         runTest(dispatcher) {
             val repository = FakeSettingsRepository()
             val viewModel = viewModel(repository)
             viewModel.uiState.test {
                 awaitItem() shouldBe SettingsUiState.Loading
-                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.dynamicColor shouldBe true
+                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.colorSource shouldBe
+                    ColorSource.BRAND
 
-                viewModel.setDynamicColor(false)
+                viewModel.setColorSource(ColorSource.DYNAMIC)
 
-                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.dynamicColor shouldBe false
-                repository.current shouldBe UserSettings.DEFAULT.copy(dynamicColor = false)
+                awaitItem().shouldBeInstanceOf<SettingsUiState.Loaded>().settings.colorSource shouldBe
+                    ColorSource.DYNAMIC
+                repository.current shouldBe UserSettings.DEFAULT.copy(colorSource = ColorSource.DYNAMIC)
             }
         }
 
@@ -210,7 +213,8 @@ class SettingsViewModelTest {
     @Test
     fun `confirming both steps erases every event and resets settings, then shows completion`() =
         runTest(dispatcher) {
-            val settingsRepo = FakeSettingsRepository(UserSettings(themeMode = ThemeMode.DARK, dynamicColor = false))
+            val settingsRepo =
+                FakeSettingsRepository(UserSettings(themeMode = ThemeMode.DARK, colorSource = ColorSource.DYNAMIC))
             val eventRepo = FakeEventRepository()
             eventRepo.seed(listOf(EventFixtures.sol13Yearly(), EventFixtures.weeklyGregorian()))
             val viewModel = viewModel(settingsRepo, eventRepository = eventRepo)

@@ -20,21 +20,21 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import java.time.LocalDate
 
-/** Minimum touch target of a day cell (docs/ARCHITECTURE.md §4 "Accessibility"). */
-val DayCellMinSize = 48.dp
+/** Minimum touch target of a day cell (docs/ARCHITECTURE.md §4 "Accessibility"). See [Dimens.DayCellMinSize]. */
+val DayCellMinSize = Dimens.DayCellMinSize
 
 /** Width of the border drawn around today's cell or band; shared by [DayCell] and `IntercalaryBand`. */
-internal val TodayRingWidth = 2.dp
+internal val TodayRingWidth = Dimens.TodayRingWidth
 
 // 1dp, not more: seven columns at 360dp give 51dp each (docs/ARCHITECTURE.md §4), and the touch
-// target inside the gap must stay at DayCellMinSize.
-private val CellGap = 1.dp
-private val CellPadding = 4.dp
+// target inside the gap must stay at DayCellMinSize. Values live in Dimens (docs/design-plan.md §3.1).
+private val CellGap = Dimens.CellGap
+private val CellPadding = Dimens.CellPadding
 
 /**
  * One regular day of the month grid (FEATURES C1, C4): the IFC day number large, the Gregorian day of

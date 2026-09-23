@@ -363,10 +363,10 @@ enums in `:core:domain` (settings package), so parallel agents compile against o
 
 | | Task | Owner modules | Status |
 |---|---|---|---|
-| Wave 1 | A1 design-system foundation: `YearalColors` tokens, `Shapes`, `Typography`, `Dimens`, dark scheme rework, six palettes, pure black, `IfcTheme` API, `MonthGrid` title optional | `:core:designsystem` | ⬜ |
-| Wave 1 | B1 settings model: `colorSource` replaces `dynamicColor`, `palette`, `pureBlack`, `widgetTheme`, `widgetBackgroundOpacity`; mechanical caller updates | `:core:domain`, `:core:data`, callers | ⬜ |
-| Wave 1 | T1 oracle tests, written from this doc: `ColorSchemeContrastTest`, the `dynamicColor` → `BRAND` migration test | test files only | ⬜ |
-| Integrate 1 | apply, `spotlessApply`, gate | | ⬜ |
+| Wave 1 | A1 design-system foundation: `YearalColors` tokens, `Shapes`, `Typography`, `Dimens`, dark scheme rework, six palettes, pure black, `IfcTheme` API, `MonthGrid` title optional | `:core:designsystem` | ✅ applied, gate running |
+| Wave 1 | B1 settings model: `colorSource` replaces `dynamicColor`, `palette`, `pureBlack`, `widgetTheme`, `widgetBackgroundOpacity`; mechanical caller updates | `:core:domain`, `:core:data`, callers | ✅ applied, gate running |
+| Wave 1 | T1 oracle tests, written from this doc: `ColorSchemeContrastTest`, the `dynamicColor` → `BRAND` migration test | test files only | ✅ applied, gate running |
+| Integrate 1 | apply, `spotlessApply`, gate | | 🔄 |
 | Wave 2 | C2 calendar components: cell fills, weekend tint, 8 dp marks, placeholder pill, Year tile cards, intercalary fill restored, holiday diamonds in Year | `:core:designsystem` | ⬜ |
 | Wave 2 | D2 calendar screens: Today hero, Month anchoring and selected-day summary, single title with chevron, Year padding, Day intercalary header | `:feature:calendar` | ⬜ |
 | Wave 2 | E2 events: grouped list, one date line, chips, editor states, colour swatch row, category control | `:feature:events` | ⬜ |

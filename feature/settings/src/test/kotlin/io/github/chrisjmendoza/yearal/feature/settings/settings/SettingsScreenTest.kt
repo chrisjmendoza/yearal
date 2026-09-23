@@ -20,6 +20,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
@@ -145,7 +146,7 @@ class SettingsScreenTest {
 
     @Test
     fun `dynamic colour switch reflects the state and reports the opposite value on click`() {
-        show(UserSettings(dynamicColor = true), dynamicColorSupported = true)
+        show(UserSettings(colorSource = ColorSource.DYNAMIC), dynamicColorSupported = true)
 
         val row = compose.onNodeWithText("Dynamic colour").performScrollTo()
         row.assertIsEnabled().assertIsOn()
@@ -158,7 +159,7 @@ class SettingsScreenTest {
 
     @Test
     fun `dynamic colour switch is disabled with its reason when the device cannot support it`() {
-        show(UserSettings(dynamicColor = true), dynamicColorSupported = false)
+        show(UserSettings(colorSource = ColorSource.DYNAMIC), dynamicColorSupported = false)
 
         compose.onNodeWithText("Dynamic colour").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithText("Not available on this device").assertIsDisplayed()

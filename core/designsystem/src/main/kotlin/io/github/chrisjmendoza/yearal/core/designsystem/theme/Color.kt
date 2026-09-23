@@ -25,7 +25,7 @@ val BrandInk: Color = Color(0xFF244338)
 // every text-on-container pair is above 4.5:1 and most are above 7:1. Declaration order matters:
 // top-level vals initialise in file order, so a tone is declared before the first tone that reuses it.
 
-/** Dark primary, a light teal-mint; [DarkOnPrimary] on it: 7.8:1, on [DarkSurface]: 10.9:1. */
+/** Dark primary, a light teal-mint; [DarkOnPrimary] on it: 7.8:1, on [DarkSurface]: 10.3:1. */
 val DarkPrimary: Color = Color(0xFF8FD4CA)
 
 /** Light primary = [BrandTeal]. [LightOnPrimary] on it: 9.9:1. On [LightSurface]: 10.8:1. */
@@ -133,7 +133,10 @@ val LightSurfaceBright: Color = LightSurface
 /** Dark on-primary, a deep teal. */
 val DarkOnPrimary: Color = Color(0xFF003733)
 
-/** Dark primary container = [BrandTeal]; [DarkOnPrimaryContainer] on it: 9.1:1. */
+/**
+ * Dark primary container = [BrandTeal], kept unchanged through the §3.1 dark scheme rework so the
+ * hero card is unmistakably teal at night; [DarkOnPrimaryContainer] on it: 9.1:1.
+ */
 val DarkPrimaryContainer: Color = BrandTeal
 
 /** Dark on-primary-container, a pale mint. */
@@ -142,7 +145,7 @@ val DarkOnPrimaryContainer: Color = Color(0xFFABF0E6)
 /** Dark inverse primary = [BrandTeal]; on [DarkInverseSurface]: 9.0:1. */
 val DarkInversePrimary: Color = BrandTeal
 
-/** Dark secondary, a pale sage; [DarkOnSecondary] on it: 7.7:1, on [DarkSurface]: 10.7:1. */
+/** Dark secondary, a pale sage; [DarkOnSecondary] on it: 7.7:1, on [DarkSurface]: 10.2:1. */
 val DarkSecondary: Color = Color(0xFFB1CCC1)
 
 /** Dark on-secondary. */
@@ -154,7 +157,7 @@ val DarkSecondaryContainer: Color = Color(0xFF334B43)
 /** Dark on-secondary-container. */
 val DarkOnSecondaryContainer: Color = Color(0xFFCDE8DC)
 
-/** Dark tertiary, a light amber; [DarkOnTertiary] on it: 7.9:1, on [DarkSurface]: 10.8:1. */
+/** Dark tertiary, a light amber; [DarkOnTertiary] on it: 7.9:1, on [DarkSurface]: 10.3:1. */
 val DarkTertiary: Color = Color(0xFFFFB877)
 
 /** Dark on-tertiary. */
@@ -169,8 +172,12 @@ val DarkTertiaryContainer: Color = Color(0xFF6B3800)
 /** Dark on-tertiary-container, the light peach. */
 val DarkOnTertiaryContainer: Color = Color(0xFFFFDCBE)
 
-/** Dark surface and background, near-black teal; [DarkOnSurface] on it: 14.2:1. */
-val DarkSurface: Color = Color(0xFF0E1615)
+/**
+ * Dark surface and background, a *visibly teal* near-black (`docs/design-plan.md` §3.1 "Dark scheme
+ * rework", finding D3: the previous `#0E1615` read as plain black because the container tiers below
+ * it stepped too little). [DarkOnSurface] on it: 13.5:1.
+ */
+val DarkSurface: Color = Color(0xFF121C1B)
 
 /** Dark on-surface. */
 val DarkOnSurface: Color = Color(0xFFDDE4E0)
@@ -178,10 +185,10 @@ val DarkOnSurface: Color = Color(0xFFDDE4E0)
 /** Dark surface variant; [DarkOnSurfaceVariant] on it: 5.5:1. */
 val DarkSurfaceVariant: Color = Color(0xFF3F4945)
 
-/** Dark on-surface-variant; on [DarkSurface]: 10.8:1. */
+/** Dark on-surface-variant; on [DarkSurface]: 10.2:1, on [DarkSurfaceVariant] itself: 5.5:1. */
 val DarkOnSurfaceVariant: Color = Color(0xFFBEC9C4)
 
-/** Dark outline; on [DarkSurface]: 5.8:1. */
+/** Dark outline; on [DarkSurface]: 5.5:1 (above the 3:1 floor for non-text UI). */
 val DarkOutline: Color = Color(0xFF889390)
 
 /** Dark outline variant, for hairlines. */
@@ -205,26 +212,30 @@ val DarkErrorContainer: Color = Color(0xFF93000A)
 /** Dark on-error-container. */
 val DarkOnErrorContainer: Color = Color(0xFFFFDAD6)
 
-/** Dark surface container tiers: lowest (darkest) to highest. */
-val DarkSurfaceContainerLowest: Color = Color(0xFF090F0E)
+/**
+ * Dark surface container tiers: lowest (darkest) to highest, spread so each step is a real tint
+ * (`docs/design-plan.md` §3.1 "Dark scheme rework") instead of the previous `#090F0E`…`#2F3B39`
+ * range, which was too little step to read as anything but black. [DarkOnSurface] on it: 14.3:1.
+ */
+val DarkSurfaceContainerLowest: Color = Color(0xFF0D1514)
 
-/** See [DarkSurfaceContainerLowest]. */
-val DarkSurfaceContainerLow: Color = Color(0xFF161E1D)
+/** See [DarkSurfaceContainerLowest]; [DarkOnSurface] on it: 12.3:1. */
+val DarkSurfaceContainerLow: Color = Color(0xFF182423)
 
-/** See [DarkSurfaceContainerLowest]. */
-val DarkSurfaceContainer: Color = Color(0xFF1A2322)
+/** See [DarkSurfaceContainerLowest]; [DarkOnSurface] on it: 11.2:1. */
+val DarkSurfaceContainer: Color = Color(0xFF1E2C2A)
 
-/** See [DarkSurfaceContainerLowest]. */
-val DarkSurfaceContainerHigh: Color = Color(0xFF24302E)
+/** See [DarkSurfaceContainerLowest]; [DarkOnSurface] on it: 10.1:1. */
+val DarkSurfaceContainerHigh: Color = Color(0xFF25342F)
 
-/** See [DarkSurfaceContainerLowest]; [DarkOnSurface] on it: 9.0:1, [DarkPrimary]: 6.9:1. */
-val DarkSurfaceContainerHighest: Color = Color(0xFF2F3B39)
+/** See [DarkSurfaceContainerLowest]; [DarkOnSurface] on it: 8.6:1, [DarkPrimary]: 6.6:1. */
+val DarkSurfaceContainerHighest: Color = Color(0xFF2D3F3A)
 
 /** Dark surface dim. */
 val DarkSurfaceDim: Color = DarkSurface
 
-/** Dark surface bright. */
-val DarkSurfaceBright: Color = Color(0xFF333F3D)
+/** Dark surface bright, a real step above [DarkSurfaceContainerHighest]. */
+val DarkSurfaceBright: Color = Color(0xFF334542)
 
 /**
  * The brand light scheme, used below API 31 and whenever dynamic colour is off: teal primary on

@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.cash.turbine.test
 import io.github.chrisjmendoza.yearal.core.data.di.SettingsModule
+import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
@@ -87,12 +88,12 @@ class DataStoreSettingsRepositoryTest {
                 returned shouldBe UserSettings.DEFAULT.copy(themeMode = ThemeMode.DARK)
                 awaitItem() shouldBe returned
 
-                repo.update { it.copy(weekdayDisplay = WeekdayDisplay.NOMINAL, dynamicColor = false) }
+                repo.update { it.copy(weekdayDisplay = WeekdayDisplay.NOMINAL, colorSource = ColorSource.DYNAMIC) }
                 awaitItem() shouldBe
                     UserSettings(
                         weekdayDisplay = WeekdayDisplay.NOMINAL,
                         themeMode = ThemeMode.DARK,
-                        dynamicColor = false,
+                        colorSource = ColorSource.DYNAMIC,
                         enabledHolidaySets = UserSettings.DEFAULT.enabledHolidaySets,
                     )
                 cancelAndIgnoreRemainingEvents()
@@ -106,7 +107,7 @@ class DataStoreSettingsRepositoryTest {
                 UserSettings(
                     weekdayDisplay = WeekdayDisplay.ACTUAL,
                     themeMode = ThemeMode.LIGHT,
-                    dynamicColor = false,
+                    colorSource = ColorSource.DYNAMIC,
                     enabledHolidaySets = setOf("ifc"),
                 )
             newRepository().update { stored } shouldBe stored
@@ -142,7 +143,7 @@ class DataStoreSettingsRepositoryTest {
                 UserSettings(
                     weekdayDisplay = WeekdayDisplay.NOMINAL,
                     themeMode = ThemeMode.DARK,
-                    dynamicColor = false,
+                    colorSource = ColorSource.DYNAMIC,
                     enabledHolidaySets = emptySet(),
                 )
             }
