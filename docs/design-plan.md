@@ -369,14 +369,15 @@ enums in `:core:domain` (settings package), so parallel agents compile against o
 | Wave 1 | B1 settings model: `colorSource` replaces `dynamicColor`, `palette`, `pureBlack`, `widgetTheme`, `widgetBackgroundOpacity`; mechanical caller updates | `:core:domain`, `:core:data`, callers | ✅ committed 7f5da83 |
 | Wave 1 | T1 oracle tests, written from this doc: `ColorSchemeContrastTest`, the `dynamicColor` → `BRAND` migration test | test files only | ✅ committed 7f5da83 |
 | Integrate 1 | apply, `spotlessApply`, gate | | ✅ green in 3m58s |
-| Wave 2 | C2 calendar components: cell fills, weekend tint, 8 dp marks, placeholder pill, Year tile cards, intercalary fill restored, holiday diamonds in Year | `:core:designsystem` | ✅ applied |
-| Wave 2 | D2 calendar screens: Today hero, Month anchoring and selected-day summary, single title with chevron, Year padding, Day intercalary header | `:feature:calendar` | ✅ applied |
-| Wave 2 | E2 events: grouped list, one date line, chips, editor states, colour swatch row, category control | `:feature:events` | ✅ applied |
-| Wave 2 | F2 converter result card and swap icon; holidays rows and pack dots | `:feature:converter`, `:feature:holidays` | ✅ applied |
-| Wave 2 | H2 Settings Appearance section, palette and theme wiring, system bars follow `ThemeMode` | `:feature:settings`, `:app` | ✅ applied |
-| Integrate 2 | apply, gate, `assembleDebug` | | 🔄 gate running |
-| Wave 3 | I3 widgets follow the app theme, widget appearance settings, Month widget fills, large Today content | `:widget` | ⬜ |
-| Wave 3 | J3 intro and Learn grid illustrations, Settings preview strip | `:feature:settings` | ⬜ |
-| Wave 3 | K3 documentation sweep: README, CHANGELOG, ARCHITECTURE, FEATURES, ROADMAP, KDoc audit | docs | ⬜ |
-| Integrate 3 | gate, `assembleDebug`, install and check on a device or emulator | | ⬜ |
-| Deferred | screenshot goldens (owner, CI only); holiday pack colours §5.5; the unfamiliar-user test | | ⏸ |
+| Wave 2 | C2 calendar components: cell fills, weekend tint, 8 dp marks, placeholder pill, Year tile cards, intercalary fill restored, holiday diamonds in Year | `:core:designsystem` | ✅ committed cb1fdc2 |
+| Wave 2 | D2 calendar screens: Today hero, Month anchoring and selected-day summary, single title with chevron, Year padding, Day intercalary header | `:feature:calendar` | ✅ committed cb1fdc2 |
+| Wave 2 | E2 events: grouped list, one date line, chips, editor states, colour swatch row, category control | `:feature:events` | ✅ committed cb1fdc2 |
+| Wave 2 | F2 converter result card and swap icon; holidays rows and pack dots | `:feature:converter`, `:feature:holidays` | ✅ committed cb1fdc2 |
+| Wave 2 | H2 Settings Appearance section, palette and theme wiring, system bars follow `ThemeMode` | `:feature:settings`, `:app` | ✅ committed cb1fdc2 |
+| Integrate 2 | apply, gate, `assembleDebug` | | ✅ green in 2m54s, APK built |
+| Wave 3 | I3 widgets follow the app theme, widget appearance settings, Month widget fills, large Today content | `:widget` | ✅ applied |
+| Wave 3 | J3 intro and Learn grid illustrations, Settings preview strip | `:feature:settings` | ✅ applied |
+| Wave 3 | R1 + R2 fixes from the Opus review of waves 1–2: stale summary rows, dead chips, slider writes, title-pill target, contrast pairs, enum tolerance, doc drift | `:feature:*`, `:core:data`, `:core:designsystem` tests | ✅ applied |
+| Wave 3 | K3 documentation sweep: README, CHANGELOG, ARCHITECTURE, FEATURES, ROADMAP, KDoc audit | docs | ✅ applied |
+| Integrate 3 | gate, `assembleDebug`, install and check on a device or emulator | | ✅ gate green, APK sent to the owner; no device or emulator on the build machine, so the on-device check is the owner's |
+| Deferred | screenshot goldens (owner, CI only); holiday pack colours §5.5; the unfamiliar-user test; a widget's own theme override while Material You is the colour source (Glance follows the system there) | | ⏸ |

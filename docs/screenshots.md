@@ -1,8 +1,11 @@
 # Screenshot goldens (Roborazzi)
 
-Status: **current as of ROADMAP R6 / M2 T10** (2026-09-19). Owned by [ARCHITECTURE.md](ARCHITECTURE.md)
+Status: **current as of ROADMAP R6 / M2 T10** (2026-09-23). Owned by [ARCHITECTURE.md](ARCHITECTURE.md)
 §6 "Goldens", which this doc expands into a runbook; see that section first for the design (why goldens
-are recorded only in CI, why a bot never commits them).
+are recorded only in CI, why a bot never commits them). **The baseline is still unrecorded** — it was
+deliberately deferred past the M2 T13 visual design pass ([design-plan.md](design-plan.md)) rather than
+spend an owner step recording goldens that pass would immediately invalidate. Recording it now, against
+the post-pass UI, is the sensible first baseline; see ROADMAP.md R6.
 
 Every `@Preview` in `:core:designsystem` is captured as a Roborazzi screenshot by Roborazzi's Compose
 preview scanner (`generateComposePreviewRobolectricTests`, configured in

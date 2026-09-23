@@ -194,8 +194,54 @@ Architecture, tooling and CI:
   why that row spans all seven columns. Both use `ExplainerInfoButton`, the reusable info-button and popup
   in `:core:designsystem`. Neither button sits inside the row it explains, so the weekday headers stay
   aligned with the day cells beneath them.
+- The visual design pass (ROADMAP M2 T13; FEATURES W6; [docs/design-plan.md](docs/design-plan.md)):
+  `:core:designsystem` gains a real design language — `YearalColors` semantic tokens (today ring, hero
+  container, intercalary accent, marked and weekend grid cells) derived from whichever `ColorScheme` is
+  active so they hold under any palette or Material You; `YearalShapes` and a named `PillShape`;
+  `YearalTypography` (Roboto, tabular figures on every numeral-bearing style, a heavier `displayMedium`
+  for hero dates); `Dimens` for spacing and mark sizes; and a reworked dark scheme whose surfaces read as
+  teal-tinted rather than plain black. `ColorSchemeContrastTest` gates 4.5:1 text / 3:1 non-text contrast
+  across every palette, both modes and pure black.
+- Six curated palettes — Teal (default), Sol, Night, Moss, Rose, Ink — plus a colour-source switch
+  (Yearal palette / Material You), a pure-black toggle for dark mode, per-widget (Today, Month) theme
+  overrides, a widget background-opacity slider and a live miniature preview strip, all in a new Settings
+  → Appearance section.
+- Colour now reaches every screen instead of only state cues: a Today hero card with IFC/Gregorian
+  eyebrows and an intercalary countdown chip; filled and marked cells on Month and Year; Year tiles as
+  cards with the intercalary fill and holiday diamonds; an intercalary header on Day detail for Year Day
+  and Leap Day; a converter result hero card; holiday-pack colour dots and holiday diamonds; and an Events
+  list grouped under IFC month headers (Year Day and Leap Day get their own header) with a leading colour
+  bar and small chips for recurrence and category instead of a fifth grey text line.
+- Per-event colour and category in the event editor (FEATURES E8): a row of seven fixed swatches plus
+  "Calendar colour" as the reset, and a three-way `EventCategory` control (Event / Observance / Birthday)
+  shown as a chip in the list. Both were already stored, so `docs/contracts/Events.md` stays frozen.
+- Grid illustrations (`GridIllustration`, `:feature:settings`) replace bare text on the first-run intro
+  and as Learn section headers: three `Canvas`-drawn variants built from the same 13×28 grid the app
+  already shows elsewhere, with no bitmap assets.
+- Both home-screen widgets now follow the app's colour source, palette and pure-black setting, with their
+  own theme override (follow app / light / dark) and a background-opacity setting; the Month widget's
+  cells are filled and tinted, and the large Today widget adds a year-progress bar and a countdown to the
+  next Year Day / Leap Day. **Known limitation:** a widget's own theme override has no effect while the
+  colour source is Material You, because Glance's dynamic colour set follows the system UI mode and
+  cannot be overridden per widget.
 
 ### Changed
+
+- **Existing installs move from Material You to the Yearal palette.** `colorSource` replaces the old
+  `dynamicColor` boolean and now defaults to `BRAND`, so a fresh or updated install shows the teal / cream
+  / amber brand palette instead of a wallpaper-derived scheme without the user touching anything. Switch
+  back any time in Settings → Appearance → "Colour source" → Material You (Android 12+ only).
+- The Month screen anchors on the grid: one title (the app bar's, not a second heading inside the grid), a
+  "Show year" pill with a chevron as the affordance for the Year view, and a selected-day summary filling
+  the space below the grid instead of leaving it empty.
+- The Year overview's Year Day tile was drawn like the mini-month tiles beside it — same container, same
+  heading style, same today border — instead of the full-width filled pill the month grid uses, marked out
+  only by the intercalary icon and its Gregorian date beneath. **Reversed by the design pass:** the tile
+  now shares the intercalary fill with Month, Day detail and the widgets, now that the same accent is used
+  consistently everywhere (design-plan.md §8 decision 4).
+- The Events list groups rows under sticky IFC month headers (Year Day and Leap Day get their own header)
+  instead of one flat list, with a single date line and small chips for recurrence and category instead of
+  a fifth grey line.
 
 - The month pager no longer re-queries the events of months that are already on screen: swiping one page
   now issues one query for the month that came into view, instead of three for the whole warm window.
@@ -205,10 +251,6 @@ Architecture, tooling and CI:
   More hub both link to it, so there is a single place that owns the setting.
 
 - The Convert tab uses a swap-arrows icon instead of one that read as "refresh" (R5).
-
-- The Year overview's Year Day tile is drawn like the mini-month tiles beside it — same container, same
-  heading style, same today border — instead of the full-width filled pill the month grid uses. It is
-  still marked out as no ordinary month by the intercalary icon and its Gregorian date beneath.
 
 - The events list no longer prints "Default calendar" under every event. The calendar's name appears
   only once a second calendar exists to tell it apart from; the colour swatch and the hidden-calendar
@@ -263,3 +305,9 @@ Architecture, tooling and CI:
 - `IfcDate.toNumericString()` / `toPrefixedString()` took their digits from the default locale, so a device
   set to Arabic, Persian or Hindi produced a numeric IFC date that `IfcDate.parse` rejects. The canonical
   form now always uses ASCII digits (`docs/calendar-spec.md` §7.6).
+- System status and navigation bar icons followed the *system's* dark setting rather than the app's own
+  `ThemeMode`, so a forced Light or Dark theme could show mismatched (for example white-on-cream) status
+  bar icons; they now follow the theme the user actually chose (design-plan.md §3.2 finding D6).
+- Both home-screen widgets ignored the app's theme entirely — always Material You dynamic colour, always
+  the system dark setting — regardless of what the user had chosen in Settings; they now read
+  `UserSettings` and match what the app itself shows (design-plan.md §4.9).

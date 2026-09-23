@@ -40,15 +40,21 @@ what's listed in [Privacy](#privacy).
   pack, shown on the grid, in Day detail and in the Today agenda. The Holidays screen (More → Holidays)
   lists any year's holidays in both calendars and switches packs on or off.
 - **Today and Month home-screen widgets**, refreshed at midnight and after a clock, time-zone or locale
-  change, reboot, or app update — no per-minute polling. The Month widget marks days that have events
-  (never their titles) and updates within a second or so of an edit.
+  change, reboot, or app update — no per-minute polling. Both follow the app's own colour palette and
+  theme (with a per-widget override and a background-opacity setting). The Month widget marks days that
+  have events (never their titles) and updates within a second or so of an edit.
 - **A first-run intro** — three skippable screens on what the IFC is, why the weekdays differ, and where
   Year Day and Leap Day live; re-openable any time from Learn. On the month grid itself, an info button
   beside the heading explains the two kinds of weekday, and one beside the Leap Day / Year Day band
   explains why that row belongs to no week.
-- **Learn, Privacy and Settings screens** — an in-app explainer for the calendar's rules and quirks, a
-  plain-language privacy statement, and controls for weekday-header style, theme, dynamic colour and
-  holiday packs, plus "Delete all data".
+- **Learn, Privacy and Settings screens** — an in-app explainer for the calendar's rules and quirks (with
+  illustrations built from the app's own 13×28 grid), a plain-language privacy statement, and an
+  Appearance section: weekday-header style, theme, six curated colour palettes (or Material You on
+  Android 12+), a pure-black option for dark mode, per-widget theming, holiday packs, plus "Delete all
+  data".
+- **Colour throughout the UI, not just accents** — a coloured Today hero, filled and marked grid cells,
+  intercalary (Year Day / Leap Day) accents shared across every screen and both widgets, per-event colour
+  and category, and a live palette preview in Settings before you commit to one.
 
 ## What's not here yet
 
