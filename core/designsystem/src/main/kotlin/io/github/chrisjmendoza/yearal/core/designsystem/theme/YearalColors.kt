@@ -33,6 +33,12 @@ import androidx.compose.ui.graphics.Color
  * @property gridCellWeekend the fill of a day cell in the IFC week's Saturday/Sunday columns.
  * @property gridCellMarked the fill a marked cell (holiday or event) steps up to, one container tier
  * above [gridCell], so colour, shape and fill all say "something is here".
+ * @property miniGridCell the fill of a plain day square in the Year overview's mini grid, which sits
+ * *on* a [cardContainer] card rather than on the page: two container tiers above the card, because one
+ * tier (`surfaceContainerLow` → `surfaceContainer`) is only two tones apart in every scheme and the
+ * squares vanished into the card at [gridCell]'s own tier (design-pass fix R11).
+ * @property miniGridCellMarked the fill a marked mini-grid square (holiday or event) steps up to, one
+ * tier above [miniGridCell] — the same "fill says something is here" convention as [gridCellMarked].
  * @property cardContainer the fill of an ordinary card (agenda rows, mini-months, list rows).
  * @property onCard content colour on [cardContainer].
  * @property pageBackground the fill of a screen behind its cards.
@@ -54,6 +60,8 @@ public class YearalColors(
     public val gridCell: Color,
     public val gridCellWeekend: Color,
     public val gridCellMarked: Color,
+    public val miniGridCell: Color,
+    public val miniGridCellMarked: Color,
     public val cardContainer: Color,
     public val onCard: Color,
     public val pageBackground: Color,
@@ -77,6 +85,7 @@ public class YearalColors(
  * | `gridCell` | `surfaceContainerLow` |
  * | `gridCellWeekend` | `surfaceContainer` |
  * | `gridCellMarked` | `surfaceContainerHigh` |
+ * | `miniGridCell`, `miniGridCellMarked` | `surfaceContainerHigh`, `surfaceContainerHighest` |
  * | `cardContainer`, `onCard` | `surfaceContainerLow`, `onSurface` |
  * | `pageBackground` | `surface` |
  */
@@ -97,6 +106,8 @@ public fun yearalColorsFrom(scheme: ColorScheme): YearalColors =
         gridCell = scheme.surfaceContainerLow,
         gridCellWeekend = scheme.surfaceContainer,
         gridCellMarked = scheme.surfaceContainerHigh,
+        miniGridCell = scheme.surfaceContainerHigh,
+        miniGridCellMarked = scheme.surfaceContainerHighest,
         cardContainer = scheme.surfaceContainerLow,
         onCard = scheme.onSurface,
         pageBackground = scheme.surface,

@@ -289,6 +289,10 @@ Architecture, tooling and CI:
 
 ### Fixed
 
+- The Year overview's mini-months looked broken after the design pass: the 28 day squares were painted in
+  the same colour as the card they sit on, so each month was a blank card with a few loose diamonds on it.
+  Every square now has a visible fill, its IFC day number, and its holiday diamond / event dot beneath the
+  number, with today ringed and bold — a miniature of the Month grid (R11).
 - `HolidaysViewModel`'s tests raced real threads: the view model evaluates packs on `Dispatchers.Default`,
   which a test's virtual clock cannot control, so they passed alone and failed under a loaded full-suite
   run. The dispatcher is now injectable for tests. Production behaviour is unchanged.

@@ -4,9 +4,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,8 +23,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -30,7 +35,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
@@ -54,6 +66,9 @@ object YearOverviewTestTags {
      * `"ifc:yearMiniMonth:7"` for Sol.
      */
     const val MINI_MONTH_TILE_PREFIX: String = "ifc:yearMiniMonth:"
+
+    /** Tag of the mini grid inside a tile — the `Canvas` the 28 day squares are drawn on. */
+    const val MINI_GRID: String = "ifc:yearMiniGrid"
 }
 
 // TilePadding and TileBorderWidth come from Dimens (docs/design-plan.md §3.1) rather than their own
@@ -66,16 +81,25 @@ private val IntercalaryRowSpacing = 6.dp
 private val LeapDayPillHorizontalPadding = Dimens.SpaceS
 private val LeapDayPillVerticalPadding = Dimens.SpaceXs
 private const val MINI_GRID_ASPECT_RATIO = GRID_COLUMNS.toFloat() / GRID_ROWS.toFloat()
-private const val CELL_INSET_FRACTION = 0.12f
-private const val EVENT_DOT_RADIUS_FRACTION = 0.16f
-private const val TODAY_RING_RADIUS_FRACTION = 0.32f
 
-/**
- * Scale of the corner event dot drawn on a cell that also has a holiday diamond, relative to the full
- * [EVENT_DOT_RADIUS_FRACTION] dot a plain event-only cell gets (fix design-pass 9): smaller so it reads
- * as a secondary mark in the corner the diamond does not reach, rather than crowding the cell.
- */
-private const val BOTH_MARKED_EVENT_DOT_SCALE = 0.6f
+// Geometry of one mini-grid square, all as fractions of the square's shorter side so the same drawing
+// holds from the grid's 160dp minimum tile (about 19dp squares) up to a tablet's. The layout inside a
+// square mirrors DayCell top to bottom — the day number, then the marks row — just without the
+// Gregorian corner number, which has no room here.
+private const val CELL_INSET_FRACTION = 0.06f
+private const val CELL_CORNER_FRACTION = 0.12f
+
+/** Cap on the day number's font size: half the square, so two digits never touch the marks row. */
+private const val NUMBER_SIZE_FRACTION = 0.5f
+private const val NUMBER_CENTER_FRACTION = 0.38f
+private const val MARK_ROW_CENTER_FRACTION = 0.80f
+private const val MARK_RADIUS_FRACTION = 0.10f
+
+/** A diamond's half-diagonal relative to the dot's radius, so both marks carry the same visual weight. */
+private const val DIAMOND_SCALE = 1.2f
+
+/** Each mark's offset from the square's centre line, in dot radii, when a day carries both marks. */
+private const val MARK_PAIR_OFFSET = 1.4f
 
 /**
  * One tile of the Year overview's `LazyVerticalGrid` (docs/FEATURES.md C6; docs/ARCHITECTURE.md §4
@@ -94,24 +118,24 @@ private const val BOTH_MARKED_EVENT_DOT_SCALE = 0.6f
  * whatever the inner `Text`s would otherwise contribute.
  *
  * The tile is a card (design-plan §4.3 "Every mini-month is a card"): [YearalTheme.colors]`.cardContainer`
- * fill on `MaterialTheme.shapes.medium`. Today is marked two ways, never by colour alone
+ * fill on `MaterialTheme.shapes.medium`. Each of the 28 squares is a small [DayCell] in miniature
+ * ([MiniMonthGrid]): its fill is `.miniGridCell` — **not** `.gridCell`, which is the same Material
+ * role as the card and made every square invisible (fix R11) — its IFC day number sits in the upper
+ * part in `.onCard`, and the marks row beneath: a `.holidayMark` diamond for a holiday (design-plan
+ * §4.3 "a holiday diamond appears in the mini grid too", since [holidays] carries the data already), a
+ * `.eventMark` dot for a day with an event occurrence, both side by side when a day has both (fix
+ * design-pass 9: neither mark is ever dropped). A marked day's square steps up to `.miniGridCellMarked`,
+ * the convention [DayCell] uses with `.gridCellMarked`. Today is marked two ways, never by colour alone
  * (docs/ARCHITECTURE.md §4 "Accessibility"): a `.todayRing` border around the whole tile when it
- * contains the real today (a regular day or, for June, Leap Day), and a hollow ring around that exact
- * cell in the grid. A day with an event occurrence gets a filled `.eventMark` dot; a day with a
- * holiday gets a `.holidayMark` diamond, since [holidays] carries the data already (design-plan §4.3
- * "a holiday diamond appears in the mini grid too" — reversing the earlier state where the Year view's
- * presence bitmap was events only). A day that is both marked steps its cell fill up to
- * `.gridCellMarked`, the same convention [DayCell] uses, and draws **both** marks rather than picking
- * one: the diamond stays centred and a smaller `.eventMark` dot goes in the cell's lower-right corner
- * (fix design-pass 9) — the mini cell (about 19dp at the grid's 160dp minimum tile width) is small, but
- * still legible at that corner scale, so nothing needs to be dropped.
+ * contains the real today (a regular day or, for June, Leap Day), and inside the grid a `.todayRing`
+ * ring around that exact square with its number bold in `.todayText`, exactly as [DayCell] marks it.
  *
  * @param month the month this tile shows.
  * @param today the real today as a Gregorian date, or `null` to mark nothing.
  * @param eventDates dates with at least one event occurrence, from `ObserveAgendaUseCase.presence`.
  * @param onClick invoked when the tile — including its Leap Day indicator — is tapped.
  * @param modifier applied to the tile; it fills the width the grid cell gives it.
- * @param formatter supplies the month name and the day names spoken in the description.
+ * @param formatter supplies the month name, the day numbers and the day names spoken in the description.
  * @param holidays dates with a holiday this month, keyed the same way [eventDates] is (a presence
  * set, not a name map — the mini grid draws a mark, never a label). Defaults to empty so every
  * existing caller is unaffected.
@@ -130,6 +154,7 @@ fun YearMiniMonthTile(
     val regularDays =
         remember(month) { (1..IfcMonth.DAYS_PER_MONTH).map { IfcDate.Regular(month.year, month.month, it) } }
     val regularDates = remember(regularDays) { regularDays.map { it.toLocalDate() } }
+    val dayNumbers = remember(regularDays, formatter) { regularDays.map { formatter.formatNumber(it.dayOfMonth) } }
     val leapDayDate = remember(leapDay) { leapDay?.toLocalDate() }
     val todayIndex = remember(regularDates, today) { today?.let(regularDates::indexOf)?.takeIf { it >= 0 } }
     val todayIsLeapDay = leapDayDate != null && today == leapDayDate
@@ -177,67 +202,19 @@ fun YearMiniMonthTile(
         Text(
             text = formatter.monthName(month.month),
             style = MaterialTheme.typography.titleSmall,
+            // Explicit, like YearDayTile's: the tile is a card, so its heading is onCard rather than
+            // whatever LocalContentColor the host happens to provide.
+            color = yearalColors.onCard,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Canvas(modifier = Modifier.fillMaxWidth().aspectRatio(MINI_GRID_ASPECT_RATIO)) {
-            val cellWidth = size.width / GRID_COLUMNS
-            val cellHeight = size.height / GRID_ROWS
-            val inset = minOf(cellWidth, cellHeight) * CELL_INSET_FRACTION
-            for (index in regularDates.indices) {
-                val row = index / GRID_COLUMNS
-                val column = index % GRID_COLUMNS
-                val center = Offset(cellWidth * (column + 0.5f), cellHeight * (row + 0.5f))
-                val date = regularDates[index]
-                val hasHoliday = date in holidays
-                val hasEvent = date in eventDates
-                drawRoundRect(
-                    color = if (hasHoliday || hasEvent) yearalColors.gridCellMarked else yearalColors.gridCell,
-                    topLeft = Offset(cellWidth * column + inset, cellHeight * row + inset),
-                    size = Size(cellWidth - 2 * inset, cellHeight - 2 * inset),
-                    cornerRadius = CornerRadius(inset),
-                )
-                if (hasHoliday) {
-                    val markRadius = minOf(cellWidth, cellHeight) * EVENT_DOT_RADIUS_FRACTION
-                    rotate(degrees = 45f, pivot = center) {
-                        drawRect(
-                            color = yearalColors.holidayMark,
-                            topLeft = Offset(center.x - markRadius, center.y - markRadius),
-                            size = Size(markRadius * 2, markRadius * 2),
-                        )
-                    }
-                    if (hasEvent) {
-                        // Fix design-pass 9: a day with both marks used to draw the diamond only, silently
-                        // dropping the event dot. A smaller dot in the lower-right corner the diamond
-                        // doesn't reach keeps both marks visible without the two overlapping.
-                        val cornerDotRadius = markRadius * BOTH_MARKED_EVENT_DOT_SCALE
-                        drawCircle(
-                            color = yearalColors.eventMark,
-                            radius = cornerDotRadius,
-                            center =
-                                Offset(
-                                    cellWidth * (column + 1) - inset - cornerDotRadius,
-                                    cellHeight * (row + 1) - inset - cornerDotRadius,
-                                ),
-                        )
-                    }
-                } else if (hasEvent) {
-                    drawCircle(
-                        color = yearalColors.eventMark,
-                        radius = minOf(cellWidth, cellHeight) * EVENT_DOT_RADIUS_FRACTION,
-                        center = center,
-                    )
-                }
-                if (date == today) {
-                    drawCircle(
-                        color = yearalColors.todayRing,
-                        radius = minOf(cellWidth, cellHeight) * TODAY_RING_RADIUS_FRACTION,
-                        center = center,
-                        style = Stroke(width = TileBorderWidth.toPx()),
-                    )
-                }
-            }
-        }
+        MiniMonthGrid(
+            regularDates = regularDates,
+            dayNumbers = dayNumbers,
+            todayIndex = todayIndex,
+            eventDates = eventDates,
+            holidays = holidays,
+        )
         if (leapDay != null) {
             LeapDayIndicator(
                 hasEvent = leapDayDate != null && leapDayDate in eventDates,
@@ -245,6 +222,161 @@ fun YearMiniMonthTile(
             )
         }
     }
+}
+
+/**
+ * The 4 × 7 grid of a [YearMiniMonthTile]: one [Canvas] drawing 28 squares, each with its day number
+ * and marks (see the tile's KDoc for what each square shows and why it is a `Canvas` at all).
+ *
+ * The numbers are laid out **once per size**, not once per frame: a [BoxWithConstraints] gives the
+ * square size at composition, the font size is derived from it, and the 28 [TextLayoutResult]s are
+ * `remember`ed so the draw pass only blits them — measuring 28 strings inside `onDraw` would put 392
+ * text layouts on every scrolled frame of the Year screen, the very cost the `Canvas` exists to avoid.
+ *
+ * The font size is `labelSmall`'s, capped at [NUMBER_SIZE_FRACTION] of the square so it still fits
+ * at font scale 2.0 (docs/ARCHITECTURE.md §4, "font scale 2.0"): at the default scale the cap never
+ * bites on a phone, and at 200% the number shrinks to fit rather than overflowing its square — the
+ * tile's own title and the merged description carry the accessible reading, so a small number here
+ * costs nothing that TalkBack or the large-font user relies on.
+ *
+ * @param regularDates the month's 28 regular days as Gregorian dates, in grid order (CLAUDE.md rule 4:
+ * the marks' keys are Gregorian).
+ * @param dayNumbers the formatted IFC day numbers, parallel to [regularDates].
+ * @param todayIndex index into [regularDates] of the real today, or `null`.
+ * @param eventDates dates with an event occurrence.
+ * @param holidays dates with a holiday.
+ * @param modifier applied to the grid; it fills the tile's width at the 7:4 aspect ratio.
+ */
+@Composable
+private fun MiniMonthGrid(
+    regularDates: List<LocalDate>,
+    dayNumbers: List<String>,
+    todayIndex: Int?,
+    eventDates: Set<LocalDate>,
+    holidays: Set<LocalDate>,
+    modifier: Modifier = Modifier,
+) {
+    val yearalColors = YearalTheme.colors
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val baseStyle = MaterialTheme.typography.labelSmall
+    BoxWithConstraints(modifier = modifier.fillMaxWidth().aspectRatio(MINI_GRID_ASPECT_RATIO)) {
+        val squareSizePx = with(density) { minOf(maxWidth / GRID_COLUMNS, maxHeight / GRID_ROWS).toPx() }
+        val numberStyle =
+            baseStyle.copy(
+                fontSize = fitNumberSize(baseStyle.fontSize, squareSizePx, density),
+                // labelSmall's 16sp line height would centre the glyph in a box taller than the square
+                // allows; the font's natural line height keeps the number where the square's centre is.
+                lineHeight = TextUnit.Unspecified,
+                color = yearalColors.onCard,
+            )
+        val todayStyle = numberStyle.copy(color = yearalColors.todayText, fontWeight = FontWeight.Bold)
+        val numberLayouts =
+            remember(measurer, dayNumbers, numberStyle, todayStyle, todayIndex) {
+                dayNumbers.mapIndexed { index, label ->
+                    measurer.measure(label, if (index == todayIndex) todayStyle else numberStyle, maxLines = 1)
+                }
+            }
+        Canvas(modifier = Modifier.fillMaxSize().testTag(YearOverviewTestTags.MINI_GRID)) {
+            val cellWidth = size.width / GRID_COLUMNS
+            val cellHeight = size.height / GRID_ROWS
+            val cellMin = minOf(cellWidth, cellHeight)
+            val inset = cellMin * CELL_INSET_FRACTION
+            val cornerRadius = CornerRadius(cellMin * CELL_CORNER_FRACTION)
+            val markRadius = cellMin * MARK_RADIUS_FRACTION
+            val ringWidth = TileBorderWidth.toPx()
+            for (index in regularDates.indices) {
+                val row = index / GRID_COLUMNS
+                val column = index % GRID_COLUMNS
+                val topLeft = Offset(cellWidth * column + inset, cellHeight * row + inset)
+                val squareSize = Size(cellWidth - 2 * inset, cellHeight - 2 * inset)
+                val centerX = topLeft.x + squareSize.width / 2
+                val date = regularDates[index]
+                val hasHoliday = date in holidays
+                val hasEvent = date in eventDates
+                drawRoundRect(
+                    color = if (hasHoliday || hasEvent) yearalColors.miniGridCellMarked else yearalColors.miniGridCell,
+                    topLeft = topLeft,
+                    size = squareSize,
+                    cornerRadius = cornerRadius,
+                )
+                val layout = numberLayouts[index]
+                drawText(
+                    textLayoutResult = layout,
+                    topLeft =
+                        Offset(
+                            centerX - layout.size.width / 2f,
+                            topLeft.y + squareSize.height * NUMBER_CENTER_FRACTION - layout.size.height / 2f,
+                        ),
+                )
+                val markY = topLeft.y + squareSize.height * MARK_ROW_CENTER_FRACTION
+                when {
+                    hasHoliday && hasEvent -> {
+                        drawDiamond(
+                            yearalColors.holidayMark,
+                            Offset(centerX - markRadius * MARK_PAIR_OFFSET, markY),
+                            markRadius,
+                        )
+                        drawCircle(
+                            yearalColors.eventMark,
+                            markRadius,
+                            Offset(centerX + markRadius * MARK_PAIR_OFFSET, markY),
+                        )
+                    }
+
+                    hasHoliday -> {
+                        drawDiamond(yearalColors.holidayMark, Offset(centerX, markY), markRadius)
+                    }
+
+                    hasEvent -> {
+                        drawCircle(yearalColors.eventMark, markRadius, Offset(centerX, markY))
+                    }
+                }
+                if (index == todayIndex) {
+                    drawRoundRect(
+                        color = yearalColors.todayRing,
+                        topLeft = Offset(topLeft.x + ringWidth / 2, topLeft.y + ringWidth / 2),
+                        size = Size(squareSize.width - ringWidth, squareSize.height - ringWidth),
+                        cornerRadius = cornerRadius,
+                        style = Stroke(width = ringWidth),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The day number's font size for a square [squareSizePx] wide: [base] (`labelSmall`, already in sp so
+ * the user's font scale applies when it is drawn) unless that would exceed [NUMBER_SIZE_FRACTION] of
+ * the square, in which case the size that fits. Both sides are compared in sp, so the comparison
+ * already accounts for the font scale [density] carries.
+ */
+private fun fitNumberSize(
+    base: TextUnit,
+    squareSizePx: Float,
+    density: Density,
+): TextUnit {
+    val fit = with(density) { (squareSizePx * NUMBER_SIZE_FRACTION).toSp() }
+    return if (base.isSp && base.value <= fit.value) base else fit
+}
+
+/** A filled diamond centred on [center] whose half-diagonal is [DIAMOND_SCALE] × [radius]. */
+private fun DrawScope.drawDiamond(
+    color: Color,
+    center: Offset,
+    radius: Float,
+) {
+    val half = radius * DIAMOND_SCALE
+    val path =
+        Path().apply {
+            moveTo(center.x, center.y - half)
+            lineTo(center.x + half, center.y)
+            lineTo(center.x, center.y + half)
+            lineTo(center.x - half, center.y)
+            close()
+        }
+    drawPath(path, color)
 }
 
 /**

@@ -8,6 +8,7 @@ import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import org.junit.Test
 
 /**
@@ -101,6 +102,12 @@ class ColorSchemeContrastTest {
             Pair("weekdayActualText/pageBackground", yc.weekdayActualText, yc.pageBackground, TEXT_MIN),
             Pair("todayText/gridCell", yc.todayText, yc.gridCell, TEXT_MIN),
             Pair("todayText/gridCellMarked", yc.todayText, yc.gridCellMarked, TEXT_MIN),
+            // The Year overview's mini grid (fix R11): a day number in onCard on both square fills,
+            // today's number in todayText on both.
+            Pair("onCard/miniGridCell", yc.onCard, yc.miniGridCell, TEXT_MIN),
+            Pair("onCard/miniGridCellMarked", yc.onCard, yc.miniGridCellMarked, TEXT_MIN),
+            Pair("todayText/miniGridCell", yc.todayText, yc.miniGridCell, TEXT_MIN),
+            Pair("todayText/miniGridCellMarked", yc.todayText, yc.miniGridCellMarked, TEXT_MIN),
             // YearalColors pairs, non-text (marks and rings on the cell fills they are actually drawn
             // on): 3:1. todayRing/gridCellWeekend and eventMark/gridCell are gone — the grid never
             // draws those combinations (the today ring and the event dot both sit on gridCellMarked
@@ -111,6 +118,12 @@ class ColorSchemeContrastTest {
             Pair("holidayMark/gridCell", yc.holidayMark, yc.gridCell, NON_TEXT_MIN),
             Pair("holidayMark/gridCellMarked", yc.holidayMark, yc.gridCellMarked, NON_TEXT_MIN),
             Pair("eventMark/gridCellMarked", yc.eventMark, yc.gridCellMarked, NON_TEXT_MIN),
+            // Mini grid: the today ring wraps a plain or a marked square; the marks only ever sit on
+            // a marked square.
+            Pair("todayRing/miniGridCell", yc.todayRing, yc.miniGridCell, NON_TEXT_MIN),
+            Pair("todayRing/miniGridCellMarked", yc.todayRing, yc.miniGridCellMarked, NON_TEXT_MIN),
+            Pair("holidayMark/miniGridCellMarked", yc.holidayMark, yc.miniGridCellMarked, NON_TEXT_MIN),
+            Pair("eventMark/miniGridCellMarked", yc.eventMark, yc.miniGridCellMarked, NON_TEXT_MIN),
             Pair("intercalary/intercalaryContainer", yc.intercalary, yc.intercalaryContainer, NON_TEXT_MIN),
             Pair("intercalary/pageBackground", yc.intercalary, yc.pageBackground, NON_TEXT_MIN),
         )
@@ -129,6 +142,34 @@ class ColorSchemeContrastTest {
                     withClue("$palette $mode ${pair.name}") {
                         contrastRatio(pair.fg, pair.bg) shouldBeGreaterThanOrEqual pair.min
                     }
+                }
+            }
+        }
+    }
+
+    // Fix R11: the Year overview's mini-grid squares were drawn in `gridCell`, which is the same
+    // Material role as the card they sit on, so all 28 squares vanished and only the marks were left.
+    // WCAG has nothing to say about two adjacent surfaces, so this pins a floor of its own: the plain
+    // square must be at least two Material tonal tiers away from the card (in practice ≥ ~1.09:1 in the
+    // light schemes, where the tiers are closest), and the marked square must step again from the plain
+    // one, in every palette, mode and pure black.
+
+    @Test
+    fun `mini-grid squares are visibly distinct from the card and from each other in every scheme`() {
+        ColorPalette.entries.forEach { palette ->
+            val schemes = palette.colorSchemes()
+            listOf(
+                "light" to schemes.light,
+                "dark" to schemes.dark,
+                "dark pureBlack" to schemes.dark.pureBlack(),
+            ).forEach { (mode, scheme) ->
+                val yc = yearalColorsFrom(scheme)
+                withClue("$palette $mode miniGridCell/cardContainer") {
+                    contrastRatio(yc.miniGridCell, yc.cardContainer) shouldBeGreaterThanOrEqual ADJACENT_SURFACE_MIN
+                }
+                withClue("$palette $mode miniGridCellMarked/miniGridCell") {
+                    yc.miniGridCellMarked shouldNotBe yc.miniGridCell
+                    contrastRatio(yc.miniGridCellMarked, yc.miniGridCell) shouldBeGreaterThanOrEqual TIER_STEP_MIN
                 }
             }
         }
@@ -157,6 +198,12 @@ class ColorSchemeContrastTest {
     private companion object {
         const val TEXT_MIN = 4.5
         const val NON_TEXT_MIN = 3.0
+
+        /** Two Material tonal tiers apart (see the R11 note above); one tier is ~1.03:1 in light. */
+        const val ADJACENT_SURFACE_MIN = 1.08
+
+        /** One tonal tier apart: only has to be a real, non-identical step. */
+        const val TIER_STEP_MIN = 1.02
         const val LUMINANCE_OFFSET = 0.05
     }
 }

@@ -64,6 +64,7 @@ These are already binding elsewhere; listed so no phase forgets one.
 | `eventMark` | teal | `primary`, or the event's own colour | dots in cells, agenda row swatch |
 | `weekdayNominal`, `weekdayActual` | sage container / sage text | `secondaryContainer`, `onSecondaryContainer` | the two weekday header rows and the weekday block |
 | `gridCell`, `gridCellWeekend` | cream-tinted low container / one step higher | `surfaceContainerLow`, `surfaceContainer` | every day cell gets a fill, so the grid stops being ink on paper |
+| `miniGridCell`, `miniGridCellMarked` | two tiers above the card / three | `surfaceContainerHigh`, `surfaceContainerHighest` | the Year overview's mini-grid squares, which sit on a `cardContainer` card rather than the page — at `gridCell`'s tier they were the card's own colour and vanished (fix R11) |
 | `pageBackground`, `cardContainer` | cream / cream-2 | `surface`, `surfaceContainerLow` | screens and their cards |
 
 **Dark scheme rework** (D3). Lift `DarkSurface` to a visibly teal `#121C1B`, and spread the container
@@ -157,8 +158,13 @@ Each item says what changes and what it fixes; nothing here changes behaviour.
 
 - Every mini-month is a **card** on `cardContainer` with a 12 dp shape; the month containing today gets
   the `todayRing` border instead of standing alone as the only bordered tile.
-- Mini-grid squares use `gridCell`, marks use `eventMark`; a **holiday diamond** appears in the mini grid
-  too, since the data is already there and the Year page currently hides it.
+- Mini-grid squares use `miniGridCell` (**not** `gridCell`: the tile is a `cardContainer` card and
+  `gridCell` is the same Material role, so the squares were invisible on it — fix R11, 2026-09-25), and
+  each square is a `DayCell` in miniature: its **IFC day number** in the upper part, `onCard`, sized to
+  the square and capped at `labelSmall`; the marks row beneath — a **holiday diamond** (the data is
+  already there and the Year page used to hide it) and an `eventMark` dot, side by side when a day has
+  both; a marked square steps up to `miniGridCellMarked`. Today's square gets the `todayRing` ring and a
+  bold `todayText` number, exactly as in Month.
 - **Year Day tile and the Leap Day marker get the intercalary fill back**, now that the same accent is
   shared by Month, Day and the widgets (§1 last paragraph).
 - Owner note 5: mini-months show structure through the holiday diamonds, event dots and the today ring

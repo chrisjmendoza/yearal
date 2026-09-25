@@ -23,6 +23,7 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.LightPrimary
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.LightTertiary
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
 import io.kotest.matchers.shouldBe
 import org.junit.Rule
 import org.junit.Test
@@ -241,6 +242,66 @@ class YearOverviewTilesTest {
         pixels.containsColorNear(LightPrimary) shouldBe true // the smaller event dot in the cell's corner
     }
 
+    // Fix R11: the 28 squares were drawn in `gridCell`, the same Material role as the card they sit
+    // on, so every plain square was invisible; and no square carried its day number, so the tile read
+    // as loose marks floating on a blank card. Only pixels can prove either fix, so both tests below
+    // capture the grid Canvas itself (its own test tag, unmerged tree) at xxhdpi.
+
+    @Test
+    @Config(qualifiers = "w200dp-h300dp-xxhdpi")
+    fun `a plain square is filled in the mini-grid colour, not the card colour`() {
+        var squareColor = Color.Unspecified
+        var cardColor = Color.Unspecified
+        compose.setContent {
+            IfcTheme(dynamicColor = false) {
+                squareColor = YearalTheme.colors.miniGridCell
+                cardColor = YearalTheme.colors.cardContainer
+                YearMiniMonthTile(
+                    month = IfcYearMonth(2026, IfcMonth.OCTOBER),
+                    today = null,
+                    eventDates = emptySet(),
+                    onClick = {},
+                )
+            }
+        }
+
+        val pixels = grid().captureToImage().toPixelMap()
+        // Inside day 1's square, past its inset and corner radius but left of its centred number.
+        val squareSide = minOf(pixels.width / GRID_COLUMNS, pixels.height / GRID_ROWS)
+        val probe = (squareSide * PLAIN_FILL_PROBE_FRACTION).toInt()
+        val pixel = pixels[probe, probe]
+
+        // "Closer to" rather than isNear/not-isNear: in the light schemes the square and card tiers are
+        // only a few percent apart per channel, inside the tolerance that antialiased marks need, so a
+        // not-near check on the card colour cannot pass even when the square is drawn correctly.
+        // ColorSchemeContrastTest already pins that the two tokens differ, so strict "closer" is decisive.
+        pixel.isNear(squareColor) shouldBe true
+        (pixel.distanceTo(squareColor) < pixel.distanceTo(cardColor)) shouldBe true
+    }
+
+    @Test
+    @Config(qualifiers = "w200dp-h300dp-xxhdpi")
+    fun `the mini grid draws its day numbers`() {
+        var numberColor = Color.Unspecified
+        compose.setContent {
+            IfcTheme(dynamicColor = false) {
+                numberColor = YearalTheme.colors.onCard
+                YearMiniMonthTile(
+                    month = IfcYearMonth(2026, IfcMonth.OCTOBER),
+                    today = null,
+                    eventDates = emptySet(),
+                    onClick = {},
+                )
+            }
+        }
+
+        // The Canvas alone: the month title above it is the only other onCard text in the tile, and
+        // it is outside this capture, so any onCard pixel here is a day number.
+        grid().captureToImage().toPixelMap().containsColorNear(numberColor) shouldBe true
+    }
+
+    private fun grid() = compose.onNodeWithTag(YearOverviewTestTags.MINI_GRID, useUnmergedTree = true)
+
     /** Whether any pixel is within [tolerance] of [target] on every RGB channel (0f..1f each). */
     private fun PixelMap.containsColorNear(
         target: Color,
@@ -248,16 +309,30 @@ class YearOverviewTilesTest {
     ): Boolean {
         for (x in 0 until width) {
             for (y in 0 until height) {
-                val pixel = this[x, y]
-                if (abs(pixel.red - target.red) < tolerance &&
-                    abs(pixel.green - target.green) < tolerance &&
-                    abs(pixel.blue - target.blue) < tolerance
-                ) {
+                if (this[x, y].isNear(target, tolerance)) {
                     return true
                 }
             }
         }
         return false
+    }
+
+    /** The sum of absolute RGB channel differences from [target] (0f..3f). */
+    private fun Color.distanceTo(target: Color): Float =
+        abs(red - target.red) + abs(green - target.green) + abs(blue - target.blue)
+
+    /** Whether this colour is within [tolerance] of [target] on every RGB channel (0f..1f each). */
+    private fun Color.isNear(
+        target: Color,
+        tolerance: Float = 0.08f,
+    ): Boolean =
+        abs(red - target.red) < tolerance &&
+            abs(green - target.green) < tolerance &&
+            abs(blue - target.blue) < tolerance
+
+    private companion object {
+        /** Where inside a plain square to sample its fill: past the inset and corner, short of the number. */
+        const val PLAIN_FILL_PROBE_FRACTION = 0.2f
     }
 
     // YearDayTile (docs/design-plan.md §4.3/§8 decision 4: the intercalary fill returned).
