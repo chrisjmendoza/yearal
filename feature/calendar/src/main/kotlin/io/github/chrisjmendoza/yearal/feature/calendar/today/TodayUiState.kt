@@ -22,10 +22,11 @@ sealed interface TodayUiState {
      *
      * @property date today in the IFC, the source of every other property.
      * @property gregorianDate the same physical day in the Gregorian calendar.
-     * @property heroWeekday today's **actual** (real-world) weekday, unlabelled (`Thursday`), shown
-     * above [heroDate] — never the IFC nominal weekday, which would tell the user the wrong day
-     * (spec §4.1 item 2). Present on Leap Day and Year Day too: they have no IFC weekday, but every
-     * day has a real one.
+     * @property heroWeekday today's **IFC (nominal)** weekday, unlabelled (`Sunday`), shown above
+     * [heroDate] so the hero reads as one IFC date (owner ruling, 2026-09-25: "that's the whole point
+     * of the app"). `null` on Leap Day and Year Day, which have no IFC weekday — the line is omitted
+     * there and the weekday block below says "no IFC weekday". The real weekday stays in
+     * [gregorianLongDate] and [actualWeekday].
      * @property heroDate the long style (`September 8, 2026`, `Leap Day, 2028`, `Year Day, 2026`).
      * @property mediumDate the medium style (`Sep 8, 2026`).
      * @property numericDate the canonical numeric style with its mandatory prefix (`IFC 2026-10-08`).
@@ -52,7 +53,7 @@ sealed interface TodayUiState {
     data class Loaded(
         val date: IfcDate,
         val gregorianDate: LocalDate,
-        val heroWeekday: String,
+        val heroWeekday: String?,
         val heroDate: String,
         val mediumDate: String,
         val numericDate: String,
@@ -90,7 +91,7 @@ fun buildTodayUiState(
     return TodayUiState.Loaded(
         date = date,
         gregorianDate = today,
-        heroWeekday = formatter.weekdayName(date.actualDayOfWeek),
+        heroWeekday = date.nominalDayOfWeek?.let { formatter.weekdayName(it) },
         heroDate = formatter.formatLong(date),
         mediumDate = formatter.formatMedium(date),
         numericDate = formatter.formatNumeric(date),

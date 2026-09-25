@@ -110,7 +110,7 @@ Each item says what changes and what it fixes; nothing here changes behaviour.
 
 ```
 ┌────────────────────────────────────────┐
-│ ▓▓ Tuesday ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │  the ACTUAL weekday (owner, 2026-09-25)
+│ ▓▓ Thursday ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │  the IFC weekday (owner, 2026-09-25)
 │ ▓▓ Sol 12, 2026 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │  hero card, heroContainer
 │ ▓▓ IFC 2026-07-12 · Tue 23 Jun 2026 ▓  │  eyebrow captions "IFC" and "Gregorian"
 │ ▓▓ [ IFC weekday: Thursday ]  ▓▓▓▓▓▓▓  │  weekday block keeps its sage container
@@ -123,10 +123,13 @@ Each item says what changes and what it fixes; nothing here changes behaviour.
   ● Today's events          (card, event swatches, times)
 ```
 
-- Above the date, today's **actual** weekday in `titleLarge` (owner request, 2026-09-25). Bare, because
-  it answers "what day is it?" — a real-world question, so it is never the IFC nominal weekday (spec
-  §4.1 item 2); TalkBack speaks it labelled ("Actual weekday: Tuesday"), and the labelled pair still
-  sits in the weekday block below. Year Day and Leap Day show it too: no IFC weekday, but a real one.
+- Above the date, today's **IFC (nominal)** weekday in `titleLarge` (owner request and ruling,
+  2026-09-25: "that's the whole point of the app"), so the hero reads as one IFC date, "Thursday / Sol
+  12, 2026". It is shown bare — a deliberate exception to spec §4.1 item 6, which the owner made after
+  the actual weekday was tried there first — with three safeguards: TalkBack speaks it labelled ("IFC
+  weekday: Thursday"); the real weekday stays one glance below, in the Gregorian line and the labelled
+  weekday block; and on Year Day and Leap Day, which have no IFC weekday, the line is omitted rather
+  than filled with the real one.
 - Hero card on `heroContainer` with the IFC date in `displayMedium`, the numeric IFC form and the
   Gregorian date as *eyebrow + value* pairs so a newcomer sees which is which (the review's acceptance
   test: "what Gregorian date is this?").

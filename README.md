@@ -30,7 +30,7 @@ what's listed in [Privacy](#privacy).
 - **Today, Month, Year and Day-detail views** — a swipeable month grid and a 13-mini-month year overview,
   both with the Leap Day / Year Day bands and both real and IFC weekdays shown side by side. Tap any
   day and the card below the grid shows its Gregorian equivalent, both weekdays, holidays and events, with
-  "Add event" and "Open in converter". Today's card leads with the real weekday.
+  "Add event" and "Open in converter". Today's card leads with the IFC weekday.
 - **Converter** — convert any date between Gregorian and IFC in either direction, for the years
   1583–9999, with copy/share.
 - **Events** — a list and editor with recurrence on IFC dates ("every Sol 13", "every Year Day", "every

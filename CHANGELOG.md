@@ -233,8 +233,9 @@ Architecture, tooling and CI:
   and "Open in converter" — and lost its "Details" button. Opening a day from the Holidays list, the
   converter's "Open day", a widget or a notification now opens the Month on that day, selected. On tablets
   and unfolded foldables the same card is the right-hand pane.
-- The Today card shows today's weekday above the date. It is the **real** weekday (the one on your phone's
-  clock), not the IFC one — those differ in most years, and the labelled pair is still just below.
+- The Today card shows today's IFC weekday above the date, so it reads as one IFC date ("Monday,
+  September 16, 2026"). The real weekday is still just below, in the Gregorian date and the labelled
+  weekday box. Year Day and Leap Day have no IFC weekday, so the line is left out on those days.
 
 - **Existing installs move from Material You to the Yearal palette.** `colorSource` replaces the old
   `dynamicColor` boolean and now defaults to `BRAND`, so a fresh or updated install shows the teal / cream
