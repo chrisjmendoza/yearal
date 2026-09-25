@@ -110,6 +110,7 @@ Each item says what changes and what it fixes; nothing here changes behaviour.
 
 ```
 ┌────────────────────────────────────────┐
+│ ▓▓ Tuesday ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │  the ACTUAL weekday (owner, 2026-09-25)
 │ ▓▓ Sol 12, 2026 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │  hero card, heroContainer
 │ ▓▓ IFC 2026-07-12 · Tue 23 Jun 2026 ▓  │  eyebrow captions "IFC" and "Gregorian"
 │ ▓▓ [ IFC weekday: Thursday ]  ▓▓▓▓▓▓▓  │  weekday block keeps its sage container
@@ -122,6 +123,10 @@ Each item says what changes and what it fixes; nothing here changes behaviour.
   ● Today's events          (card, event swatches, times)
 ```
 
+- Above the date, today's **actual** weekday in `titleLarge` (owner request, 2026-09-25). Bare, because
+  it answers "what day is it?" — a real-world question, so it is never the IFC nominal weekday (spec
+  §4.1 item 2); TalkBack speaks it labelled ("Actual weekday: Tuesday"), and the labelled pair still
+  sits in the weekday block below. Year Day and Leap Day show it too: no IFC weekday, but a real one.
 - Hero card on `heroContainer` with the IFC date in `displayMedium`, the numeric IFC form and the
   Gregorian date as *eyebrow + value* pairs so a newcomer sees which is which (the review's acceptance
   test: "what Gregorian date is this?").
@@ -135,7 +140,8 @@ Each item says what changes and what it fixes; nothing here changes behaviour.
 
 - **Anchor the grid** (owner note 2): the page becomes app bar → grid → *selected-day summary* filling
   the space below. The summary shows the selected date in both calendars, its holidays and events in the
-  same rows as Day detail, and a "Details" action; with nothing selected it shows today. This is the
+  same rows as Day detail; with nothing selected it shows today. **Superseded 2026-09-25 (owner):** the
+  card is now the whole day detail and the Day detail popup is gone — see §4.4. This is the
   review's "selected-date summary in the dead space" and it removes the floating-grid feel.
 - **One title** (owner note 3): the grid's inner heading goes; the app bar carries the month and year.
 - **A visible zoom-out affordance** (owner note 4): the title becomes a `FilterChip`-style control with
@@ -173,11 +179,14 @@ Each item says what changes and what it fixes; nothing here changes behaviour.
 
 ### 4.4 Day detail (🟠)
 
+**2026-09-25 (owner):** Day detail is no longer a sheet. Its content lives in the Month screen's day
+card below the grid (and in the expanded-width detail pane), so everything below now describes that card.
+
 - Year Day and Leap Day get the **intercalary header**: amber container, the intercalary icon and the
   "no IFC weekday" explanation inside it, matching what the user tapped in Month or Year.
 - Holidays rows carry the diamond; events rows the swatch; "Add event" and "Open in converter" become a
   `FilledTonalButton` and an `OutlinedButton`.
-- The expanded-width empty pane gets a muted calendar glyph over its text.
+- ~~The expanded-width empty pane gets a muted calendar glyph over its text.~~ No empty pane since 2026-09-25: it always shows the selected day or today.
 
 ### 4.5 Events list and editor (🟠)
 

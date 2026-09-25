@@ -1,5 +1,6 @@
 package io.github.chrisjmendoza.yearal.feature.calendar.month
 
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -23,11 +24,13 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.MonthGridTestTags
+import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -37,6 +40,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
+import java.util.Locale
 
 /**
  * [MonthScreen] under Robolectric, written from `docs/calendar-spec.md` §7.1–7.2 and
@@ -60,6 +64,9 @@ class MonthScreenTest {
     /** Gregorian September 17, 2026 is IFC September 8, 2026, so today's page is IFC September. */
     private val todayPage = MonthPages.pageOf(IfcYearMonth(2026, IfcMonth.SEPTEMBER))
 
+    private val formatter =
+        IfcDateFormatter(ApplicationProvider.getApplicationContext<Context>().resources, Locale.US)
+
     private fun state(
         month: IfcYearMonth,
         today: LocalDate? = this.today,
@@ -68,6 +75,7 @@ class MonthScreenTest {
         today = today,
         todayPage = today?.let { MonthPages.pageOf(IfcYearMonth.from(IfcDate.from(it))) },
         selected = null,
+        dayDetail = today?.let { buildDayDetailUi(it, it, formatter, holidays = emptyList()) },
     )
 
     private fun show(
@@ -163,18 +171,24 @@ class MonthScreenTest {
         clicks shouldContainExactly listOf(IfcDate.YearDay(2026))
     }
 
+    // The day card can show its own, non-clickable "Today" badge whenever the day it summarises really
+    // is today (independent of which month page is on screen), so these assertions must target the
+    // app-bar's *clickable* "Today" action specifically — a plain "Today" text match would also catch
+    // the card's badge and, once both can be on screen together, become ambiguous.
+    private val todayAction = hasText("Today").and(hasClickAction())
+
     @Test
     fun `the Today action is absent on today's month`() {
         show(state(IfcYearMonth(2026, IfcMonth.SEPTEMBER)))
 
-        compose.onAllNodesWithText("Today").assertCountEquals(0)
+        compose.onAllNodes(todayAction).assertCountEquals(0)
     }
 
     @Test
     fun `the Today action is absent before the first date tick`() {
         show(state(october2026, today = null))
 
-        compose.onAllNodesWithText("Today").assertCountEquals(0)
+        compose.onAllNodes(todayAction).assertCountEquals(0)
     }
 
     @Test
@@ -182,12 +196,12 @@ class MonthScreenTest {
         val pages = mutableListOf<Int>()
         show(state(june2028), onPageChanged = { pages += it })
 
-        compose.onNodeWithText("Today").assertIsDisplayed().performClick()
+        compose.onNode(todayAction).assertIsDisplayed().performClick()
         compose.waitForIdle()
 
         heading("September 2026").assertIsDisplayed()
         pages.last() shouldBe todayPage
-        compose.onAllNodesWithText("Today").assertCountEquals(0)
+        compose.onAllNodes(todayAction).assertCountEquals(0)
     }
 
     @Test
@@ -244,10 +258,11 @@ class MonthScreenTest {
             .assertCountEquals(2)
     }
 
-    // docs/design-plan.md §4.2, owner note 2: the selected-day summary anchored below the grid.
+    // docs/design-plan.md §4.2, owner note 2 (the day-card merge): the day card anchored below the
+    // grid is now the whole day detail, not a summary onward to a popup.
 
     @Test
-    fun `the summary shows today's date when nothing is selected`() {
+    fun `the day card shows today's date when nothing is selected`() {
         show(state(october2026))
 
         // Gregorian September 17, 2026 is IFC September 8, 2026 (spec §4.1 worked example) — today,
@@ -260,34 +275,24 @@ class MonthScreenTest {
     }
 
     @Test
-    fun `the summary follows the selected day after a cell tap`() {
-        var uiState by mutableStateOf(state(october2026))
+    fun `the day card follows the selected day once one is picked`() {
+        val selectedDay = LocalDate.of(2026, 10, 12) // IFC October 5, 2026.
+        var uiState by
+            mutableStateOf(
+                state(october2026).copy(
+                    selected = selectedDay,
+                    dayDetail = buildDayDetailUi(selectedDay, today, formatter, holidays = emptyList()),
+                ),
+            )
         compose.setContent {
             IfcTheme(dynamicColor = false) {
                 MonthScreen(state = uiState, onPageChanged = {}, onDayClick = {})
             }
         }
 
-        // IFC October 5, 2026 is Gregorian October 12, 2026.
-        uiState = uiState.copy(selected = LocalDate.of(2026, 10, 12))
-        compose.waitForIdle()
-
         compose
             .onNode(hasText("October 5, 2026").and(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)))
             .assertIsDisplayed()
-    }
-
-    @Test
-    fun `the Details action opens the same day a cell tap would`() {
-        val opened = mutableListOf<IfcDate>()
-        show(
-            state(october2026).copy(selected = LocalDate.of(2026, 10, 12)),
-            onDayClick = { opened += it },
-        )
-
-        compose.onNodeWithText("Details").performClick()
-
-        opened shouldContainExactly listOf(IfcDate.Regular(2026, IfcMonth.OCTOBER, 5))
     }
 
     // docs/ROADMAP.md M3 T2: tapping the month title zooms out to the Year view.

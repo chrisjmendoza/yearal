@@ -30,15 +30,27 @@ data object TodayKey : NavKey
 data object IntroKey : NavKey
 
 /**
- * One month of the calendar grid.
+ * One month of the calendar grid, its Month pager page and the day card below it (docs/FEATURES.md
+ * C1, C3, C5, C7; the Day detail popup this key used to open alongside is gone — the card is now the
+ * whole detail, so a "day" destination is just this key with [selectedEpochDay] set).
  *
  * @property year IFC year, 1583..9999 in the UI.
  * @property month IFC month number 1..13 (7 = Sol). **Not** a Gregorian month number.
+ * @property selectedEpochDay a Gregorian date (`LocalDate.toEpochDay()`) to select when the pager opens
+ * on this month, so the day card below the grid shows it instead of today; `null` selects nothing.
+ * **Not validated by this key** — like a stale [year]/[month], the receiving screen does the
+ * validating (`MonthPages.selectedDateOf`) and fails soft: a value that does not convert with
+ * `LocalDate.ofEpochDay`, or that converts but falls outside the pager's own UI year range,
+ * 1583..9999 — narrower than `:core:calendar`'s own 1..9999
+ * ([io.github.chrisjmendoza.yearal.core.calendar.IfcDate.MIN_YEAR]..[io.github.chrisjmendoza.yearal.core.calendar.IfcDate.MAX_YEAR])
+ * — is ignored rather than surfaced as an error. A value built from untrusted input (a synthesized
+ * widget or notification intent) is therefore always safe to pass through unchecked.
  */
 @Serializable
 data class MonthKey(
     val year: Int,
     val month: Int,
+    val selectedEpochDay: Long? = null,
 ) : NavKey
 
 /**
@@ -52,21 +64,6 @@ data class MonthKey(
 @Serializable
 data class YearKey(
     val year: Int,
-) : NavKey
-
-/**
- * Day detail for one date.
- *
- * @property epochDay the Gregorian date as days since 1970-01-01 (`LocalDate.toEpochDay()`).
- * **Not validated by this key or by the Day detail screen** — the screen converts it with a bare
- * `LocalDate.ofEpochDay(epochDay)` and no range check, unlike [ConverterKey.prefillEpochDay] and
- * [EventEditorKey.prefillEpochDay], which fail soft outside `:core:calendar`'s supported years
- * (1..9999). A value built from untrusted input (a synthesized widget or notification intent) must be
- * validated by the caller before this key is constructed.
- */
-@Serializable
-data class DayKey(
-    val epochDay: Long,
 ) : NavKey
 
 /**

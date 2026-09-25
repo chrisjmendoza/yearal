@@ -6,6 +6,13 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.cash.turbine.test
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
+import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
+import io.github.chrisjmendoza.yearal.core.domain.event.AgendaEntry
+import io.github.chrisjmendoza.yearal.core.domain.event.Event
+import io.github.chrisjmendoza.yearal.core.domain.event.EventCalendar
+import io.github.chrisjmendoza.yearal.core.domain.event.EventTiming
+import io.github.chrisjmendoza.yearal.core.domain.event.IfcRecurrence
+import io.github.chrisjmendoza.yearal.core.domain.event.Occurrence
 import io.github.chrisjmendoza.yearal.core.domain.holiday.HolidayEngine
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
@@ -13,19 +20,25 @@ import io.github.chrisjmendoza.yearal.core.holidays.HolidayPackLoader
 import io.github.chrisjmendoza.yearal.core.navigation.MonthKey
 import io.github.chrisjmendoza.yearal.core.testing.EventFixtures
 import io.github.chrisjmendoza.yearal.core.testing.FakeDateTicker
+import io.github.chrisjmendoza.yearal.core.testing.FakeEventRepository
 import io.github.chrisjmendoza.yearal.core.testing.FakeObserveAgendaUseCase
 import io.github.chrisjmendoza.yearal.core.testing.FakeSettingsRepository
+import io.github.chrisjmendoza.yearal.feature.calendar.agenda.AgendaItemUi
 import io.github.chrisjmendoza.yearal.feature.calendar.holiday.HolidayCatalog
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.maps.shouldContainKey
 import io.kotest.matchers.maps.shouldNotContainKey
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -33,6 +46,9 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.util.Locale
 
 /**
  * [MonthViewModel] and [MonthPages] against [FakeDateTicker] and [FakeSettingsRepository] with the
@@ -49,6 +65,7 @@ import java.time.LocalDate
 class MonthViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private lateinit var catalog: HolidayCatalog
+    private lateinit var formatter: IfcDateFormatter
 
     /** IFC month 10 is September, not October (CLAUDE.md rule 5): the month of the spec §4.1 example. */
     private val september2026 = IfcYearMonth(2026, IfcMonth.SEPTEMBER)
@@ -60,12 +77,9 @@ class MonthViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
-        catalog =
-            HolidayCatalog(
-                HolidayEngine(),
-                HolidayPackLoader(),
-                ApplicationProvider.getApplicationContext<Context>(),
-            )
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        catalog = HolidayCatalog(HolidayEngine(), HolidayPackLoader(), context)
+        formatter = IfcDateFormatter(context.resources, Locale.US)
     }
 
     @After
@@ -75,10 +89,21 @@ class MonthViewModelTest {
 
     private fun viewModel(
         initialMonth: IfcYearMonth,
+        initialSelectedDate: LocalDate? = null,
         ticker: FakeDateTicker = FakeDateTicker(LocalDate.of(2026, 9, 17)),
         settings: FakeSettingsRepository = FakeSettingsRepository(),
         observeAgenda: FakeObserveAgendaUseCase = FakeObserveAgendaUseCase(),
-    ) = MonthViewModel(initialMonth, ticker, settings, catalog, observeAgenda)
+        eventRepository: FakeEventRepository = FakeEventRepository(),
+    ) = MonthViewModel(
+        initialMonth,
+        initialSelectedDate,
+        ticker,
+        settings,
+        catalog,
+        observeAgenda,
+        formatter,
+        eventRepository,
+    )
 
     // Spec §7.1: the pager covers 1583..9999, 13 pages a year.
 
@@ -415,7 +440,7 @@ class MonthViewModelTest {
                 viewModel.select(christmas2026)
 
                 val loaded = awaitItem()
-                loaded.summaryHolidays shouldBe listOf("Christmas Day")
+                loaded.dayDetail?.holidays shouldBe listOf("Christmas Day")
             }
         }
 
@@ -438,7 +463,7 @@ class MonthViewModelTest {
                 awaitItem()
                 val settled = awaitItem()
                 settled.summaryDate shouldBe christmas2026
-                settled.summaryAgenda.map { it.title } shouldBe listOf("Party")
+                settled.dayDetail?.agenda?.map { it.title } shouldBe listOf("Party")
             }
         }
 
@@ -458,7 +483,7 @@ class MonthViewModelTest {
                 awaitItem()
                 val initial = awaitItem()
                 initial.summaryDate shouldBe today
-                initial.summaryAgenda.map { it.title } shouldBe listOf("Standup")
+                initial.dayDetail?.agenda?.map { it.title } shouldBe listOf("Standup")
 
                 viewModel.select(christmas2026)
 
@@ -468,13 +493,13 @@ class MonthViewModelTest {
                 // mismatch instead.
                 val justSelected = awaitItem()
                 justSelected.summaryDate shouldBe christmas2026
-                justSelected.summaryAgenda shouldBe emptyList()
+                justSelected.dayDetail?.agenda shouldBe emptyList()
 
                 // Once the re-issued subscription for christmas2026's range delivers its own value, the
                 // correct rows settle.
                 val settled = awaitItem()
                 settled.summaryDate shouldBe christmas2026
-                settled.summaryAgenda.map { it.title } shouldBe listOf("Party")
+                settled.dayDetail?.agenda?.map { it.title } shouldBe listOf("Party")
             }
         }
 
@@ -495,6 +520,356 @@ class MonthViewModelTest {
                 awaitItem()
                 val paged = awaitItem()
                 paged.eventCountsByMonth[december2026]?.get(christmas2026) shouldBe 1
+            }
+        }
+
+    // The day-card merge (owner request): the popup Day detail is gone, and MonthViewModel now owns
+    // its full formatted content directly, as MonthUiState.dayDetail. These tests were ported from the
+    // old DayViewModelTest, adapted to a selected (or "today") day inside the Month pager's own state
+    // instead of a standalone epoch-day-keyed ViewModel.
+
+    @Test
+    fun `the day card shows the spec's worked example when nothing is selected`() =
+        runTest(dispatcher) {
+            viewModel(september2026).uiState.test {
+                awaitItem()
+                val detail = awaitItem().dayDetail.shouldNotBeNull()
+                detail.gregorianDate shouldBe LocalDate.of(2026, 9, 17)
+                detail.ifcLong shouldBe "September 8, 2026"
+                detail.numeric shouldBe "IFC 2026-10-08"
+                detail.gregorianLong shouldBe "Thursday, September 17, 2026"
+                detail.nominalWeekday shouldBe "IFC weekday: Sunday"
+                detail.actualWeekday shouldBe "Actual weekday: Thursday"
+                detail.weekdaysDescription shouldBe "IFC Sunday, actual Thursday"
+                detail.dayAndWeek shouldBe "Day 260 · Week 38 of 52"
+                detail.quarter shouldBe "Q3"
+                detail.isToday shouldBe true
+                detail.holidays shouldBe emptyList()
+            }
+        }
+
+    @Test
+    fun `selecting Leap Day shows no IFC weekday and its holiday`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(IfcYearMonth(2028, IfcMonth.JUNE))
+            viewModel.uiState.test {
+                awaitItem()
+                awaitItem()
+
+                viewModel.select(LocalDate.of(2028, 6, 17))
+
+                val detail = awaitItem().dayDetail.shouldNotBeNull()
+                detail.ifcLong shouldBe "Leap Day, 2028"
+                detail.numeric shouldBe "IFC 2028-06-29"
+                detail.nominalWeekday shouldBe "no IFC weekday"
+                detail.dayAndWeek shouldBe "Day 169 · outside the weeks"
+                detail.holidays shouldContainExactly listOf("Leap Day")
+            }
+        }
+
+    @Test
+    fun `selecting Year Day shows no IFC weekday and shares the day with the US pack`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(december2026)
+            viewModel.uiState.test {
+                awaitItem()
+                awaitItem()
+
+                viewModel.select(yearDay2026)
+
+                val detail = awaitItem().dayDetail.shouldNotBeNull()
+                detail.ifcLong shouldBe "Year Day, 2026"
+                detail.numeric shouldBe "IFC 2026-13-29"
+                detail.nominalWeekday shouldBe "no IFC weekday"
+                // Engine order: by set id (ifc before us), then holiday id (kwanzaa before new_years_eve).
+                detail.holidays shouldContainExactly listOf("Year Day", "Kwanzaa", "New Year's Eve")
+            }
+        }
+
+    // WORKFLOW §3: crossing midnight with a fake clock; the card's own "Today" badge must roll over
+    // even though the badge belongs to a *selected* day, not just to "today" itself.
+
+    @Test
+    fun `the selected day card's isToday flips across midnight in both directions`() =
+        runTest(dispatcher) {
+            val ticker = FakeDateTicker(LocalDate.of(2026, 9, 17))
+            val viewModel = viewModel(september2026, ticker = ticker)
+            viewModel.uiState.test {
+                awaitItem()
+                awaitItem()
+
+                viewModel.select(LocalDate.of(2026, 9, 18))
+                awaitItem().dayDetail?.isToday shouldBe false
+
+                ticker.set(LocalDate.of(2026, 9, 18))
+                awaitItem().dayDetail?.isToday shouldBe true
+
+                ticker.set(LocalDate.of(2026, 9, 19))
+                val after = awaitItem()
+                after.dayDetail?.isToday shouldBe false
+                // The selected day itself never changes with the clock.
+                after.dayDetail?.ifcLong shouldBe "September 9, 2026"
+            }
+        }
+
+    // FEATURES E1: "delete this occurrence" — docs/contracts/Events.md §4, §7 "T6–T8": the exdate key
+    // is the occurrence's own start date, never the day the card is showing. Moved from the old
+    // DayViewModelTest along with the rest of the delete flow (the day-card merge).
+
+    /** A three-day recurring all-day event, Dec 30 – Year Day – Jan 1, whose own start is Dec 30. */
+    private suspend fun seedMultiDayRecurringEvent(repository: FakeEventRepository): Event {
+        val draft =
+            EventFixtures.allDay(
+                date = LocalDate.of(2026, 12, 30),
+                days = 3,
+                title = "New Year trip",
+                recurrence = IfcRecurrence.yearlyOn(LocalDate.of(2026, 12, 30)),
+            )
+        val id = repository.upsertEvent(draft)
+        return checkNotNull(repository.getEvent(id))
+    }
+
+    private fun multiDayOccurrence(event: Event): Occurrence =
+        Occurrence(
+            eventId = event.id,
+            startLocal = LocalDateTime.of(2026, 12, 30, 0, 0),
+            endLocal = LocalDateTime.of(2027, 1, 2, 0, 0),
+            zone = null,
+            allDay = true,
+        )
+
+    @Test
+    fun `deleting a shown occurrence exdates its own start date, not the day being viewed`() =
+        runTest(dispatcher) {
+            val repository = FakeEventRepository()
+            val event = seedMultiDayRecurringEvent(repository)
+            val occurrence = multiDayOccurrence(event)
+            val shownDay = LocalDate.of(2026, 12, 31) // Year Day: the middle of the span, not its own start.
+            val agenda = FakeObserveAgendaUseCase()
+            agenda.putEntry(AgendaEntry(event, occurrence, EventCalendar.DEFAULT_COLOR_ARGB, ZoneId.of("UTC")))
+
+            val viewModel = viewModel(december2026, observeAgenda = agenda, eventRepository = repository)
+            viewModel.uiState.test {
+                awaitItem()
+                awaitItem()
+
+                viewModel.select(shownDay)
+                awaitItem()
+                val loaded = awaitItem()
+                val item =
+                    loaded.dayDetail
+                        .shouldNotBeNull()
+                        .agenda
+                        .single()
+                item.isRecurring shouldBe true
+                item.occurrenceDate shouldBe LocalDate.of(2026, 12, 30)
+
+                viewModel.requestDelete(item)
+                awaitItem().dayDetail?.pendingDelete shouldBe item
+
+                viewModel.confirmDelete()
+                awaitItem().dayDetail?.pendingDelete.shouldBeNull()
+            }
+            repository.getEvent(event.id)?.exdates shouldBe setOf(LocalDate.of(2026, 12, 30))
+        }
+
+    @Test
+    fun `confirming a recurring delete offers undo, and undo clears the exdate`() =
+        runTest(dispatcher) {
+            val repository = FakeEventRepository()
+            val event = seedMultiDayRecurringEvent(repository)
+            val occurrence = multiDayOccurrence(event)
+            val item =
+                AgendaItemUi(
+                    eventId = event.id,
+                    title = event.title,
+                    isAllDay = true,
+                    startTime = null,
+                    endTime = null,
+                    colorArgb = EventCalendar.DEFAULT_COLOR_ARGB,
+                    isRecurring = true,
+                    occurrenceDate = occurrence.occurrenceDate,
+                )
+            val viewModel =
+                viewModel(
+                    december2026,
+                    observeAgenda = FakeObserveAgendaUseCase(),
+                    eventRepository = repository,
+                )
+            viewModel.events.test {
+                viewModel.requestDelete(item)
+                viewModel.confirmDelete()
+
+                val deleted = awaitItem().shouldBeInstanceOf<MonthEvent.OccurrenceDeleted>()
+                deleted.eventId shouldBe event.id
+                deleted.occurrenceDate shouldBe LocalDate.of(2026, 12, 30)
+
+                repository.getEvent(event.id)?.exdates shouldBe setOf(LocalDate.of(2026, 12, 30))
+
+                viewModel.undoDeleteOccurrence(deleted.eventId, deleted.occurrenceDate)
+                runCurrent()
+                repository
+                    .getEvent(event.id)
+                    ?.exdates
+                    .orEmpty()
+                    .shouldBeEmpty()
+            }
+        }
+
+    @Test
+    fun `cancelling a delete confirmation changes nothing`() =
+        runTest(dispatcher) {
+            val repository = FakeEventRepository()
+            val event = seedMultiDayRecurringEvent(repository)
+            val occurrence = multiDayOccurrence(event)
+            val agenda = FakeObserveAgendaUseCase()
+            agenda.putEntry(AgendaEntry(event, occurrence, EventCalendar.DEFAULT_COLOR_ARGB, ZoneId.of("UTC")))
+
+            val viewModel =
+                viewModel(december2026, observeAgenda = agenda, eventRepository = repository)
+            viewModel.uiState.test {
+                awaitItem()
+                awaitItem()
+
+                viewModel.select(LocalDate.of(2026, 12, 30))
+                awaitItem()
+                val loaded = awaitItem()
+
+                viewModel.requestDelete(
+                    loaded.dayDetail
+                        .shouldNotBeNull()
+                        .agenda
+                        .single(),
+                )
+                awaitItem().dayDetail?.pendingDelete.shouldNotBeNull()
+
+                viewModel.cancelDelete()
+                awaitItem().dayDetail?.pendingDelete.shouldBeNull()
+            }
+            repository
+                .getEvent(event.id)
+                ?.exdates
+                .orEmpty()
+                .shouldBeEmpty()
+        }
+
+    @Test
+    fun `a non-recurring row deletes the whole event, not an exdate`() =
+        runTest(dispatcher) {
+            val repository = FakeEventRepository()
+            val day = LocalDate.of(2026, 9, 17)
+            val storedId = repository.upsertEvent(EventFixtures.allDay(date = day, title = "Once"))
+            val event = checkNotNull(repository.getEvent(storedId))
+            val agenda = FakeObserveAgendaUseCase()
+            agenda.putEntry(EventFixtures.entry(event))
+
+            val viewModel = viewModel(september2026, observeAgenda = agenda, eventRepository = repository)
+            viewModel.uiState.test {
+                awaitItem()
+                val loaded = awaitItem()
+                val item =
+                    loaded.dayDetail
+                        .shouldNotBeNull()
+                        .agenda
+                        .single()
+                item.isRecurring shouldBe false
+
+                viewModel.requestDelete(item)
+                awaitItem().dayDetail?.pendingDelete.shouldNotBeNull()
+                viewModel.confirmDelete()
+                awaitItem().dayDetail?.pendingDelete.shouldBeNull()
+            }
+            repository.getEvent(event.id).shouldBeNull()
+        }
+
+    // A pending delete belongs to one specific day; if the card's own date moves out from under it —
+    // here, a new selection — the confirmation must be dropped rather than left open on the wrong day.
+
+    @Test
+    fun `pending delete clears when the summary date changes`() =
+        runTest(dispatcher) {
+            val repository = FakeEventRepository()
+            val day = LocalDate.of(2026, 9, 17)
+            val storedId = repository.upsertEvent(EventFixtures.allDay(date = day, title = "Once"))
+            val event = checkNotNull(repository.getEvent(storedId))
+            val agenda = FakeObserveAgendaUseCase()
+            agenda.putEntry(EventFixtures.entry(event))
+
+            val viewModel = viewModel(september2026, observeAgenda = agenda, eventRepository = repository)
+            viewModel.uiState.test {
+                awaitItem()
+                val loaded = awaitItem()
+                val item =
+                    loaded.dayDetail
+                        .shouldNotBeNull()
+                        .agenda
+                        .single()
+
+                viewModel.requestDelete(item)
+                awaitItem().dayDetail?.pendingDelete shouldBe item
+
+                viewModel.select(LocalDate.of(2026, 9, 18))
+
+                // Two independent flows react to the selection change (the main uiState combine, and the
+                // dedicated collector that clears pendingDelete), so the exact number of intervening
+                // emissions is not load-bearing — only that pendingDelete has settled to null once things
+                // catch up.
+                var state = awaitItem()
+                while (state.dayDetail?.pendingDelete != null) {
+                    state = awaitItem()
+                }
+                state.dayDetail?.pendingDelete.shouldBeNull()
+            }
+            // Nothing was actually deleted — only the confirmation was dropped.
+            repository
+                .getEvent(event.id)
+                ?.exdates
+                .orEmpty()
+                .shouldBeEmpty()
+        }
+
+    // docs/ROADMAP.md, the day-card merge: MonthKey.selectedEpochDay replaces DayKey, and
+    // MonthPages.selectedDateOf resolves it fail-soft — the same treatment ConverterKey's and
+    // EventEditorKey's own prefill epoch days get (never a crash from a synthesized widget or
+    // notification intent, docs/security-and-privacy.md §6.3).
+
+    @Test
+    fun `selectedDateOf resolves a valid epoch day`() {
+        val epochDay = LocalDate.of(2026, 9, 17).toEpochDay()
+        MonthPages.selectedDateOf(MonthKey(2026, 10, selectedEpochDay = epochDay)) shouldBe
+            LocalDate.of(2026, 9, 17)
+    }
+
+    @Test
+    fun `selectedDateOf is null when the key names no selection`() {
+        MonthPages.selectedDateOf(MonthKey(2026, 10)).shouldBeNull()
+    }
+
+    @Test
+    fun `selectedDateOf fails soft for an epoch day LocalDate cannot represent`() {
+        MonthPages.selectedDateOf(MonthKey(2026, 10, selectedEpochDay = Long.MIN_VALUE)).shouldBeNull()
+        MonthPages.selectedDateOf(MonthKey(2026, 10, selectedEpochDay = Long.MAX_VALUE)).shouldBeNull()
+    }
+
+    @Test
+    fun `selectedDateOf fails soft for a year outside the pager's UI range`() {
+        val beforeFirstYear = LocalDate.of(1582, 12, 31).toEpochDay()
+        val afterLastYear = LocalDate.of(10000, 1, 1).toEpochDay()
+        MonthPages.selectedDateOf(MonthKey(1583, 1, selectedEpochDay = beforeFirstYear)).shouldBeNull()
+        MonthPages.selectedDateOf(MonthKey(9999, 13, selectedEpochDay = afterLastYear)).shouldBeNull()
+    }
+
+    @Test
+    fun `an initial selection from MonthKey is reflected in state from the start`() =
+        runTest(dispatcher) {
+            val selectedDate = LocalDate.of(2026, 12, 31)
+            val viewModel = viewModel(december2026, initialSelectedDate = selectedDate)
+
+            viewModel.uiState.value.selected shouldBe selectedDate
+
+            viewModel.uiState.test {
+                awaitItem().selected shouldBe selectedDate
+                awaitItem().summaryDate shouldBe selectedDate
             }
         }
 }

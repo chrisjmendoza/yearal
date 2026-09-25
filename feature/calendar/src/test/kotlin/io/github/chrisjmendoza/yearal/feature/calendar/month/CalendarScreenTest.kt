@@ -6,7 +6,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
@@ -14,8 +13,6 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
@@ -28,7 +25,6 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
-import io.github.chrisjmendoza.yearal.feature.calendar.day.buildDayUiState
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import org.junit.Rule
@@ -42,11 +38,12 @@ import java.util.Locale
 private val MinTouchTarget = 48.dp
 
 /**
- * [CalendarScreen] (docs/ROADMAP.md M3 T4; docs/ARCHITECTURE.md §4 "Adaptive layouts"): at
- * compact/medium widths it is exactly [MonthScreen] (a day tap navigates); at expanded widths both
- * panes of [MonthListDetailScreen] are composed and a day tap only updates the detail pane in place.
- * Written from the spec citations already in `MonthScreenTest` and `DayScreenTest` — this class covers
- * only what changes with the width, not the grid or the sheet's own content again.
+ * [CalendarScreen] (docs/ROADMAP.md M3 T4; docs/ARCHITECTURE.md §4 "Adaptive layouts"; the day-card
+ * merge): at compact/medium widths it is exactly [MonthScreen] with its day card below the grid; at
+ * expanded widths [MonthListDetailScreen] composes the grid and the same card side by side. A day tap
+ * never navigates at either width — it only calls [onSelectDay]. Written from the spec citations
+ * already in `MonthScreenTest` — this class covers only what changes with the width, not the grid or
+ * the card's own content again (that's `MonthScreenTest`'s and a future day-card content test's job).
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -60,15 +57,18 @@ class CalendarScreenTest {
     private val today = LocalDate.of(2026, 9, 17)
     private val october2026 = IfcYearMonth(2026, IfcMonth.OCTOBER)
 
-    private fun monthState(selected: LocalDate? = null) =
-        MonthUiState(
-            currentPage = MonthPages.pageOf(october2026),
-            today = today,
-            todayPage = MonthPages.pageOf(IfcYearMonth.from(IfcDate.from(today))),
-            selected = selected,
-        )
+    private fun monthState(
+        selected: LocalDate? = null,
+        dayDetail: DayDetailUi? = buildDayDetailUi(selected ?: today, today, formatter, holidays = emptyList()),
+    ) = MonthUiState(
+        currentPage = MonthPages.pageOf(october2026),
+        today = today,
+        todayPage = MonthPages.pageOf(IfcYearMonth.from(IfcDate.from(today))),
+        selected = selected,
+        dayDetail = dayDetail,
+    )
 
-    private fun emptyDayCallbacks(onClose: () -> Unit = {}) =
+    private fun emptyDayCallbacks() =
         DayDetailCallbacks(
             onEventClick = {},
             onAddEvent = {},
@@ -76,13 +76,11 @@ class CalendarScreenTest {
             onRequestDelete = {},
             onConfirmDelete = {},
             onCancelDelete = {},
-            onClose = onClose,
         )
 
     @Test
-    fun `compact width renders only the Month screen and a day tap navigates`() {
-        val navigated = mutableListOf<IfcDate>()
-        val selectedInPlace = mutableListOf<IfcDate>()
+    fun `compact width renders only the Month screen and a tap only selects`() {
+        val selected = mutableListOf<IfcDate>()
         compose.setContent {
             IfcTheme(dynamicColor = false) {
                 CalendarScreen(
@@ -91,9 +89,7 @@ class CalendarScreenTest {
                     onPageChanged = {},
                     onTitleClick = {},
                     onJumpToDate = {},
-                    onDayClick = { navigated += it },
-                    onSelectDay = { selectedInPlace += it },
-                    dayState = null,
+                    onSelectDay = { selected += it },
                     dayCallbacks = emptyDayCallbacks(),
                 )
             }
@@ -101,16 +97,12 @@ class CalendarScreenTest {
 
         compose.onNode(hasContentDescription("October 5, IFC", substring = true)).performClick()
 
-        navigated shouldContainExactly listOf(IfcDate.Regular(2026, IfcMonth.OCTOBER, 5))
-        selectedInPlace shouldBe emptyList()
-        // No detail pane exists at compact width.
-        compose.onAllNodesWithText("No day selected").assertCountEquals(0)
+        selected shouldContainExactly listOf(IfcDate.Regular(2026, IfcMonth.OCTOBER, 5))
     }
 
     @Test
     fun `expanded width composes both panes and a tap only selects in place`() {
-        val navigated = mutableListOf<IfcDate>()
-        val selectedInPlace = mutableListOf<IfcDate>()
+        val selected = mutableListOf<IfcDate>()
         compose.setContent {
             IfcTheme(dynamicColor = false) {
                 CalendarScreen(
@@ -119,39 +111,35 @@ class CalendarScreenTest {
                     onPageChanged = {},
                     onTitleClick = {},
                     onJumpToDate = {},
-                    onDayClick = { navigated += it },
-                    onSelectDay = { selectedInPlace += it },
-                    dayState = null,
+                    onSelectDay = { selected += it },
                     dayCallbacks = emptyDayCallbacks(),
                 )
             }
         }
 
-        // The grid (list pane) and the empty-state detail pane are both on screen at once.
+        // The grid (list pane) and the day card (detail pane, already showing today — there is no
+        // separate empty state any more) are both on screen at once.
         compose.onNode(hasContentDescription("October 5, IFC", substring = true)).assertIsDisplayed()
-        compose.onNodeWithText("No day selected").assertIsDisplayed()
+        compose.onNodeWithText("No events on this day.").assertIsDisplayed()
 
         compose.onNode(hasContentDescription("October 5, IFC", substring = true)).performClick()
 
-        selectedInPlace shouldContainExactly listOf(IfcDate.Regular(2026, IfcMonth.OCTOBER, 5))
-        navigated shouldBe emptyList()
+        selected shouldContainExactly listOf(IfcDate.Regular(2026, IfcMonth.OCTOBER, 5))
     }
 
     @Test
-    fun `expanded width shows the selected day's detail without navigating away from the grid`() {
+    fun `expanded width shows the selected day's card without navigating away from the grid`() {
         val onScreen = LocalDate.of(2026, 10, 12) // IFC October 5, 2026.
-        val dayState = buildDayUiState(onScreen, today, formatter, holidays = emptyList())
+        val dayDetail = buildDayDetailUi(onScreen, today, formatter, holidays = emptyList())
         compose.setContent {
             IfcTheme(dynamicColor = false) {
                 CalendarScreen(
                     widthClass = WindowWidthClass.EXPANDED,
-                    monthState = monthState(selected = onScreen),
+                    monthState = monthState(selected = onScreen, dayDetail = dayDetail),
                     onPageChanged = {},
                     onTitleClick = {},
                     onJumpToDate = {},
-                    onDayClick = {},
                     onSelectDay = {},
-                    dayState = dayState,
                     dayCallbacks = emptyDayCallbacks(),
                 )
             }
@@ -160,34 +148,8 @@ class CalendarScreenTest {
         // The list pane's month heading is still visible…
         compose.onNode(hasText("October 2026").and(hasClickAction())).assertIsDisplayed()
         // …at the same time as the detail pane's content.
-        compose.onNodeWithText(dayState.numeric).assertIsDisplayed()
+        compose.onNodeWithText(dayDetail.numeric).assertIsDisplayed()
         compose.onNode(hasContentDescription("October 5, IFC", substring = true)).assertIsSelected()
-    }
-
-    @Test
-    fun `the detail pane's close action is wired to the caller's callback`() {
-        var closed = false
-        val onScreen = LocalDate.of(2026, 10, 12)
-        val dayState = buildDayUiState(onScreen, today, formatter, holidays = emptyList())
-        compose.setContent {
-            IfcTheme(dynamicColor = false) {
-                CalendarScreen(
-                    widthClass = WindowWidthClass.EXPANDED,
-                    monthState = monthState(selected = onScreen),
-                    onPageChanged = {},
-                    onTitleClick = {},
-                    onJumpToDate = {},
-                    onDayClick = {},
-                    onSelectDay = {},
-                    dayState = dayState,
-                    dayCallbacks = emptyDayCallbacks(onClose = { closed = true }),
-                )
-            }
-        }
-
-        compose.onNodeWithContentDescription("Close").performClick()
-
-        closed shouldBe true
     }
 
     @Test
@@ -200,9 +162,7 @@ class CalendarScreenTest {
                     onPageChanged = {},
                     onTitleClick = {},
                     onJumpToDate = {},
-                    onDayClick = {},
                     onSelectDay = {},
-                    dayState = null,
                     dayCallbacks = emptyDayCallbacks(),
                 )
             }
@@ -223,9 +183,7 @@ class CalendarScreenTest {
                     onPageChanged = {},
                     onTitleClick = {},
                     onJumpToDate = {},
-                    onDayClick = {},
                     onSelectDay = {},
-                    dayState = buildDayUiState(onScreen, today, formatter, holidays = emptyList()),
                     dayCallbacks = emptyDayCallbacks(),
                 )
             }
@@ -246,20 +204,18 @@ class CalendarScreenTest {
     @Test
     fun `expanded layout touch targets stay at least 48dp at 200 percent font scale`() {
         val onScreen = LocalDate.of(2026, 10, 12)
-        val dayState = buildDayUiState(onScreen, today, formatter, holidays = emptyList())
+        val dayDetail = buildDayDetailUi(onScreen, today, formatter, holidays = emptyList())
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 2f)) {
                 IfcTheme(dynamicColor = false) {
                     CalendarScreen(
                         widthClass = WindowWidthClass.EXPANDED,
-                        monthState = monthState(selected = onScreen),
+                        monthState = monthState(selected = onScreen, dayDetail = dayDetail),
                         onPageChanged = {},
                         onTitleClick = {},
                         onJumpToDate = {},
-                        onDayClick = {},
                         onSelectDay = {},
-                        dayState = dayState,
                         dayCallbacks = emptyDayCallbacks(),
                     )
                 }
@@ -267,10 +223,10 @@ class CalendarScreenTest {
         }
 
         // The day cell (this task's own new touch target inside the list pane at this width) and the
-        // detail pane's "Add event" action (already proven at 48dp for the sheet in `DayScreenTest`,
-        // proven again here because the same content now also renders without the sheet's chrome).
+        // detail pane's "Add event" action (already proven at 48dp for the card in a future day-card
+        // content test, proven again here because the same content renders in this pane too).
         compose.onNode(hasContentDescription("October 5, IFC", substring = true)).assertHeightIsAtLeast(MinTouchTarget)
         compose.onNodeWithText("Add event").assertHeightIsAtLeast(MinTouchTarget)
-        compose.onNodeWithText(dayState.numeric).assertIsDisplayed()
+        compose.onNodeWithText(dayDetail.numeric).assertIsDisplayed()
     }
 }

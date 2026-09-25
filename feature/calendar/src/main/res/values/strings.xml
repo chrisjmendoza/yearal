@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Strings of the Today screen (docs/FEATURES.md T1–T4, T6), the Month pager (C1, C3, C7) and the Day
-     detail sheet (C5). Calendar terms and date patterns live in :core:designsystem, not here. -->
+<!-- Strings of the Today screen (docs/FEATURES.md T1–T4, T6), the Month pager (C1, C3, C7) and its day
+     card (C5). Calendar terms and date patterns live in :core:designsystem, not here. -->
 <resources>
 
     <!-- Spoken description of the progress spinner shown until the first date tick arrives. -->
@@ -48,18 +48,12 @@
          §4.2, owner note 4): the title is itself a tappable pill that zooms out to the Year view. -->
     <string name="month_show_year">Show year</string>
 
-    <!-- Selected-day summary below the grid (`docs/design-plan.md` §4.2, owner note 2). -->
+    <!-- The day card below the grid (`docs/design-plan.md` §4.2, owner note 2; the day-card merge: this
+         is now the whole day detail, not a summary onward to a popup). -->
     <string name="month_summary_holidays_empty">No holidays on this day.</string>
     <string name="month_summary_events_empty">No events on this day.</string>
-    <!-- Opens the same Day detail a grid cell tap opens, for the day the summary is showing. -->
-    <string name="month_summary_details">Details</string>
-    <!-- Shown before the first date tick, when there is no selected or "today" date to summarise yet. -->
+    <!-- Shown before the first date tick, when there is no selected or "today" date to show yet. -->
     <string name="month_summary_loading">Loading…</string>
-
-    <!-- Expanded-width list-detail pane (docs/ROADMAP.md M3 T4): shown in the detail pane before any
-         day is selected. -->
-    <string name="month_detail_empty_title">No day selected</string>
-    <string name="month_detail_empty_message">Select a day in the calendar to see its details here.</string>
 
     <!-- Year overview (FEATURES C6, C7) -->
 
@@ -78,18 +72,8 @@
            is a space; keep a separator that works between names in your language. -->
     <string name="holiday_list_separator">, </string>
 
-    <!-- Day detail sheet (FEATURES C5) -->
-
-    <!-- Spoken description of the progress spinner shown until the day's details are ready. -->
-    <string name="day_loading">Loading the day</string>
-
-    <!-- Shown when a DayKey names no showable date (an out-of-range epoch day, e.g. from a synthesized
-         widget or notification intent, docs/security-and-privacy.md §6.3), instead of crashing. -->
-    <string name="day_unavailable_title">Date not available</string>
-    <string name="day_unavailable_message">This date can\'t be shown.</string>
-
-    <!-- Spoken description of the button that closes the day detail sheet. -->
-    <string name="day_close">Close</string>
+    <!-- The day card (FEATURES C5): the merged day detail below the Month grid (or, at expanded
+         widths, beside it) — see docs/design-plan.md §4.2, owner note 2. -->
 
     <!-- The Gregorian equivalent of the shown IFC date, labelled so it is never confused with the IFC
          date above it. %1$s = the full Gregorian date with its weekday, e.g. "Thursday, December 31, 2026". -->
@@ -99,16 +83,16 @@
          %1$s = "Day 260 · Week 38 of 52", %2$s = "Q3". -->
     <string name="day_day_week_quarter">%1$s · %2$s</string>
 
-    <!-- Badge shown on the day detail when the shown day is the real today. -->
+    <!-- Badge shown on the day card when the shown day is the real today. -->
     <string name="day_today">Today</string>
 
     <!-- Heading above the list of holidays that fall on the shown day. Not shown when there are none. -->
     <string name="day_holidays">Holidays</string>
 
-    <!-- Agenda (FEATURES C5, T5): the day's or today's events, shared between the Day detail sheet and
-         the Today screen. -->
+    <!-- Agenda (FEATURES C5, T5): the day's or today's events, shared between the day card and the
+         Today screen. -->
 
-    <!-- Heading above the list of the day's events on the Day detail sheet. Not shown when there are none. -->
+    <!-- Heading above the list of the day's events on the day card. Not shown when there are none. -->
     <string name="day_events">Events</string>
 
     <!-- Action that opens the event editor pre-filled with the shown day. -->

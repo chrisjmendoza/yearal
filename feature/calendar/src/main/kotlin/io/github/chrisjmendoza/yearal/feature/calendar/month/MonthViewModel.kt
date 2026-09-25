@@ -8,7 +8,9 @@ import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
+import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.domain.DateTicker
+import io.github.chrisjmendoza.yearal.core.domain.event.EventRepository
 import io.github.chrisjmendoza.yearal.core.domain.event.ObserveAgendaUseCase
 import io.github.chrisjmendoza.yearal.core.domain.settings.SettingsRepository
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
@@ -16,23 +18,27 @@ import io.github.chrisjmendoza.yearal.feature.calendar.agenda.AgendaItemUi
 import io.github.chrisjmendoza.yearal.feature.calendar.agenda.toAgendaItemUi
 import io.github.chrisjmendoza.yearal.feature.calendar.holiday.HolidayCatalog
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
- * State holder for the Month pager (docs/ARCHITECTURE.md §4 "State management"; FEATURES C1, C3, C4,
- * C5, C7). "Today" comes only from [DateTicker] (CLAUDE.md rule 2), so the today ring and the
- * "Today" target roll over at local midnight; the grid headers follow
+ * State holder for the Month pager and its day card (docs/ARCHITECTURE.md §4 "State management";
+ * FEATURES C1, C3, C4, C5, C7, E1). "Today" comes only from [DateTicker] (CLAUDE.md rule 2), so the
+ * today ring and the "Today" target roll over at local midnight; the grid headers follow
  * [UserSettings.weekdayDisplay], the holiday marks [UserSettings.enabledHolidaySets], and the event
  * dots [observeAgenda], all live.
  *
@@ -41,11 +47,19 @@ import java.time.LocalDate
  * same three pages come from [observeAgenda], the single place events are expanded and bucketed, so
  * paging never computes a date or an occurrence itself (CLAUDE.md rule 1).
  *
- * The starting month is assisted-injected from the `MonthKey` of the entry (see [Factory]); the
- * ViewModel has no other dependency on navigation, so tests build it with the constructor. Stops
- * collecting five seconds after the last subscriber leaves.
+ * **The day card is the whole day detail** (the popup Day detail sheet this superseded is gone): this
+ * ViewModel now also owns the selected day's full formatted content ([DayDetailUi], [MonthUiState.dayDetail])
+ * and its "delete this occurrence" / delete flow ([requestDelete], [confirmDelete], [cancelDelete],
+ * [undoDeleteOccurrence]) — moved here from the old `DayViewModel`, one-to-one, since there is no
+ * longer a separate screen or ViewModel for the day.
+ *
+ * The starting month (and, if the entry named one, an initial selection) are assisted-injected from the
+ * `MonthKey` of the entry (see [Factory]); the ViewModel has no other dependency on navigation, so
+ * tests build it with the constructor. Stops collecting five seconds after the last subscriber leaves.
  *
  * @param initialMonth the month the pager opens on; its page is the state's first `currentPage`.
+ * @param initialSelectedDate the day to select on open (`MonthPages.selectedDateOf(key)`), or `null`
+ * to open with nothing selected (the card falls back to today).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel(assistedFactory = MonthViewModel.Factory::class)
@@ -53,20 +67,35 @@ class MonthViewModel
     @AssistedInject
     constructor(
         @Assisted initialMonth: IfcYearMonth,
+        @Assisted initialSelectedDate: LocalDate?,
         dateTicker: DateTicker,
         settingsRepository: SettingsRepository,
         private val catalog: HolidayCatalog,
         private val observeAgenda: ObserveAgendaUseCase,
+        private val formatter: IfcDateFormatter,
+        private val eventRepository: EventRepository,
     ) : ViewModel() {
         /** Creates a [MonthViewModel] for the entry's month; used by `hiltViewModel(creationCallback)`. */
         @AssistedFactory
         interface Factory {
-            /** @param initialMonth the month to open on, already clamped by `MonthPages.monthOf`. */
-            fun create(initialMonth: IfcYearMonth): MonthViewModel
+            /**
+             * @param initialMonth the month to open on, already clamped by `MonthPages.monthOf`.
+             * @param initialSelectedDate the day to select on open, already resolved (and fail-soft
+             * validated) by `MonthPages.selectedDateOf`, or `null`.
+             */
+            fun create(
+                initialMonth: IfcYearMonth,
+                initialSelectedDate: LocalDate?,
+            ): MonthViewModel
         }
 
         private val page = MutableStateFlow(MonthPages.pageOf(initialMonth))
-        private val selected = MutableStateFlow<LocalDate?>(null)
+        private val selected = MutableStateFlow(initialSelectedDate)
+        private val pendingDelete = MutableStateFlow<AgendaItemUi?>(null)
+        private val outbox = Channel<MonthEvent>(Channel.BUFFERED)
+
+        /** One-shot outcomes of a delete: only [MonthEvent.OccurrenceDeleted], to offer undo. */
+        val events: Flow<MonthEvent> = outbox.receiveAsFlow()
 
         // Per-month event-count flows, shared and cached across page changes (see agendaCountsFor):
         // without this, every page change tore down and rebuilt the ObserveAgendaUseCase subscription
@@ -76,10 +105,18 @@ class MonthViewModel
         private val eventCountsByPage: Flow<Map<IfcYearMonth, Map<LocalDate, Int>>> =
             page.flatMapLatest { p -> eventCountsAround(p) }
 
-        // The selected-day summary below the grid (docs/design-plan.md §4.2, owner note 2): the
-        // selected day, or today when nothing is selected. Its agenda needs its own single-day
-        // ObserveAgendaUseCase subscription — MonthUiState.eventCountsByMonth only carries counts, not
-        // the AgendaItemUi rows the summary shows — re-issued only when the summary date itself changes.
+        // eventCountsByPage and pendingDelete folded into one flow purely to keep the top-level combine
+        // below at kotlinx.coroutines' five-argument overload (as it was before pendingDelete existed);
+        // pendingDelete starts already-valued (MutableStateFlow(null)), so this adds no extra latency to
+        // any emission the event-counts flow would not already have had on its own.
+        private val eventCountsAndPendingDelete: Flow<EventCountsAndPendingDelete> =
+            combine(eventCountsByPage, pendingDelete, ::EventCountsAndPendingDelete)
+
+        // The day card's own content (docs/design-plan.md §4.2, owner note 2, superseded by the day-card
+        // merge): the selected day, or today when nothing is selected. Its agenda needs its own
+        // single-day ObserveAgendaUseCase subscription — MonthUiState.eventCountsByMonth only carries
+        // counts, not the AgendaItemUi rows the card shows — re-issued only when the summary date itself
+        // changes.
         private val summaryDate: Flow<LocalDate> =
             combine(dateTicker.today, selected) { today, sel -> sel ?: today }.distinctUntilChanged()
 
@@ -90,9 +127,21 @@ class MonthViewModel
                 }
             }
 
+        init {
+            // A pending delete confirmation belongs to one specific day; if the card's own date moves
+            // out from under it — a new selection, or today rolling over at midnight while nothing is
+            // selected — the confirmation no longer names a row the card is showing, so it is dropped
+            // rather than left open on the wrong day. drop(1): the date summaryDate starts on is not "a
+            // change", and there is never a pending delete before the first emission anyway.
+            viewModelScope.launch {
+                summaryDate.drop(1).collect { pendingDelete.value = null }
+            }
+        }
+
         /**
-         * The current [MonthUiState]. Starts with the initial page, no today and default settings;
-         * the first tick, the stored settings and the event counts arrive on subscription.
+         * The current [MonthUiState]. Starts with the initial page, the initial selection, no today and
+         * default settings; the first tick, the stored settings and the event counts arrive on
+         * subscription.
          */
         val uiState: StateFlow<MonthUiState> =
             combine(
@@ -100,9 +149,16 @@ class MonthViewModel
                 settingsRepository.settings,
                 page,
                 selected,
-                eventCountsByPage,
-            ) { today, settings, page, selected, eventCounts ->
-                MonthPartialState(today, settings, page, selected, eventCounts)
+                eventCountsAndPendingDelete,
+            ) { today, settings, page, selected, countsAndPending ->
+                MonthPartialState(
+                    today = today,
+                    settings = settings,
+                    page = page,
+                    selected = selected,
+                    eventCounts = countsAndPending.eventCounts,
+                    pendingDelete = countsAndPending.pendingDelete,
+                )
             }.combine(summaryAgenda) { partial, agendaSnapshot ->
                 val summaryDate = partial.selected ?: partial.today
                 // The two combined flows can settle out of step: when the summary date just changed,
@@ -110,6 +166,10 @@ class MonthViewModel
                 // new date — that would pair the new day with the old day's rows for a frame. Emit
                 // nothing until agendaSnapshot itself catches up to summaryDate (see design-pass fix 1).
                 val rows = if (agendaSnapshot.date == summaryDate) agendaSnapshot.rows else emptyList()
+                val holidays =
+                    catalog
+                        .labels(partial.settings.enabledHolidaySets, summaryDate..summaryDate)[summaryDate]
+                        .orEmpty()
                 MonthUiState(
                     currentPage = partial.page,
                     today = partial.today,
@@ -118,16 +178,20 @@ class MonthViewModel
                     weekdayDisplay = partial.settings.weekdayDisplay,
                     holidaysByMonth = holidaysAround(partial.page, partial.settings.enabledHolidaySets),
                     eventCountsByMonth = partial.eventCounts,
-                    summaryHolidays =
-                        catalog
-                            .labels(partial.settings.enabledHolidaySets, summaryDate..summaryDate)[summaryDate]
-                            .orEmpty(),
-                    summaryAgenda = rows,
+                    dayDetail =
+                        buildDayDetailUi(
+                            day = summaryDate,
+                            today = partial.today,
+                            formatter = formatter,
+                            holidays = holidays,
+                            agenda = rows,
+                            pendingDelete = partial.pendingDelete,
+                        ),
                 )
             }.stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-                MonthUiState(currentPage = page.value, today = null, todayPage = null, selected = null),
+                MonthUiState(currentPage = page.value, today = null, todayPage = null, selected = selected.value),
             )
 
         /**
@@ -139,23 +203,58 @@ class MonthViewModel
         }
 
         /**
-         * Marks [date] as the selected day (FEATURES C5); the grid fills its cell or band. At compact
-         * and medium widths this also names the day pushed as `DayKey`; at expanded widths it is the
-         * expanded-width list-detail pane's own selection (docs/ROADMAP.md M3 T4) — the same property
-         * serves both, so switching width classes mid-session never loses or duplicates a selection.
+         * Marks [date] as the selected day (FEATURES C5); the grid fills its cell or band and the day
+         * card below it (or, at expanded widths, beside it) switches to it. Taps never navigate — this
+         * is the only thing a day tap does, at every width class.
          */
         fun select(date: LocalDate) {
             selected.value = date
         }
 
         /**
-         * Clears the selection (docs/ROADMAP.md M3 T4): the expanded-width list-detail pane's empty
-         * state returns, and the grid's cell fill is removed. Invoked by the detail pane's close action
-         * and by the system back gesture while a day is selected at expanded widths — at compact and
-         * medium widths the selection is left alone (`DayKey`'s own back pops the sheet instead).
+         * Clears the selection (docs/ROADMAP.md M3 T4): the card falls back to today, and the grid's
+         * cell fill is removed. Invoked by the system back gesture while a day is selected at expanded
+         * widths; at compact and medium widths the selection is left alone (there is no separate detail
+         * destination to back out of any more).
          */
         fun clearSelection() {
             selected.value = null
+        }
+
+        /** Opens the delete confirmation for [item] (an agenda row's long-press or TalkBack action). */
+        fun requestDelete(item: AgendaItemUi) {
+            pendingDelete.value = item
+        }
+
+        /** Dismisses the delete confirmation without changing anything. */
+        fun cancelDelete() {
+            pendingDelete.value = null
+        }
+
+        /**
+         * Applies the pending delete: [EventRepository.addExdate] on
+         * [AgendaItemUi.occurrenceDate] for a recurring row (offering undo through [events]), or
+         * [EventRepository.deleteEvent] for a non-recurring one. No-op if nothing is pending.
+         */
+        fun confirmDelete() {
+            val pending = pendingDelete.value ?: return
+            pendingDelete.value = null
+            viewModelScope.launch {
+                if (pending.isRecurring) {
+                    eventRepository.addExdate(pending.eventId, pending.occurrenceDate)
+                    outbox.send(MonthEvent.OccurrenceDeleted(pending.eventId, pending.occurrenceDate))
+                } else {
+                    eventRepository.deleteEvent(pending.eventId)
+                }
+            }
+        }
+
+        /** Undoes an occurrence delete ([MonthEvent.OccurrenceDeleted]'s snackbar action). */
+        fun undoDeleteOccurrence(
+            eventId: Long,
+            occurrenceDate: LocalDate,
+        ) {
+            viewModelScope.launch { eventRepository.removeExdate(eventId, occurrenceDate) }
         }
 
         private fun holidaysAround(
@@ -218,6 +317,13 @@ private data class MonthPartialState(
     val page: Int,
     val selected: LocalDate?,
     val eventCounts: Map<IfcYearMonth, Map<LocalDate, Int>>,
+    val pendingDelete: AgendaItemUi?,
+)
+
+/** [MonthViewModel.eventCountsByPage] folded together with [MonthViewModel.pendingDelete]. */
+private data class EventCountsAndPendingDelete(
+    val eventCounts: Map<IfcYearMonth, Map<LocalDate, Int>>,
+    val pendingDelete: AgendaItemUi?,
 )
 
 /**
@@ -230,3 +336,18 @@ private data class SummaryAgendaSnapshot(
     val date: LocalDate,
     val rows: List<AgendaItemUi>,
 )
+
+/** One-shot outcomes of the day card's delete flow (moved here from the old `DayViewModel`/`DayEvent`). */
+sealed interface MonthEvent {
+    /**
+     * One occurrence was excluded; the UI should offer undo.
+     *
+     * @property eventId the event it belongs to.
+     * @property occurrenceDate the exdate added — the occurrence's own start date, for
+     * [MonthViewModel.undoDeleteOccurrence].
+     */
+    data class OccurrenceDeleted(
+        val eventId: Long,
+        val occurrenceDate: LocalDate,
+    ) : MonthEvent
+}

@@ -27,7 +27,7 @@ version and date when it passes. Target coverage: API 26, 33 and 36, plus one Sa
 
 | # | Check | Result |
 |---|---|---|
-| L1 | With Today, Month, Year or Day detail open, change the system time zone across a date line: the date and the agenda update within a second or two, without leaving the screen. | |
+| L1 | With Today, Month (and its day card) or Year open, change the system time zone across a date line: the date and the agenda update within a second or two, without leaving the screen. | |
 | L2 | Background the app, change the time zone or the date, return: the same, through the resume path. | |
 | L3 | Set the clock backwards across midnight with a screen open: the earlier date is shown. | |
 | L4 | The Convert tab icon reads as "swap", not "refresh", in light and dark, on the bar and on the rail. | |
@@ -53,16 +53,16 @@ version and date when it passes. Target coverage: API 26, 33 and 36, plus one Sa
 | # | Check | Result |
 |---|---|---|
 | N1 | Tap a reminder notification: the app opens that event's editor, not the last-used tab. | |
-| N2 | Tap a day cell on the Month widget: that day opens. Tap the widget's heading or a gap: the current month opens. **Unit-tested only — the per-cell click regions were never rendered on a device.** | |
+| N2 | Tap a day cell on the Month widget: the Month opens on that day, selected, with its details in the card below the grid. Tap the widget's heading or a gap: the current month opens. **Unit-tested only — the per-cell click regions were never rendered on a device.** | |
 | N3 | Tap the Today widget: the Today tab opens. | |
 | N4 | Leave the app in the background until Android kills it, then reopen it from a widget or a notification: it routes correctly, and rotating afterwards does not route a second time. | |
-| N5 | At expanded width (tablet or unfolded foldable), a widget or notification tap still opens the day as a sheet over the two panes — confirm that reads as acceptable for now (known gap, ROADMAP M3 T4). | |
+| N5 | At expanded width (tablet or unfolded foldable), a widget or notification tap opens the Month on that day, with the day selected in the right-hand pane — no sheet. | |
 
 ## App
 
 | # | Check | Result |
 |---|---|---|
-| A1 | "Every Sol 13" and "every Year Day" events appear on the right days, on the grid, in Day detail and on Today. | |
+| A1 | "Every Sol 13" and "every Year Day" events appear on the right days, on the grid, in the Month day card and on Today. | |
 | A1b | Tap Save several times quickly on a new event: exactly one event is created. | |
 | A2 | "Delete this occurrence" removes only that day; undo restores it. | |
 | A3 | "Delete all data" empties events, resets settings, clears widget dots and any pending reminder. | |

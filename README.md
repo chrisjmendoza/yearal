@@ -28,8 +28,9 @@ Everything below is implemented and covered by tests on `main`. Nothing here nee
 what's listed in [Privacy](#privacy).
 
 - **Today, Month, Year and Day-detail views** — a swipeable month grid and a 13-mini-month year overview,
-  both with the Leap Day / Year Day bands, both real and IFC weekdays shown side by side, and a tap on any
-  day for its Gregorian equivalent, holidays and that day's events.
+  both with the Leap Day / Year Day bands and both real and IFC weekdays shown side by side. Tap any
+  day and the card below the grid shows its Gregorian equivalent, both weekdays, holidays and events, with
+  "Add event" and "Open in converter". Today's card leads with the real weekday.
 - **Converter** — convert any date between Gregorian and IFC in either direction, for the years
   1583–9999, with copy/share.
 - **Events** — a list and editor with recurrence on IFC dates ("every Sol 13", "every Year Day", "every
@@ -37,7 +38,7 @@ what's listed in [Privacy](#privacy).
   Reminder notifications fire even in Doze and hide the event's title on the lock screen. A single
   occurrence of a repeating event can be deleted (with undo).
 - **Built-in holidays** — the IFC observances (Year Day, Leap Day, Sol 1) and a US federal + observances
-  pack, shown on the grid, in Day detail and in the Today agenda. The Holidays screen (More → Holidays)
+  pack, shown on the grid, in the day card below it and in the Today agenda. The Holidays screen (More → Holidays)
   lists any year's holidays in both calendars and switches packs on or off.
 - **Today and Month home-screen widgets**, refreshed at midnight and after a clock, time-zone or locale
   change, reboot, or app update — no per-minute polling. Both follow the app's own colour palette and

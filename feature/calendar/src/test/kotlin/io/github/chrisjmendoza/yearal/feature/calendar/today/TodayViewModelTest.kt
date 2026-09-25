@@ -104,6 +104,8 @@ class TodayViewModelTest {
                 val next = awaitItem().shouldBeInstanceOf<TodayUiState.Loaded>()
                 next.date shouldBe IfcDate.Regular(2026, IfcMonth.SEPTEMBER, 9)
                 next.heroDate shouldBe "September 9, 2026"
+                // The hero's weekday line is the real one (Friday), not the IFC one (Monday).
+                next.heroWeekday shouldBe "Friday"
                 next.numericDate shouldBe "IFC 2026-10-09"
                 next.gregorianLongDate shouldBe "Friday, September 18, 2026"
                 next.nominalWeekday shouldBe "IFC weekday: Monday"
@@ -125,6 +127,7 @@ class TodayViewModelTest {
 
                 val next = awaitItem().shouldBeInstanceOf<TodayUiState.Loaded>()
                 next.heroDate shouldBe "January 1, 2027"
+                next.heroWeekday shouldBe "Friday"
                 next.numericDate shouldBe "IFC 2027-01-01"
                 next.dayAndWeek shouldBe "Day 1 · Week 1 of 52"
                 next.yearProgress shouldBe (1f / 365 plusOrMinus 0.0001f)
@@ -139,6 +142,7 @@ class TodayViewModelTest {
                 val loaded = awaitItem().shouldBeInstanceOf<TodayUiState.Loaded>()
                 loaded.date shouldBe IfcDate.YearDay(2026)
                 loaded.heroDate shouldBe "Year Day, 2026"
+                loaded.heroWeekday shouldBe "Thursday"
                 loaded.mediumDate shouldBe "Year Day 2026"
                 loaded.numericDate shouldBe "IFC 2026-13-29"
                 loaded.gregorianLongDate shouldBe "Thursday, December 31, 2026"
@@ -162,6 +166,7 @@ class TodayViewModelTest {
                 val loaded = awaitItem().shouldBeInstanceOf<TodayUiState.Loaded>()
                 loaded.date shouldBe IfcDate.LeapDay(2028)
                 loaded.heroDate shouldBe "Leap Day, 2028"
+                loaded.heroWeekday shouldBe "Saturday"
                 loaded.mediumDate shouldBe "Leap Day 2028"
                 loaded.numericDate shouldBe "IFC 2028-06-29"
                 loaded.gregorianLongDate shouldBe "Saturday, June 17, 2028"

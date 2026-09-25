@@ -53,7 +53,7 @@ private const val PAGE_COUNT = 3
  *
  * @param navigator pops back to whatever the intro was shown over; also used for the "Learn more" link
  * and the "find my IFC birthday" hook, both of which push onto the current tab exactly like
- * `io.github.chrisjmendoza.yearal.feature.calendar.day.DayScreen`'s "Open in converter" action does.
+ * `io.github.chrisjmendoza.yearal.feature.calendar.month.DayCard`'s "Open in converter" action does.
  */
 @Composable
 fun IntroRoute(

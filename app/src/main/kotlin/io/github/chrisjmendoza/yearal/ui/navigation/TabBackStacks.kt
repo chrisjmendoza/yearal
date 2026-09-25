@@ -13,7 +13,6 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
-import io.github.chrisjmendoza.yearal.core.navigation.DayKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventListKey
 import io.github.chrisjmendoza.yearal.core.navigation.MonthKey
@@ -139,11 +138,13 @@ fun TabBackStacks.applyRoute(
 
         is AppRoute.Day -> {
             // Already validated by IntentRouter: converts and falls within IfcDate's supported years.
+            // The Month pager opens with its day card already selected on this day — MonthKey.selectedEpochDay
+            // took over the role DayKey used to serve, once the popup Day detail was merged into the card.
             val date = LocalDate.ofEpochDay(route.epochDay)
             val month = IfcYearMonth.from(IfcDate.from(date))
             open(
                 TopLevelDestination.CALENDAR,
-                listOf(MonthKey(month.year, month.month.number), DayKey(route.epochDay)),
+                listOf(MonthKey(month.year, month.month.number, selectedEpochDay = route.epochDay)),
             )
         }
 

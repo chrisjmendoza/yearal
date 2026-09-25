@@ -4,11 +4,11 @@
 the month Sol, plus Year Day and Leap Day. Solo developer working with AI agents.
 
 **Status:** M0 and M1 done; M2–M5 in progress (M2 T13 visual design pass done, M3 T1–T3, M4 T1–T9, M5 T1–T3
-and T5–T6, M6 T1 and T3, review fixes R1–R5 and R8–R11 done). Pure-JVM: `:core:calendar`,
+and T5–T6, M6 T1 and T3, review fixes R1–R5 and R8–R12 done). Pure-JVM: `:core:calendar`,
 `:core:domain` (clock/ticker, holiday engine, the events contract, `DayRolloverListener`), `:core:holidays`
 (JSON packs), `:core:testing`. Android: `:app` (Hilt, 5-tab Nav3 shell), `:core:designsystem` (theme
 tokens, six curated colour palettes, pure black, `MonthGrid`, date pickers), `:core:navigation`, `:core:data` (settings DataStore, Room 3 event storage), `:core:scheduling`
-(midnight rollover + reminder alarms, receivers, notifications), `:feature:calendar` (Today, Month, Year, Day detail), `:feature:converter`
+(midnight rollover + reminder alarms, receivers, notifications), `:feature:calendar` (Today, Month with its day card, Year), `:feature:converter`
 (Gregorian ↔ IFC), `:feature:events` (list + editor), `:feature:holidays` (browse/toggle packs),
 `:feature:settings` (Settings, More hub, Learn, Privacy), `:widget` (Glance Today and Month widgets). `docs/ROADMAP.md` has the ledger; frozen
 contracts are in `docs/contracts/`.

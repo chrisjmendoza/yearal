@@ -88,7 +88,7 @@ fun TodayRoute(
  * (docs/ARCHITECTURE.md §4 "State management").
  *
  * A hero card (`docs/design-plan.md` §4.1) on [YearalTheme.colors]' `heroContainer`/`onHero` carries
- * the IFC date in `displayMedium`, an "IFC"/"Gregorian" eyebrow pair, the weekday block, the
+ * today's actual weekday above the IFC date in `displayMedium`, an "IFC"/"Gregorian" eyebrow pair, the weekday block, the
  * day/week/quarter line and the year-progress bar. Below it: an amber intercalary countdown chip, a
  * Holidays card and an Events card, both showing a quiet line rather than vanishing when there is
  * nothing to show (§4.1).
@@ -144,7 +144,8 @@ private fun LoadedContent(
 }
 
 /**
- * The hero card (`docs/design-plan.md` §4.1): the IFC date in `displayMedium`, the "IFC" / "Gregorian"
+ * The hero card (`docs/design-plan.md` §4.1): today's actual weekday above the IFC date in
+ * `displayMedium`, the "IFC" / "Gregorian"
  * eyebrow pair (the review's acceptance test — "what Gregorian date is this?" — answered at a glance),
  * the weekday block, the day/week/quarter line and the tinted year-progress bar.
  */
@@ -159,6 +160,13 @@ private fun HeroCard(state: TodayUiState.Loaded) {
             modifier = Modifier.padding(Dimens.SpaceL),
             verticalArrangement = Arrangement.spacedBy(Dimens.SpaceS),
         ) {
+            // The real weekday, bare: this line answers "what day is it?", which is tied to real life
+            // (spec §4.1 item 2). TalkBack speaks the labelled form so it is never heard as the IFC one.
+            Text(
+                text = state.heroWeekday,
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.semantics { contentDescription = state.actualWeekday },
+            )
             Text(
                 text = state.heroDate,
                 style = MaterialTheme.typography.displayMedium,

@@ -1,4 +1,4 @@
-package io.github.chrisjmendoza.yearal.feature.calendar.day
+package io.github.chrisjmendoza.yearal.feature.calendar.month
 
 import android.content.Context
 import androidx.compose.runtime.CompositionLocalProvider
@@ -39,15 +39,17 @@ import java.time.LocalTime
 import java.util.Locale
 
 /**
- * [DayScreen] under Robolectric: the sheet shows the IFC date as a heading, the numeric form with
- * its `IFC` marker, the Gregorian date, both labelled weekday lines (spec §4.1) with "no IFC
- * weekday" on intercalary days, day/week/quarter, the holiday names, the "Today" badge only on
- * today, and the close button invokes the dismiss callback.
+ * [DayCard] under Robolectric (the day-card merge — ported from the old `DayScreenTest`, which tested
+ * the popup Day detail this card superseded): the card shows the IFC date as a heading, the numeric
+ * form with its `IFC` marker, the Gregorian date, both labelled weekday lines (spec §4.1) with "no IFC
+ * weekday" on intercalary days, day/week/quarter, the holiday names, the "Today" badge only on today,
+ * and its agenda is interactive: tap opens the event, long-press or its TalkBack action requests
+ * delete, with a confirmation dialog worded by whether the row recurs (FEATURES E1).
  */
 @RunWith(AndroidJUnit4::class)
-// A tall window so the whole sheet, holidays included, is on screen; the content scrolls otherwise.
+// A tall window so the whole card, holidays included, is on screen; the content scrolls otherwise.
 @Config(qualifiers = "w360dp-h900dp")
-class DayScreenTest {
+class DayCardTest {
     @get:Rule
     val compose = createComposeRule()
 
@@ -60,7 +62,6 @@ class DayScreenTest {
         holidays: List<String> = emptyList(),
         agenda: List<AgendaItemUi> = emptyList(),
         pendingDelete: AgendaItemUi? = null,
-        onDismiss: () -> Unit = {},
         onEventClick: (Long) -> Unit = {},
         onAddEvent: () -> Unit = {},
         onOpenInConverter: () -> Unit = {},
@@ -69,13 +70,15 @@ class DayScreenTest {
         onCancelDelete: () -> Unit = {},
         fontScale: Float = 1f,
     ) {
+        val detail = buildDayDetailUi(day, today, formatter, holidays, agenda, pendingDelete)
+        val state =
+            MonthUiState(currentPage = 0, today = today, todayPage = 0, selected = day, dayDetail = detail)
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
                 IfcTheme(dynamicColor = false) {
-                    DayScreen(
-                        state = buildDayUiState(day, today, formatter, holidays, agenda, pendingDelete),
-                        onDismiss = onDismiss,
+                    DayCard(
+                        state = state,
                         onEventClick = onEventClick,
                         onAddEvent = onAddEvent,
                         onOpenInConverter = onOpenInConverter,
@@ -102,7 +105,7 @@ class DayScreenTest {
         compose.onNodeWithContentDescription("IFC Sunday, actual Thursday").assertIsDisplayed()
         compose.onNodeWithText("Day 260 · Week 38 of 52 · Q3").assertIsDisplayed()
         compose.onNodeWithText("Today").assertIsDisplayed()
-        compose.onAllNodesWithText("Holidays").assertCountEquals(0)
+        compose.onNodeWithText("No holidays on this day.").assertIsDisplayed()
     }
 
     @Test
@@ -115,7 +118,8 @@ class DayScreenTest {
         compose.onNodeWithText("Actual weekday: Thursday", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("no IFC weekday, actual Thursday").assertIsDisplayed()
         compose.onNodeWithText("Day 365 · outside the weeks · Q4").assertIsDisplayed()
-        compose.onNodeWithText("Holidays").assertIsDisplayed()
+        // The section eyebrow heading is shown uppercased, matching every other card section.
+        compose.onNodeWithText("HOLIDAYS").assertIsDisplayed()
         compose.onNodeWithText("Year Day").assertIsDisplayed()
         compose.onNodeWithText("New Year's Eve").assertIsDisplayed()
         compose.onAllNodesWithText("Today").assertCountEquals(0)
@@ -160,16 +164,6 @@ class DayScreenTest {
         compose.onNodeWithText("Independence Day (observed)").assertIsDisplayed()
     }
 
-    @Test
-    fun `the close button invokes the dismiss callback`() {
-        var dismissed = 0
-        show(LocalDate.of(2026, 9, 17), onDismiss = { dismissed++ })
-
-        compose.onNodeWithContentDescription("Close").performClick()
-
-        dismissed shouldBe 1
-    }
-
     // FEATURES C5: the day's agenda, all-day first then by start time, tap navigates by id only.
 
     @Test
@@ -196,7 +190,7 @@ class DayScreenTest {
         val clicked = mutableListOf<Long>()
         show(LocalDate.of(2026, 9, 17), agenda = agenda, onEventClick = { clicked += it })
 
-        compose.onNodeWithText("Events").assertIsDisplayed()
+        compose.onNodeWithText("EVENTS").assertIsDisplayed()
         compose.onNodeWithText("Conference").assertIsDisplayed()
         compose.onNodeWithText("All day").assertIsDisplayed()
         compose.onNodeWithText("Standup").performClick()
@@ -264,31 +258,28 @@ class DayScreenTest {
         compose.onNodeWithText("Add event").assertHeightIsAtLeast(48.dp)
     }
 
-    @Test
-    fun `the loading state shows only the spinner`() {
-        compose.setContent {
-            IfcTheme(dynamicColor = false) { DayScreen(state = DayUiState.Loading, onDismiss = {}) }
-        }
+    // The popup Day detail's Loading/Unavailable states are gone with it (docs/ROADMAP.md, the day-card
+    // merge): an invalid MonthKey.selectedEpochDay now just fails soft to no selection (MonthPages.selectedDateOf),
+    // so the card only ever has two states — no day yet (before the first date tick) or a real one.
 
-        compose.onNodeWithContentDescription("Loading the day").assertIsDisplayed()
-        compose.onAllNodesWithText("Gregorian: ", substring = true).assertCountEquals(0)
-    }
-
-    // A DayKey can be synthesized from a widget or notification intent with an out-of-range epoch day
-    // (docs/security-and-privacy.md §6.3); DayViewModel fails soft to DayUiState.Unavailable.
     @Test
-    fun `the unavailable state shows a message and an explicit close action`() {
-        var dismissed = 0
+    fun `the card shows a loading message when there is no day yet`() {
         compose.setContent {
             IfcTheme(dynamicColor = false) {
-                DayScreen(state = DayUiState.Unavailable, onDismiss = { dismissed++ })
+                DayCard(
+                    state = MonthUiState(currentPage = 0, today = null, todayPage = null, selected = null),
+                    onEventClick = {},
+                    onAddEvent = {},
+                    onOpenInConverter = {},
+                    onRequestDelete = {},
+                    onConfirmDelete = {},
+                    onCancelDelete = {},
+                )
             }
         }
 
-        compose.onNodeWithText("Date not available").assertIsDisplayed()
-        compose.onNodeWithText("This date can't be shown.").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Close").performClick()
-        dismissed shouldBe 1
+        compose.onNodeWithText("Loading…").assertIsDisplayed()
+        compose.onAllNodesWithText("Gregorian: ", substring = true).assertCountEquals(0)
     }
 
     // FEATURES E1: "delete this occurrence" and plain delete, with a TalkBack-reachable action.

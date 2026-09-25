@@ -23,7 +23,6 @@ import io.github.chrisjmendoza.yearal.R
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.calendar.toIfcDate
 import io.github.chrisjmendoza.yearal.core.navigation.ConverterKey
-import io.github.chrisjmendoza.yearal.core.navigation.DayKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventListKey
 import io.github.chrisjmendoza.yearal.core.navigation.HolidaysKey
@@ -35,7 +34,6 @@ import io.github.chrisjmendoza.yearal.core.navigation.PrivacyKey
 import io.github.chrisjmendoza.yearal.core.navigation.SettingsKey
 import io.github.chrisjmendoza.yearal.core.navigation.TodayKey
 import io.github.chrisjmendoza.yearal.core.navigation.YearKey
-import io.github.chrisjmendoza.yearal.feature.calendar.day.DayRoute
 import io.github.chrisjmendoza.yearal.feature.calendar.month.MonthRoute
 import io.github.chrisjmendoza.yearal.feature.calendar.today.TodayRoute
 import io.github.chrisjmendoza.yearal.feature.calendar.year.YearRoute
@@ -134,7 +132,6 @@ fun IfcApp(
                     entry<IntroKey> { IntroRoute(navigator = tabs) }
                     entry<MonthKey> { key -> MonthRoute(key = key, navigator = tabs) }
                     entry<YearKey> { key -> YearRoute(key = key, navigator = tabs) }
-                    entry<DayKey> { key -> DayRoute(key = key, navigator = tabs) }
                     entry<EventListKey> { EventListRoute(navigator = tabs) }
                     entry<EventEditorKey> { key -> EventEditorRoute(key = key, navigator = tabs) }
                     entry<ConverterKey> { key -> ConverterRoute(key = key, navigator = tabs) }

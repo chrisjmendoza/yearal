@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
+import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.DatePickerRange
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.GregorianDatePickerDialog
@@ -68,7 +69,7 @@ import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.navigation.ConverterKey
-import io.github.chrisjmendoza.yearal.core.navigation.DayKey
+import io.github.chrisjmendoza.yearal.core.navigation.MonthKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -88,10 +89,12 @@ private val IntercalaryIconSpacing = 4.dp
  * The converter (docs/FEATURES.md D1, D2, D4): collects [ConverterViewModel.uiState] with the lifecycle
  * and renders it through the stateless [ConverterScreen]. This is the composable `:app` places behind
  * [ConverterKey]. Copy and share happen here, where a `Context` is at hand; "Open day" pushes the
- * converted day's [DayKey] through [navigator] (CLAUDE.md rule 10).
+ * converted day's month, selected, through [navigator] (CLAUDE.md rule 10) — the Month pager opens with
+ * its day card already showing that day (the popup Day detail this used to open has been merged into
+ * the day card, docs/ROADMAP.md).
  *
  * @param key the entry's key; its `prefillEpochDay` is the initial date when present and in range.
- * @param navigator receives the [DayKey] of "Open day".
+ * @param navigator receives the [MonthKey] of "Open day"'s month, with that day selected.
  * @param modifier applied to the screen's root [Scaffold].
  */
 @Composable
@@ -126,7 +129,10 @@ fun ConverterRoute(
         onShare = { text ->
             if (!shareConversion(context, text)) scope.launch { snackbarHostState.showSnackbar(shareUnavailable) }
         },
-        onOpenDay = { day -> navigator.navigate(DayKey(day.toEpochDay())) },
+        onOpenDay = { day ->
+            val month = IfcYearMonth.from(IfcDate.from(day))
+            navigator.navigate(MonthKey(month.year, month.month.number, selectedEpochDay = day.toEpochDay()))
+        },
         modifier = modifier,
         snackbarHostState = snackbarHostState,
     )

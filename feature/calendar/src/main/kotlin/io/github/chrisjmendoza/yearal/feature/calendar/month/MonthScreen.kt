@@ -25,6 +25,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -32,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -67,15 +72,12 @@ import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.PillShape
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.navigation.ConverterKey
-import io.github.chrisjmendoza.yearal.core.navigation.DayKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
 import io.github.chrisjmendoza.yearal.core.navigation.MonthKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
 import io.github.chrisjmendoza.yearal.core.navigation.YearKey
 import io.github.chrisjmendoza.yearal.feature.calendar.R
-import io.github.chrisjmendoza.yearal.feature.calendar.day.DayDetailState
-import io.github.chrisjmendoza.yearal.feature.calendar.day.DayViewModel
-import io.github.chrisjmendoza.yearal.feature.calendar.day.rememberDayDetailState
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import io.github.chrisjmendoza.yearal.core.designsystem.R as DesignSystemR
@@ -85,39 +87,42 @@ private val JumpChooserOptionSpacing = 8.dp
 private val JumpChooserMinTouchTarget = 48.dp
 
 /**
- * A floor on the selected-day summary's height (`docs/design-plan.md` §4.2, owner note 2: "fills the
- * space below"), so a tall screen with a short summary still reads as one anchored page rather than
- * the grid floating above dead space. Not a hard fill: the page column scrolls, so a summary with more
- * content than this — or a grid grown tall by a large font scale — is never clipped (design-plan §2,
- * "200% font scale never clips").
+ * A floor on the day card's height (`docs/design-plan.md` §4.2, owner note 2: "fills the space below"),
+ * so a tall screen with a short card still reads as one anchored page rather than the grid floating
+ * above dead space. Not a hard fill: the page column scrolls, so a card with more content than this —
+ * or a grid grown tall by a large font scale — is never clipped (design-plan §2, "200% font scale never
+ * clips").
  */
 private val SummaryMinHeight = 220.dp
 
 /**
- * The Calendar tab's Month pager (docs/FEATURES.md C1, C3, C5, C7; docs/ARCHITECTURE.md §4 "Adaptive
- * layouts"): collects [MonthViewModel.uiState] with the lifecycle and renders it through the
- * stateless [CalendarScreen]. This is the composable `:app` places behind [MonthKey].
+ * The Calendar tab's Month pager and day card (docs/FEATURES.md C1, C3, C5, C7, E1;
+ * docs/ARCHITECTURE.md §4 "Adaptive layouts"): collects [MonthViewModel.uiState] with the lifecycle and
+ * renders it through the stateless [CalendarScreen]. This is the composable `:app` places behind
+ * [MonthKey].
  *
- * The ViewModel is created for [key]'s month through [MonthViewModel.Factory] (the month is clamped
- * by [MonthPages.monthOf]). [currentWindowWidthClass] decides the layout (docs/ROADMAP.md M3 T4):
+ * **The popup Day detail this superseded is gone.** A day tap only calls [MonthViewModel.select] — at
+ * every width class, never navigating — and the day card, [DayCard], shows the full detail for
+ * whichever day is selected (or today, when nothing is). [MonthKey.selectedEpochDay] lets a caller open
+ * the pager with a day already selected, the same role `DayKey` used to serve; [MonthPages.selectedDateOf]
+ * resolves it fail-soft.
  *
- * - **Compact and medium:** a tap on a day selects it and pushes [DayKey] with the day's Gregorian
- *   epoch day (CLAUDE.md rule 4) — unchanged from before this task, so the sheet still works exactly
- *   as it did.
- * - **Expanded:** a tap on a day only calls [MonthViewModel.select]; no navigation happens; instead a
- *   second, [DayViewModel] — created only while there is a selection, keyed by the selected epoch day
- *   so switching days creates a fresh instance rather than reusing a stale one — feeds the list-detail
- *   pane's own [DayDetailState] directly, and [BackHandler] clears the selection instead of leaving
- *   the tab (docs/ARCHITECTURE.md §4). "Add event" and "Open in converter" still navigate: they open a
- *   different tab, which is unrelated to Calendar's own list-detail split.
+ * [currentWindowWidthClass] decides the layout (docs/ROADMAP.md M3 T4): compact and medium show
+ * [MonthScreen] with the card anchored below the grid; expanded shows [MonthListDetailScreen], the grid
+ * and the same card side by side, with [BackHandler] clearing the selection instead of leaving the tab.
+ * "Add event" and "Open in converter" still navigate: they open a different tab.
+ *
+ * A deleted occurrence ([MonthEvent.OccurrenceDeleted]) offers undo through a snackbar
+ * ([MonthViewModel.undoDeleteOccurrence]), hosted by whichever layout is showing (`CalendarScreen`'s
+ * `snackbarHostState`).
  *
  * Tapping the month heading zooms out to [YearKey] (ARCHITECTURE §4) in both layouts; the
  * jump-to-date action lets the user pick either calendar and pushes the [MonthKey] of the chosen date
  * (FEATURES C7).
  *
- * @param key the month to open on.
- * @param navigator where the title tap, the jump-to-date action, and (compact/medium only) a day tap
- * navigate; also where the expanded detail pane's "Add event" / "Open in converter" navigate.
+ * @param key the month to open on, and (via [MonthKey.selectedEpochDay]) the day to select, if any.
+ * @param navigator where the title tap, the jump-to-date action, and the day card's "Add event" /
+ * "Open in converter" actions navigate.
  * @param modifier applied to the screen's root.
  */
 @Composable
@@ -127,30 +132,38 @@ fun MonthRoute(
     modifier: Modifier = Modifier,
     viewModel: MonthViewModel =
         hiltViewModel<MonthViewModel, MonthViewModel.Factory>(
-            creationCallback = { factory -> factory.create(MonthPages.monthOf(key)) },
+            creationCallback = { factory ->
+                factory.create(MonthPages.monthOf(key), MonthPages.selectedDateOf(key))
+            },
         ),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val widthClass = currentWindowWidthClass()
-    val selectedEpochDay = state.selected?.toEpochDay()
-
-    // The detail pane's own ViewModel exists only while there is a selection at expanded widths — an
-    // explicit `key` (not the default call-site key) so picking a different day creates a fresh
-    // instance instead of reusing the previous day's (this composable itself never gets a new Nav3
-    // entry to do that for us, unlike DayRoute).
-    val dayViewModel =
-        if (widthClass == WindowWidthClass.EXPANDED && selectedEpochDay != null) {
-            hiltViewModel<DayViewModel, DayViewModel.Factory>(
-                key = "month-day-detail-$selectedEpochDay",
-                creationCallback = { factory -> factory.create(selectedEpochDay) },
-            )
-        } else {
-            null
+    val snackbarHostState = remember { SnackbarHostState() }
+    val undoMessage = stringResource(R.string.day_delete_occurrence_snackbar)
+    val undoLabel = stringResource(R.string.day_delete_occurrence_undo)
+    LaunchedEffect(viewModel) {
+        viewModel.events.collectLatest { event ->
+            when (event) {
+                is MonthEvent.OccurrenceDeleted -> {
+                    val result =
+                        snackbarHostState.showSnackbar(
+                            message = undoMessage,
+                            actionLabel = undoLabel,
+                            duration = SnackbarDuration.Short,
+                        )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        viewModel.undoDeleteOccurrence(event.eventId, event.occurrenceDate)
+                    }
+                }
+            }
         }
-    val dayDetail: DayDetailState? = dayViewModel?.let { rememberDayDetailState(it) }
+    }
 
     // FEATURES C5 / docs/ROADMAP.md M3 T4: back clears the selection instead of popping the tab, but
-    // only while there is a selection to clear — otherwise back falls through to Nav3 as usual.
+    // only while there is a selection to clear — otherwise back falls through to Nav3 as usual. At
+    // compact/medium widths the selection is left alone: there is no separate detail destination to
+    // back out of any more.
     BackHandler(enabled = widthClass == WindowWidthClass.EXPANDED && state.selected != null) {
         viewModel.clearSelection()
     }
@@ -164,29 +177,26 @@ fun MonthRoute(
             val month = IfcYearMonth.from(IfcDate.from(date))
             navigator.navigate(MonthKey(month.year, month.month.number))
         },
-        onDayClick = { date ->
-            val gregorian = date.toLocalDate()
-            viewModel.select(gregorian)
-            navigator.navigate(DayKey(gregorian.toEpochDay()))
-        },
         onSelectDay = { date -> viewModel.select(date.toLocalDate()) },
-        dayState = dayDetail?.uiState,
         dayCallbacks =
             DayDetailCallbacks(
                 onEventClick = { eventId -> navigator.navigate(EventEditorKey(eventId = eventId)) },
                 onAddEvent = {
-                    selectedEpochDay?.let { epochDay -> navigator.navigate(EventEditorKey(prefillEpochDay = epochDay)) }
+                    state.summaryDate?.let { date ->
+                        navigator.navigate(EventEditorKey(prefillEpochDay = date.toEpochDay()))
+                    }
                 },
                 onOpenInConverter = {
-                    selectedEpochDay?.let { epochDay -> navigator.navigate(ConverterKey(prefillEpochDay = epochDay)) }
+                    state.summaryDate?.let { date ->
+                        navigator.navigate(ConverterKey(prefillEpochDay = date.toEpochDay()))
+                    }
                 },
-                onRequestDelete = dayViewModel?.let { vm -> vm::requestDelete } ?: {},
-                onConfirmDelete = dayViewModel?.let { vm -> vm::confirmDelete } ?: {},
-                onCancelDelete = dayViewModel?.let { vm -> vm::cancelDelete } ?: {},
-                onClose = viewModel::clearSelection,
+                onRequestDelete = viewModel::requestDelete,
+                onConfirmDelete = viewModel::confirmDelete,
+                onCancelDelete = viewModel::cancelDelete,
             ),
         modifier = modifier,
-        snackbarHostState = dayDetail?.snackbarHostState,
+        snackbarHostState = snackbarHostState,
     )
 }
 
@@ -199,13 +209,13 @@ fun MonthRoute(
  * (`docs/design-plan.md` §4.2, owner note 2): the grid at the top with `showTitle = false` — the app
  * bar above is the page's one title, a [MonthTitlePill] showing the currently visible month; tapping
  * it invokes [onTitleClick] with the year, the zoom-out to the Year view (docs/ARCHITECTURE.md §4;
- * docs/ROADMAP.md M3 T2) — and a [SelectedDaySummary] filling the rest of the page below it, so the
- * grid never floats above dead space. The app bar also carries the weekday-header
- * [ExplainerInfoButton] `showTitle = false` hides along with the grid's own heading (`MonthGrid`'s
- * KDoc calls this trap out by name), a jump-to-date action (FEATURES C7) and the "Today" action,
- * shown only while the pager is away from today's month, which animates the pager to
- * [MonthUiState.todayPage]. Leap Day and Year Day are the grid's band and reach [onDayClick] like any
- * cell (spec §7.2).
+ * docs/ROADMAP.md M3 T2) — and, when [showDayCard], [DayCard] filling the rest of the page below it, so
+ * the grid never floats above dead space. [showDayCard] is `false` only for the expanded-width list
+ * pane (`MonthListDetailScreen`), which shows the same card once, beside the grid, instead of once per
+ * page. The app bar also carries the weekday-header [ExplainerInfoButton], a jump-to-date action
+ * (FEATURES C7) and the "Today" action, shown only while the pager is away from today's month, which
+ * animates the pager to [MonthUiState.todayPage]. Leap Day and Year Day are the grid's band and reach
+ * [onDayClick] like any cell (spec §7.2) — a tap only ever selects the day, never navigates.
  *
  * Opts in to the Material 3 experimental marker only because `TopAppBar`'s default arguments still
  * carry it.
@@ -213,11 +223,17 @@ fun MonthRoute(
  * @param state what to show.
  * @param onPageChanged invoked with the page the pager settles towards, immediately on first
  * composition and on every change; the ViewModel evaluates holidays around it.
- * @param onDayClick invoked with the tapped day — a regular cell or the intercalary band.
+ * @param onDayClick invoked with the tapped day — a regular cell or the intercalary band; only ever
+ * selects the day (`MonthViewModel.select`), never navigates.
  * @param modifier applied to the screen's root.
  * @param onTitleClick invoked with the currently visible page's IFC year when the app bar title is
  * tapped.
  * @param onJumpToDate invoked with the date chosen from the jump-to-date action, in either calendar.
+ * @param showDayCard whether to show [DayCard] below the grid; `false` for the expanded-width list pane,
+ * which shows the card separately in its own detail pane instead.
+ * @param dayCardCallbacks [DayCard]'s own callbacks; ignored when [showDayCard] is `false`.
+ * @param snackbarHostState hosts the undo snackbar after an occurrence delete; `null` shows none (the
+ * expanded-width list pane passes `null`, since its own detail pane hosts one instead).
  * @param pagerState the pager's state; defaults to a remembered state opened on
  * [MonthUiState.currentPage]. Overridable so tests can drive the pager directly.
  */
@@ -230,6 +246,9 @@ fun MonthScreen(
     modifier: Modifier = Modifier,
     onTitleClick: (Int) -> Unit = {},
     onJumpToDate: (LocalDate) -> Unit = {},
+    showDayCard: Boolean = true,
+    dayCardCallbacks: DayDetailCallbacks = EmptyDayDetailCallbacks,
+    snackbarHostState: SnackbarHostState? = null,
     pagerState: PagerState = rememberPagerState(initialPage = state.currentPage) { MonthPages.COUNT },
 ) {
     val currentOnPageChanged by rememberUpdatedState(onPageChanged)
@@ -275,6 +294,11 @@ fun MonthScreen(
                 colors = yearalTopAppBarColors(),
             )
         },
+        snackbarHost = {
+            if (snackbarHostState != null) {
+                SnackbarHost(hostState = snackbarHostState)
+            }
+        },
     ) { padding ->
         HorizontalPager(
             state = pagerState,
@@ -284,8 +308,8 @@ fun MonthScreen(
         ) { page ->
             val month = MonthPages.monthAt(page)
             // Anchor the grid (docs/design-plan.md §4.2, owner note 2): the grid stays at the top of
-            // the page, unweighted, and the selected-day summary fills the rest — only the summary
-            // scrolls on its own, so the grid's own fixed 4x7 shape never moves.
+            // the page, unweighted, and the day card fills the rest — only the card scrolls on its own,
+            // so the grid's own fixed 4x7 shape never moves.
             Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 MonthGrid(
                     month = month,
@@ -298,17 +322,19 @@ fun MonthScreen(
                     showTitle = false,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = PageHorizontalPadding),
                 )
-                // The summary itself is not page-specific (it follows state.selected/state.today, not
-                // this page's month), but beyondViewportPageCount keeps up to three pages composed at
-                // once — rendering it on every one of them would put three identical, off-screen copies
-                // in the semantics tree. Only the page the pager is actually settled on shows it.
-                if (page == pagerState.currentPage) {
-                    SelectedDaySummary(
+                // The card itself is not page-specific (it follows state.selected/state.today, not this
+                // page's month), but beyondViewportPageCount keeps up to three pages composed at once —
+                // rendering it on every one of them would put three identical, off-screen copies in the
+                // semantics tree. Only the page the pager is actually settled on shows it.
+                if (showDayCard && page == pagerState.currentPage) {
+                    DayCard(
                         state = state,
-                        formatter = formatter,
-                        onDetailsClick = {
-                            state.summaryDate?.let { date -> onDayClick(IfcDate.from(date)) }
-                        },
+                        onEventClick = dayCardCallbacks.onEventClick,
+                        onAddEvent = dayCardCallbacks.onAddEvent,
+                        onOpenInConverter = dayCardCallbacks.onOpenInConverter,
+                        onRequestDelete = dayCardCallbacks.onRequestDelete,
+                        onConfirmDelete = dayCardCallbacks.onConfirmDelete,
+                        onCancelDelete = dayCardCallbacks.onCancelDelete,
                         modifier =
                             Modifier
                                 .fillMaxWidth()
@@ -358,6 +384,17 @@ fun MonthScreen(
         )
     }
 }
+
+/** [MonthScreen]'s default [DayDetailCallbacks] for previews and callers that hide the card. */
+private val EmptyDayDetailCallbacks =
+    DayDetailCallbacks(
+        onEventClick = {},
+        onAddEvent = {},
+        onOpenInConverter = {},
+        onRequestDelete = {},
+        onConfirmDelete = {},
+        onCancelDelete = {},
+    )
 
 /**
  * The app-bar title (`docs/design-plan.md` §4.2, owner notes 3–4): a visibly tappable pill — the

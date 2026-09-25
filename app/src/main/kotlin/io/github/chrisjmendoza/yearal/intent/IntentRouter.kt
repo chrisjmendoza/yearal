@@ -44,7 +44,7 @@ object IntentRouter {
     /**
      * [WidgetIntents.ACTION_OPEN_DAY]: the epoch day must be present as an actual `Long` and must
      * convert to a date within `:core:calendar`'s supported years,
-     * [IfcDate.MIN_YEAR]..[IfcDate.MAX_YEAR] — the same fail-soft check `DayViewModel.epochDayToDate`
+     * [IfcDate.MIN_YEAR]..[IfcDate.MAX_YEAR] — the same fail-soft check `MonthPages.selectedDateOf`
      * and `EventEditorViewModel.validEpochDayToDate` already apply to their own untrusted epoch-day
      * inputs, kept here rather than shared because both are private to their own module.
      * `Long.MIN_VALUE`/`Long.MAX_VALUE` fail at `LocalDate.ofEpochDay` itself; a year 0 or year 10000

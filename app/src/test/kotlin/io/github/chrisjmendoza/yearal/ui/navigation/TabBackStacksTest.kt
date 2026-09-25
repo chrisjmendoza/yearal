@@ -4,7 +4,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import io.github.chrisjmendoza.yearal.core.navigation.ConverterKey
-import io.github.chrisjmendoza.yearal.core.navigation.DayKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
 import io.github.chrisjmendoza.yearal.core.navigation.EventListKey
 import io.github.chrisjmendoza.yearal.core.navigation.MonthKey
@@ -51,19 +50,19 @@ class TabBackStacksTest {
         val tabs = tabs()
         val month = MonthKey(2026, 10)
         tabs.select(TopLevelDestination.CALENDAR, month)
-        tabs.navigate(DayKey(20_713))
+        tabs.navigate(EventEditorKey(eventId = 1))
         tabs.select(TopLevelDestination.CONVERT, ConverterKey())
         tabs.backStack shouldContainExactly listOf(TodayKey, ConverterKey())
         tabs.select(TopLevelDestination.CALENDAR, MonthKey(2027, 1))
         // The root given on a later selection is ignored: the tab already has a stack.
-        tabs.backStack shouldContainExactly listOf(TodayKey, month, DayKey(20_713))
+        tabs.backStack shouldContainExactly listOf(TodayKey, month, EventEditorKey(eventId = 1))
     }
 
     @Test
     fun `back pops within a tab before leaving it`() {
         val tabs = tabs()
         tabs.select(TopLevelDestination.CALENDAR, MonthKey(2026, 10))
-        tabs.navigate(DayKey(20_713))
+        tabs.navigate(EventEditorKey(eventId = 1))
         tabs.goBack()
         tabs.selected shouldBe TopLevelDestination.CALENDAR
         tabs.backStack shouldContainExactly listOf(TodayKey, MonthKey(2026, 10))
@@ -75,8 +74,8 @@ class TabBackStacksTest {
     fun `re-selecting the current tab pops it to its root`() {
         val tabs = tabs()
         tabs.select(TopLevelDestination.MORE, MoreKey)
-        tabs.navigate(DayKey(1))
-        tabs.navigate(DayKey(2))
+        tabs.navigate(EventEditorKey(eventId = 1))
+        tabs.navigate(EventEditorKey(eventId = 2))
         tabs.select(TopLevelDestination.MORE, MoreKey)
         tabs.backStack shouldContainExactly listOf(TodayKey, MoreKey)
     }
@@ -139,7 +138,7 @@ class TabBackStacksTest {
     fun `AppRoute CurrentMonth replaces a stale Calendar stack, not just switches to it`() {
         val tabs = tabs()
         tabs.select(TopLevelDestination.CALENDAR, MonthKey(2020, 1))
-        tabs.navigate(DayKey(1))
+        tabs.navigate(EventEditorKey(eventId = 1))
 
         tabs.applyRoute(AppRoute.CurrentMonth, today = LocalDate.of(2026, 9, 17))
 
@@ -147,7 +146,7 @@ class TabBackStacksTest {
     }
 
     @Test
-    fun `AppRoute Day opens the Calendar tab on that day's month, then the day itself`() {
+    fun `AppRoute Day opens the Calendar tab on that day's month, selected`() {
         val tabs = tabs()
         val epochDay = LocalDate.of(2026, 9, 17).toEpochDay()
 
@@ -155,19 +154,21 @@ class TabBackStacksTest {
 
         applied shouldBe true
         tabs.selected shouldBe TopLevelDestination.CALENDAR
-        tabs.backStack shouldContainExactly listOf(TodayKey, MonthKey(2026, 10), DayKey(epochDay))
+        tabs.backStack shouldContainExactly
+            listOf(TodayKey, MonthKey(2026, 10, selectedEpochDay = epochDay))
     }
 
     @Test
     fun `AppRoute Day replaces a stale Calendar stack entirely`() {
         val tabs = tabs()
         tabs.select(TopLevelDestination.CALENDAR, MonthKey(2020, 1))
-        tabs.navigate(DayKey(999))
+        tabs.navigate(EventEditorKey(eventId = 1))
         val epochDay = LocalDate.of(2026, 9, 17).toEpochDay()
 
         tabs.applyRoute(AppRoute.Day(epochDay), today = null)
 
-        tabs.backStack shouldContainExactly listOf(TodayKey, MonthKey(2026, 10), DayKey(epochDay))
+        tabs.backStack shouldContainExactly
+            listOf(TodayKey, MonthKey(2026, 10, selectedEpochDay = epochDay))
     }
 
     @Test

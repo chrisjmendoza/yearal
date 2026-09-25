@@ -4,6 +4,7 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.navigation.MonthKey
+import java.time.LocalDate
 
 /**
  * The page index space of the month pager: one page per IFC month of the UI year range
@@ -54,4 +55,23 @@ object MonthPages {
             year = key.year.coerceIn(FIRST_YEAR, LAST_YEAR),
             month = IfcMonth.of(key.month.coerceIn(1, IfcMonth.MONTHS_PER_YEAR)),
         )
+
+    /**
+     * The day [key] asks the pager to select on open ([MonthKey.selectedEpochDay]), or `null` when
+     * there is none or it fails to resolve. Unlike [monthOf], which always returns a month by clamping,
+     * this fails soft to `null` — the same treatment [ConverterKey][io.github.chrisjmendoza.yearal.core.navigation.ConverterKey]'s
+     * and [EventEditorKey][io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey]'s own prefill
+     * epoch days get — because a stray selection is silently safe to drop, unlike a month, which the
+     * screen must always show something for.
+     *
+     * @return the selected date, only when [MonthKey.selectedEpochDay] both converts with
+     * `LocalDate.ofEpochDay` and falls inside [FIRST_YEAR]..[LAST_YEAR], the pager's own UI year range
+     * (spec §7.1) — the same range [monthOf] clamps a month into, so a non-null result here is always a
+     * day the month [monthOf] returns for the same key can actually show.
+     */
+    fun selectedDateOf(key: MonthKey): LocalDate? {
+        val epochDay = key.selectedEpochDay ?: return null
+        val date = runCatching { LocalDate.ofEpochDay(epochDay) }.getOrNull() ?: return null
+        return date.takeIf { it.year in FIRST_YEAR..LAST_YEAR }
+    }
 }

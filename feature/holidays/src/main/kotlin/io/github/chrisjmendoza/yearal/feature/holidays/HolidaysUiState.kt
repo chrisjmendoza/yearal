@@ -35,7 +35,8 @@ data class HolidaySetRow(
  * One holiday occurrence on the chosen year's list (ROADMAP M6 T2 "a per-year list with both dates").
  *
  * @property epochDay the Gregorian date of this occurrence, as `LocalDate.toEpochDay()` (CLAUDE.md rule
- * 4); tapping the row navigates to `DayKey(epochDay)`.
+ * 4); tapping the row navigates to the occurrence's month, selected (`MonthKey(year, month,
+ * selectedEpochDay = epochDay)`).
  * @property name the holiday's display name, with an "(observed)" suffix when
  * [io.github.chrisjmendoza.yearal.core.domain.holiday.HolidayOccurrence.observed] is `true`. Holiday
  * names come from the bundled packs, never from this module's string resources (CLAUDE.md rule 9).

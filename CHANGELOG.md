@@ -227,6 +227,15 @@ Architecture, tooling and CI:
 
 ### Changed
 
+- **No more day popup.** Tapping a day on the Month grid now just selects it: the card below the grid is
+  the whole day detail. It gained what only the popup had — the `IFC`-prefixed numeric date, both labelled
+  weekdays, the day / week / quarter line, tappable events (long-press to delete, with undo), "Add event"
+  and "Open in converter" — and lost its "Details" button. Opening a day from the Holidays list, the
+  converter's "Open day", a widget or a notification now opens the Month on that day, selected. On tablets
+  and unfolded foldables the same card is the right-hand pane.
+- The Today card shows today's weekday above the date. It is the **real** weekday (the one on your phone's
+  clock), not the IFC one — those differ in most years, and the labelled pair is still just below.
+
 - **Existing installs move from Material You to the Yearal palette.** `colorSource` replaces the old
   `dynamicColor` boolean and now defaults to `BRAND`, so a fresh or updated install shows the teal / cream
   / amber brand palette instead of a wallpaper-derived scheme without the user touching anything. Switch

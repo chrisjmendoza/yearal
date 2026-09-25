@@ -53,6 +53,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
+import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
@@ -60,8 +62,9 @@ import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.holidays.BundledHolidayPacks
-import io.github.chrisjmendoza.yearal.core.navigation.DayKey
+import io.github.chrisjmendoza.yearal.core.navigation.MonthKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
+import java.time.LocalDate
 import io.github.chrisjmendoza.yearal.core.designsystem.R as DesignSystemR
 
 /**
@@ -87,9 +90,11 @@ private val HolidayDiamondSize = 8.dp
  * The Holidays screen (docs/FEATURES.md H1, H2, H3, H5, H7; ROADMAP M6 T2): collects
  * [HolidaysViewModel.uiState] with the lifecycle and renders it through the stateless
  * [HolidaysScreen]. This is the composable `:app` places behind `HolidaysKey`. Tapping a row of the
- * year list pushes [DayKey] for that occurrence's date through [navigator] (CLAUDE.md rule 10).
+ * year list pushes the [MonthKey] of that occurrence's month, selected, through [navigator] — the
+ * Month pager opens with its day card already showing that occurrence (CLAUDE.md rule 10; the popup
+ * Day detail this used to push has been merged into the day card, docs/ROADMAP.md).
  *
- * @param navigator receives the [DayKey] of a tapped occurrence.
+ * @param navigator receives the [MonthKey] of a tapped occurrence's month, with that day selected.
  * @param modifier applied to the screen's root [Scaffold].
  */
 @Composable
@@ -104,7 +109,11 @@ fun HolidaysRoute(
         onBack = navigator::goBack,
         onHolidaySetEnabledChanged = viewModel::setHolidaySetEnabled,
         onGoToYear = viewModel::goToYear,
-        onRowClick = { epochDay -> navigator.navigate(DayKey(epochDay)) },
+        onRowClick = { epochDay ->
+            val date = LocalDate.ofEpochDay(epochDay)
+            val month = IfcYearMonth.from(IfcDate.from(date))
+            navigator.navigate(MonthKey(month.year, month.month.number, selectedEpochDay = epochDay))
+        },
         modifier = modifier,
     )
 }
