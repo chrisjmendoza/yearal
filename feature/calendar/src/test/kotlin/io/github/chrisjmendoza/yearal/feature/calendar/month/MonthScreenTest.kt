@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -134,6 +135,20 @@ class MonthScreenTest {
         compose.onNode(hasText("October 2026").and(hasClickAction())).assertHeightIsAtLeast(48.dp)
     }
 
+    // a11y audit finding #6: the jump-to-date IconButton has no size modifier of its own, and
+    // Modifier.minimumInteractiveComponentSize() — the modifier IconButton relies on internally —
+    // measures no effect at all under this project's Robolectric harness (see MonthTitlePill's KDoc
+    // below), so it carries an explicit heightIn/widthIn floor instead.
+    @Test
+    fun `the jump-to-date action keeps a 48dp touch target`() {
+        show(state(october2026))
+
+        compose
+            .onNodeWithContentDescription("Jump to date")
+            .assertHeightIsAtLeast(48.dp)
+            .assertWidthIsAtLeast(48.dp)
+    }
+
     @Test
     fun `the app bar carries the weekday explainer the hidden grid heading used to show`() {
         show(state(october2026))
@@ -189,6 +204,15 @@ class MonthScreenTest {
         show(state(october2026, today = null))
 
         compose.onAllNodes(todayAction).assertCountEquals(0)
+    }
+
+    // a11y audit finding #7: Material3's TextButton defaults to ~40dp and is not boosted by
+    // minimumInteractiveComponentSize(), so the "Today" action carries an explicit heightIn floor.
+    @Test
+    fun `the Today action keeps a 48dp touch target`() {
+        show(state(june2028))
+
+        compose.onNode(todayAction).assertHeightIsAtLeast(48.dp)
     }
 
     @Test

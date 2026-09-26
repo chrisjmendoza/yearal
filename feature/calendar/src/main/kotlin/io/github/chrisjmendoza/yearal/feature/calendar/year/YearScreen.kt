@@ -4,6 +4,8 @@ import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -131,20 +133,43 @@ fun YearScreen(
                     )
                 },
                 actions = {
-                    IconButton(onClick = onPreviousYear, enabled = state.canGoPrevious) {
+                    // heightIn/widthIn floor the tap target at 48dp (docs/ARCHITECTURE.md §4
+                    // "Accessibility"): under this project's Robolectric harness,
+                    // Modifier.minimumInteractiveComponentSize() — the modifier IconButton relies on
+                    // internally — measures no effect at all (see MonthTitlePill's KDoc in
+                    // MonthScreen.kt), so IconButton's own default sizing cannot be trusted either
+                    // (a11y audit finding #6).
+                    val iconButtonTouchTarget =
+                        Modifier
+                            .heightIn(min = Dimens.DayCellMinSize)
+                            .widthIn(min = Dimens.DayCellMinSize)
+                    IconButton(
+                        onClick = onPreviousYear,
+                        enabled = state.canGoPrevious,
+                        modifier = iconButtonTouchTarget,
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                             contentDescription = stringResource(R.string.year_previous),
                         )
                     }
-                    IconButton(onClick = onNextYear, enabled = state.canGoNext) {
+                    IconButton(
+                        onClick = onNextYear,
+                        enabled = state.canGoNext,
+                        modifier = iconButtonTouchTarget,
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                             contentDescription = stringResource(R.string.year_next),
                         )
                     }
                     if (todayYear != null && todayYear != state.year) {
-                        TextButton(onClick = { onGoToYear(todayYear) }) {
+                        // heightIn alone: Material3's own TextButton defaults to ~40dp and is not
+                        // boosted by minimumInteractiveComponentSize() (a11y audit finding #7).
+                        TextButton(
+                            onClick = { onGoToYear(todayYear) },
+                            modifier = Modifier.heightIn(min = Dimens.DayCellMinSize),
+                        ) {
                             Text(stringResource(R.string.month_today))
                         }
                     }

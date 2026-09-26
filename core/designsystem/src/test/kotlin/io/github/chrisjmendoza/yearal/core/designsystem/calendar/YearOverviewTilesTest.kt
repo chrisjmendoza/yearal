@@ -2,20 +2,25 @@ package io.github.chrisjmendoza.yearal.core.designsystem.calendar
 
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onChildren
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
@@ -172,6 +177,28 @@ class YearOverviewTilesTest {
         tile().performClick()
 
         clicks shouldBe 1
+    }
+
+    // Finding #4: mergeDescendants = true must fold the month name, Leap Day note and marks into the
+    // tile's one node, or TalkBack speaks the merged description and then re-announces the inner
+    // Texts as separate stops.
+
+    @Test
+    fun `a mini-month tile's merged node has no separately reachable children`() {
+        val tag = YearOverviewTestTags.MINI_MONTH_TILE_PREFIX + IfcMonth.JUNE.number
+        // June, a leap year: the Leap Day indicator adds an extra Text and Icon to fold in.
+        compose.setContent {
+            IfcTheme(dynamicColor = false) {
+                YearMiniMonthTile(
+                    month = IfcYearMonth(2028, IfcMonth.JUNE),
+                    today = null,
+                    eventDates = emptySet(),
+                    onClick = {},
+                )
+            }
+        }
+
+        compose.onNodeWithTag(tag).onChildren().assertCountEquals(0)
     }
 
     @Test
@@ -333,6 +360,18 @@ class YearOverviewTilesTest {
     private companion object {
         /** Where inside a plain square to sample its fill: past the inset and corner, short of the number. */
         const val PLAIN_FILL_PROBE_FRACTION = 0.2f
+
+        /** Material 3's minimum touch target (docs/ARCHITECTURE.md §4 "Accessibility"). */
+        val MIN_TOUCH_TARGET = 48.dp
+
+        /**
+         * The narrowest a tile can be in production: the Year screen's
+         * `LazyVerticalGrid(GridCells.Adaptive(160.dp))` (feature/calendar's YearScreen.kt,
+         * `TileMinWidth`) guarantees every column at least this wide. Duplicated here as a literal
+         * because this module cannot depend on feature/calendar — keep it in sync if that constant
+         * ever changes.
+         */
+        val YEAR_SCREEN_NARROWEST_TILE_WIDTH = 160.dp
     }
 
     // YearDayTile (docs/design-plan.md §4.3/§8 decision 4: the intercalary fill returned).
@@ -346,6 +385,17 @@ class YearOverviewTilesTest {
         }
 
         compose.onNodeWithContentDescription(yearDayDescription).assertIsDisplayed()
+    }
+
+    @Test
+    fun `the Year Day tile's merged node has no separately reachable children`() {
+        compose.setContent {
+            IfcTheme(dynamicColor = false) {
+                YearDayTile(yearDay = yearDay2026, isToday = false, hasEvent = false, onClick = {})
+            }
+        }
+
+        compose.onNodeWithContentDescription(yearDayDescription).onChildren().assertCountEquals(0)
     }
 
     @Test
@@ -390,5 +440,53 @@ class YearOverviewTilesTest {
 
         tile().assertIsDisplayed()
         compose.onNodeWithContentDescription(yearDayDescription).assertIsDisplayed()
+    }
+
+    // Finding #19: neither tile pins its own minimum size the way DayCell (defaultMinSize) and
+    // IntercalaryBand (heightIn) do. In production that is covered by the caller instead: the Year
+    // screen's `LazyVerticalGrid(GridCells.Adaptive(160.dp))` (feature/calendar's YearScreen.kt,
+    // `TileMinWidth`) guarantees every tile at least 160dp wide, and each tile's own title, grid/rows
+    // and padding put its natural height well past 48dp at that width. This pins both tiles at that
+    // narrowest production width in both directions; no change to either composable was needed. (This
+    // module cannot depend on feature/calendar to reference TileMinWidth directly, so the 160dp floor
+    // is duplicated here as a literal — keep it in sync if that constant ever changes.)
+
+    @Test
+    fun `a mini-month tile clears 48dp at the Year screen's narrowest tile width`() {
+        compose.setContent {
+            IfcTheme(dynamicColor = false) {
+                YearMiniMonthTile(
+                    // June in a leap year is the tallest tile: it adds the Leap Day indicator row.
+                    month = IfcYearMonth(2028, IfcMonth.JUNE),
+                    today = null,
+                    eventDates = emptySet(),
+                    onClick = {},
+                    modifier = Modifier.width(YEAR_SCREEN_NARROWEST_TILE_WIDTH),
+                )
+            }
+        }
+
+        val node = compose.onNodeWithTag(YearOverviewTestTags.MINI_MONTH_TILE_PREFIX + IfcMonth.JUNE.number)
+        node.assertHeightIsAtLeast(MIN_TOUCH_TARGET)
+        node.assertWidthIsAtLeast(MIN_TOUCH_TARGET)
+    }
+
+    @Test
+    fun `the Year Day tile clears 48dp at the Year screen's narrowest tile width`() {
+        compose.setContent {
+            IfcTheme(dynamicColor = false) {
+                YearDayTile(
+                    yearDay = yearDay2026,
+                    isToday = false,
+                    hasEvent = false,
+                    onClick = {},
+                    modifier = Modifier.width(YEAR_SCREEN_NARROWEST_TILE_WIDTH),
+                )
+            }
+        }
+
+        val node = compose.onNodeWithContentDescription(yearDayDescription)
+        node.assertHeightIsAtLeast(MIN_TOUCH_TARGET)
+        node.assertWidthIsAtLeast(MIN_TOUCH_TARGET)
     }
 }

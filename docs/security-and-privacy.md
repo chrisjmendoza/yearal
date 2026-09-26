@@ -125,6 +125,7 @@ Addresses A1 only. Off by default.
 - Default: titles shown on an agenda-style widget (that is its purpose), but the configuration screen makes the choice visible at placement time rather than burying it.
 - **Lock-screen widgets:** since Android 16 QPR2, phone lock screens can host widgets, and **all widgets are eligible by default**; opt out by declaring widget category `not_keyguard` in the app-widget info XML placed in an `xml-36` resource folder ([Android Developers Blog FAQ](https://android-developers.googleblog.com/2025/03/widgets-on-lock-screen-faq.html)). **Decision:** the date-only widget stays lock-screen eligible; any widget capable of showing event titles declares `not_keyguard`. Revisit later if users ask for a redacted lock-screen agenda. **Ruled on the Month widget's event dots (ROADMAP M5 T6):** a dot is a plain per-day boolean from `ObserveAgendaUseCase.presence` — it reveals that *something* exists on a day, never a title, a count, or which calendar — so it is not "capable of showing event titles" in the sense this decision means, and the Month widget stays `home_screen`-only like the date-only Today widget, without declaring `not_keyguard`.
 - Widgets must not cache titles in `RemoteViews` state after privacy mode is turned on: toggling the setting forces an immediate update of all widget instances.
+- **TalkBack cell descriptions follow the same rule as the marks they describe.** The Month widget's per-day-cell accessibility descriptions (ROADMAP M8 T1, accessibility audit finding #1; `docs/ARCHITECTURE.md` §5) carry presence, never a title: `today`/`holiday`/`has events` qualifiers only, exactly like the visual holiday diamond and event dot they describe — never a holiday's name, never an event's title or count. A screen reader must not learn anything from a cell's spoken description that a sighted user could not already see on the cell itself.
 
 ### 3.3 Notifications — NEEDED, ships with reminders (effort S)
 
@@ -364,6 +365,18 @@ Also:
   `text/plain` behind the system chooser and a plain-text clipboard copy of a converted date are allowed. Implicit by
   design; text only — no URI, file, component, or grant flags; nothing is logged. Event content is never shared this
   way without its own review.
+- **"Send feedback" email** (done M8 T6; FEATURES P11): a user-initiated `ACTION_SENDTO` with a bare `mailto:` data
+  URI behind the system chooser — that data scheme restricts the chooser to email apps by construction, same as
+  `ACTION_SEND` restricts the converter's chooser to text targets. **Needs no permission**: like `WRITE_CALENDAR`'s
+  `ACTION_INSERT` intent (§5.1), the app never talks to an email server itself — it only asks the OS to open one.
+  Carries `EXTRA_EMAIL` (the fixed feedback address, `feature/settings`'s own `feedback_email` string resource),
+  `EXTRA_SUBJECT` (a version-stamped subject) and `EXTRA_TEXT` — a body built by the pure function
+  `FeedbackBody.kt#buildFeedbackBody`, whose parameter list is the allow-list: app version name and code, Android
+  release and SDK level, device manufacturer and model, the app's locale, the current colour source / theme mode /
+  weekday-display setting, and the count (never the names) of enabled holiday sets. **It never contains event
+  content or holiday-pack content** — there is no parameter through which either could reach the body — and nothing
+  is logged. No URI grant, no attachment. When no email app resolves, the row shows the address as plain, selectable
+  text instead of a dead control or a crash.
 - **Android Lint as the enforcement tool:** run lint in CI with the security category as errors (`ExportedReceiver`, `ExportedContentProvider`, `UnspecifiedImmutableFlag`, `MutableImplicitPendingIntent`, `UnsafeIntentLaunch`, `SetJavaScriptEnabled`, `TrustAllX509TrustManager`, …). It understands Android semantics better than generic SAST.
 - Room: parameterised queries only; no `@RawQuery` built by string concatenation; escape user text in any FTS `MATCH` expression.
 
@@ -400,6 +413,7 @@ Also:
 | Crash reporting SDK (Crashlytics, Sentry, …) | **NOT NEEDED.** | Each needs `INTERNET`, changes Data safety answers (crash logs, diagnostics, device IDs), and Firebase would close the door on F-Droid. |
 | Crash visibility | **Play Console Android vitals only** (MVP on Play) | Collected by Google Play from users who opted in at the OS level — no SDK, no code, no app-side collection. Keep R8 mapping files so traces are readable (AAB uploads include them). |
 | User-driven diagnostics | **Later, optional (S–M):** a local, size-capped crash log (stack traces only — no event content) with a "Copy / share diagnostics" button that the user can paste into a GitHub issue. | Gives debuggability without any automatic transmission. Log lives in `noBackupFilesDir`. |
+| "Send feedback" email | **Done (M8 T6):** More → Send feedback opens an `ACTION_SENDTO` `mailto:` intent (§6.3) prefilled with a body of device/app/settings diagnostics only — no crash log, no event or holiday-pack content. | Bug reporting without a backend: the OS's own email chooser, needing no permission and sending nothing until the user hits send in their own email app. |
 | Google Play Services / Firebase dependencies | **None.** | Not needed; preserves the no-network claim and F-Droid eligibility. |
 | In-app privacy screen | **MVP (S):** Settings → Privacy with the statement text, link to hosted policy, permission explanations, "Delete all data", open-source licences. | Play requires an in-app policy link anyway. |
 
@@ -421,6 +435,11 @@ Host at GitHub Pages; mirror in-app. Keep it under one screen where possible.
 12. **Children** — not directed at children; collects nothing from anyone.
 13. **Security reports** — link to `SECURITY.md`.
 14. **Changes** — changelog via the public Git history; material changes announced in release notes.
+
+The full drafts live in [privacy-policy.md](privacy-policy.md) (the end-user version to publish on GitHub Pages)
+and [play-data-safety.md](play-data-safety.md) (the Play Console Data safety and content-rating answers,
+owner-facing). Both carry hidden `<!-- source -->` comments tracing every claim back to this document, the
+manifests or the Privacy screen strings; re-verify them whenever a permission or the backup rules change.
 
 ---
 

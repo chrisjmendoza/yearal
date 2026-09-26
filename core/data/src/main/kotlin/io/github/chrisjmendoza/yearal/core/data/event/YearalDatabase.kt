@@ -44,7 +44,14 @@ public abstract class YearalDatabase : RoomDatabase() {
     public abstract fun reminderDao(): ReminderDao
 
     public companion object {
-        private const val FILE_NAME = "yearal.db"
+        /**
+         * The on-disk database file name (`docs/ARCHITECTURE.md` §3.2), inside Auto Backup's default
+         * include set (`docs/security-and-privacy.md` §4.1). `internal`, not `private`, only so
+         * `LegacyDatabaseOpenTest` (ROADMAP M8 T5) can seed a schema-v1 database at the exact path
+         * [create] will later open with the real production builder; nothing outside `:core:data`'s
+         * own test source set should ever depend on this literal.
+         */
+        internal const val FILE_NAME: String = "yearal.db"
 
         /**
          * The file-backed production database under `filesDir` (Auto Backup's default include set,

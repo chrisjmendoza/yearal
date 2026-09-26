@@ -13,6 +13,19 @@ extensions.configure<LibraryExtension> {
     configureIfcAndroid(this)
 }
 
+// Module-boundary check (ROADMAP M0 T4), every Android library module: only `:app` wires a feature
+// and `:core:data` (or `:core:scheduling`, `:core:devicecalendar`, `:widget`) together, so nothing that
+// applies this plugin — `:core:designsystem`, `:core:navigation`, `:core:data` itself,
+// `:core:scheduling`, `:widget`, and (through `ifc.android.feature`, which applies this plugin too)
+// every `:feature:*` module — may depend on a feature or on `:core:data` (docs/ARCHITECTURE.md §2
+// "Dependency direction"; `:widget` "may not depend on :feature:calendar" and "cannot depend on :app"
+// are the same rule stated there for `:widget` specifically; CLAUDE.md rule 10).
+forbidProjectDependencies(
+    listOf(":feature:", ":core:data"),
+    "an Android library module never depends on a feature or on :core:data; only :app wires those " +
+        "together for Hilt (CLAUDE.md rule 10; docs/ARCHITECTURE.md §2 \"Dependency direction\").",
+)
+
 dependencies {
     "testImplementation"(libs.findLibrary("junit4").get())
     "testImplementation"(libs.findLibrary("kotest-assertions-core").get())

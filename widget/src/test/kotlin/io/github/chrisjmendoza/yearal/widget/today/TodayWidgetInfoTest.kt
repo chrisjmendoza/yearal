@@ -58,11 +58,17 @@ class TodayWidgetInfoTest {
         category shouldBe "0x1"
     }
 
+    /**
+     * `minHeight`/`minResizeHeight` were raised from 40dp to 48dp (ROADMAP M8 T1, accessibility audit
+     * finding #15) to clear the touch-target floor for the widget's single tap region; see the XML
+     * file's own comment. [TodayGlanceWidget.SMALL]'s own height was moved to match, so this still
+     * matches that breakpoint exactly.
+     */
     @Test
     fun `min size matches the small responsive breakpoint`() {
         val attrs = rootAttributes()
         magnitudeOf(attrs.getValue("minWidth")) shouldBe 110f
-        magnitudeOf(attrs.getValue("minHeight")) shouldBe 40f
+        magnitudeOf(attrs.getValue("minHeight")) shouldBe 48f
     }
 
     @Test

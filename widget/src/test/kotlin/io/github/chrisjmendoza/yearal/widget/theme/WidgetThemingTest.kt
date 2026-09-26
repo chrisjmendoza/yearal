@@ -183,5 +183,13 @@ class WidgetThemingTest {
         translucent.alpha shouldBe 0.4f
     }
 
+    @Test
+    fun `the chip shows strictly below the threshold, never at or above it`() {
+        shouldShowLowOpacityChip(LOW_OPACITY_CHIP_THRESHOLD - 1) shouldBe true
+        shouldShowLowOpacityChip(0) shouldBe true
+        shouldShowLowOpacityChip(LOW_OPACITY_CHIP_THRESHOLD) shouldBe false
+        shouldShowLowOpacityChip(100) shouldBe false
+    }
+
     // endregion
 }

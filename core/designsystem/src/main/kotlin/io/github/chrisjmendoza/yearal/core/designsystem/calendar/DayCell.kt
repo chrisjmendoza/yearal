@@ -110,7 +110,7 @@ fun DayCell(
                 .clip(shape)
                 .background(containerColor)
                 .selectable(selected = isSelected, role = Role.Button, onClick = onClick)
-                .semantics { contentDescription = description },
+                .semantics(mergeDescendants = true) { contentDescription = description },
     ) {
         if (isToday) {
             Box(

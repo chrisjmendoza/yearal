@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -229,6 +230,18 @@ class ConverterScreenTest {
         compose.onNodeWithText("GREGORIAN", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("IFC: September 8, 2026").assertIsDisplayed()
         compose.onNodeWithContentDescription("Gregorian: Thursday, September 17, 2026").assertIsDisplayed()
+    }
+
+    // a11y audit (docs/ARCHITECTURE.md §4 "Accessibility") finding #13: the result card is a polite
+    // live region, the same pattern InvalidResult already uses, so a screen reader announces a new
+    // conversion as it replaces the old one.
+    @Test
+    fun `the result card is announced as a polite live region`() {
+        show(loaded(specToday, chosen = false))
+
+        compose
+            .onNode(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
+            .assertIsDisplayed()
     }
 
     @Test

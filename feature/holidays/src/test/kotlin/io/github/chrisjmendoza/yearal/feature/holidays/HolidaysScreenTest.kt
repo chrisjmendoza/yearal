@@ -11,11 +11,13 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -24,6 +26,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.kotest.matchers.collections.shouldHaveSize
@@ -263,6 +266,25 @@ class HolidaysScreenTest {
         compose.onNodeWithContentDescription("Back").assertHasClickAction().performClick()
 
         backPresses shouldBe 1
+    }
+
+    // a11y audit (docs/ARCHITECTURE.md §4 "Accessibility") finding #10: Back, Previous year and Next
+    // year are bare IconButtons with no guaranteed touch target under this project's Robolectric harness.
+    @Test
+    fun `Back, Previous year and Next year keep an explicit 48dp touch target`() {
+        show(loaded())
+
+        compose.onNodeWithContentDescription("Back").assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
+        compose
+            .onNodeWithContentDescription("Previous year")
+            .performScrollTo()
+            .assertHeightIsAtLeast(48.dp)
+            .assertWidthIsAtLeast(48.dp)
+        compose
+            .onNodeWithContentDescription("Next year")
+            .performScrollTo()
+            .assertHeightIsAtLeast(48.dp)
+            .assertWidthIsAtLeast(48.dp)
     }
 
     @Test

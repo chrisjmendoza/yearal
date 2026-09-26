@@ -34,8 +34,60 @@
     <!-- Supporting line under the Privacy row. -->
     <string name="more_privacy_detail">What the app stores, and what it never does</string>
 
+    <!-- Row that opens an email compose intent to report a bug or suggestion (ROADMAP M8 T6). -->
+    <string name="more_feedback">Send feedback</string>
+
+    <!-- Supporting line under the Send feedback row. -->
+    <string name="more_feedback_detail">Report a bug or suggestion by email</string>
+
     <!-- Supporting line of the About row. %1$s = the app's version name, e.g. "0.1.0". -->
     <string name="more_version">Version %1$s</string>
+
+    <!-- ===== Send feedback (ROADMAP M8 T6; docs/security-and-privacy.md §6.3) =====
+         An ACTION_SENDTO "mailto:" intent, restricted to email apps and needing no permission. The
+         body is assembled by FeedbackBody.kt's buildFeedbackBody from these lines plus plain values:
+         device, app and settings diagnostics only, never event or holiday-pack content. -->
+
+    <!-- The feedback address: the owner's own contact, already public in the repo's commit history
+         (github.com/chrisjmendoza). Change it here; this is the only place it is written. -->
+    <string name="feedback_email">chrisjmendoza@gmail.com</string>
+
+    <!-- Email subject. %1$s = the app's version name, e.g. "0.1.0". -->
+    <string name="feedback_subject">Yearal feedback (v%1$s)</string>
+
+    <!-- Line above the diagnostics block, inviting the user to describe the problem. -->
+    <string name="feedback_body_prompt">Describe what happened or what you\'d like to see:</string>
+
+    <!-- Heading introducing the diagnostics block. -->
+    <string name="feedback_body_diagnostics_heading">Diagnostics (no event content):</string>
+
+    <!-- %1$s = versionName (e.g. "0.1.0"), %2$d = versionCode (e.g. 3). -->
+    <string name="feedback_body_app_version">App version: %1$s (%2$d)</string>
+
+    <!-- %1$s = Build.VERSION.RELEASE (e.g. "14"), %2$d = Build.VERSION.SDK_INT (e.g. 34). -->
+    <string name="feedback_body_android_version">Android: %1$s (SDK %2$d)</string>
+
+    <!-- %1$s = Build.MANUFACTURER, %2$s = Build.MODEL. -->
+    <string name="feedback_body_device">Device: %1$s %2$s</string>
+
+    <!-- %1$s = the app's current locale as a language tag, e.g. "en-US". -->
+    <string name="feedback_body_locale">Locale: %1$s</string>
+
+    <!-- %1$s = UserSettings.colorSource's enum name, e.g. "BRAND". -->
+    <string name="feedback_body_color_source">Colour source: %1$s</string>
+
+    <!-- %1$s = UserSettings.themeMode's enum name, e.g. "SYSTEM". -->
+    <string name="feedback_body_theme_mode">Theme: %1$s</string>
+
+    <!-- %1$s = UserSettings.weekdayDisplay's enum name, e.g. "BOTH". -->
+    <string name="feedback_body_weekday_display">Weekday display: %1$s</string>
+
+    <!-- %1$d = UserSettings.enabledHolidaySets.size, the count only; never which ones. -->
+    <string name="feedback_body_holiday_sets">Enabled holiday sets: %1$d</string>
+
+    <!-- Shown inline (no snackbar, no toast) when no email app can handle the intent; the address
+         itself follows as separate, selectable text so the user can copy it by hand. -->
+    <string name="feedback_email_unavailable">No email app is set up on this device. Send feedback to:</string>
 
     <!-- ===== Settings screen ===== -->
 

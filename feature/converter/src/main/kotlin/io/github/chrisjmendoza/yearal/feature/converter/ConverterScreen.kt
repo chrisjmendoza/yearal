@@ -374,7 +374,9 @@ private fun InvalidResult() {
  * `IFC {ifcLong} ({numeric}) = Gregorian {gregorianLong}` — e.g. `IFC September 8, 2026
  * (IFC 2026-10-08) = Gregorian Thursday, September 17, 2026` — so the shared text always carries the
  * `IFC` marker and the Gregorian date (CLAUDE.md rule 5) before it reaches [copyConversion] or
- * [shareConversion].
+ * [shareConversion]. The card is a polite live region, so a screen reader announces a new conversion
+ * as it replaces the old one (docs/ARCHITECTURE.md §4 "Accessibility"), the same pattern [InvalidResult]
+ * already uses.
  */
 @Composable
 private fun ConvertedResult(
@@ -390,7 +392,9 @@ private fun ConvertedResult(
         color = YearalTheme.colors.heroContainer,
         contentColor = YearalTheme.colors.onHero,
         shape = MaterialTheme.shapes.large,
-        modifier = Modifier.fillMaxWidth(),
+        // a11y audit finding #13: a polite live region so TalkBack announces a new conversion as it
+        // appears, the same pattern InvalidResult already uses just above.
+        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
     ) {
         Column(
             modifier = Modifier.padding(Dimens.SpaceL),

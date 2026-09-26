@@ -5,6 +5,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -118,6 +119,21 @@ class IntroScreenTest {
         compose.onNodeWithText("Back").performClick()
 
         compose.onNodeWithText("Screen 1 of 3").assertIsDisplayed()
+    }
+
+    // A11y audit finding #26: the shared scroll state used to carry over between pages, so a user who
+    // scrolled down on one screen landed on the next already scrolled past its own heading.
+    @Test
+    fun `moving to the next page resets scroll to the top and focuses the new heading`() {
+        show()
+        // Scroll screen 1 down to its last paragraph before moving on.
+        compose.onNodeWithText("An extra month, Sol, sits between June and July.").performScrollTo()
+
+        compose.onNodeWithText("Next").performClick()
+
+        // If the scroll position had carried over, screen 2's heading would still be scrolled past and
+        // this would fail without a performScrollTo() call.
+        heading("Two weekdays for every date").assertIsDisplayed().assertIsFocused()
     }
 
     @Test

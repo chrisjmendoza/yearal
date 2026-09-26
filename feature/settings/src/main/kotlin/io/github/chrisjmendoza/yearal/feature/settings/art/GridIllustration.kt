@@ -90,8 +90,9 @@ private val PillIconSize = 20.dp
  * section's header (`docs/ARCHITECTURE.md` §4, the intro/Learn bullets).
  *
  * Colour is never the only signal (CLAUDE.md rule constraints, design-plan §2): the highlighted
- * elements in every variant also differ in shape from the rest — a ring, a differently-sized block, or
- * a pill outside the grid — and the whole illustration is described to TalkBack by [contentDescription]
+ * elements in every variant also differ in shape from the rest — a ring, a capsule/pill in place of a
+ * block ([MonthStrip]'s Sol), or a pill outside the grid (Year Day) — and the whole illustration is
+ * described to TalkBack by [contentDescription]
  * rather than left for a screen reader to interpret dot by dot ([Modifier.clearAndSetSemantics] hides
  * the decorative canvas and any visible caption text from the accessibility tree in favour of that one
  * description).
@@ -185,7 +186,13 @@ private fun DotGrid(
     }
 }
 
-/** The 13-block month strip for [GridIllustrationVariant.THIRTEEN_MONTHS], Sol picked out at [SOL_INDEX]. */
+/**
+ * The 13-block month strip for [GridIllustrationVariant.THIRTEEN_MONTHS], Sol picked out at
+ * [SOL_INDEX] — by shape as well as colour ([monthStripCornerRadius]): every other block keeps
+ * [MonthBlockCorner]'s small rounding, but Sol's is drawn as a full capsule/pill, so a colour-blind or
+ * greyscale-display user still sees which block is highlighted (CLAUDE.md rule 3's spirit;
+ * `docs/design-plan.md` §2 "colour never alone").
+ */
 @Composable
 private fun MonthStrip(modifier: Modifier = Modifier) {
     val blockColor = YearalTheme.colors.gridCell
@@ -193,18 +200,36 @@ private fun MonthStrip(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val blockWidth = size.width / MONTH_STRIP_COUNT
         val gap = blockWidth * MONTH_BLOCK_GAP_FRACTION
-        val cornerRadius = CornerRadius(MonthBlockCorner.toPx())
+        val defaultCornerRadiusPx = MonthBlockCorner.toPx()
         for (index in 0 until MONTH_STRIP_COUNT) {
             val color = if (index == SOL_INDEX) solColor else blockColor
             drawRoundRect(
                 color = color,
                 topLeft = Offset(blockWidth * index + gap / 2, 0f),
                 size = Size(blockWidth - gap, size.height),
-                cornerRadius = cornerRadius,
+                cornerRadius = monthStripCornerRadius(index, size.height, defaultCornerRadiusPx),
             )
         }
     }
 }
+
+/**
+ * The corner radius [MonthStrip] draws for one block, given the strip's pixel height and the default
+ * (non-Sol) corner radius in pixels. [SOL_INDEX] gets half its own height — a full capsule/pill, one of
+ * the shape differences this file's illustrations use elsewhere (the Year Day pill) — instead of
+ * [MonthBlockCorner]'s small rounding. Extracted as a pure function, independent of [Canvas], so
+ * `MonthStripGeometryTest` can assert the difference without rendering anything.
+ */
+internal fun monthStripCornerRadius(
+    index: Int,
+    blockHeightPx: Float,
+    defaultCornerRadiusPx: Float,
+): CornerRadius =
+    if (index == SOL_INDEX) {
+        CornerRadius(blockHeightPx / 2f)
+    } else {
+        CornerRadius(defaultCornerRadiusPx)
+    }
 
 /** One "<label>: <value>" caption row under [GridIllustrationVariant.NOMINAL_VS_ACTUAL]'s dot grid. */
 @Composable

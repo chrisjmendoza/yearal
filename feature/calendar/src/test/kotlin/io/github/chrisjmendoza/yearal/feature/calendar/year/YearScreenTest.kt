@@ -3,8 +3,10 @@ package io.github.chrisjmendoza.yearal.feature.calendar.year
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -17,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
@@ -220,5 +223,25 @@ class YearScreenTest {
             compose.onNodeWithTag(tileTag(number)).assertIsDisplayed()
         }
         compose.onNodeWithTag(YEAR_DAY_TILE_TEST_TAG).assertIsDisplayed()
+    }
+
+    // a11y audit findings #6 (bare IconButtons) and #7 (the "Today" TextButton): neither
+    // Modifier.minimumInteractiveComponentSize() (IconButton's own default) nor Material3's stock
+    // TextButton sizing reaches 48dp under this project's Robolectric harness, so both actions carry
+    // an explicit heightIn/widthIn floor (YearScreen.kt), asserted here.
+
+    @Test
+    fun `previous and next year keep a 48dp touch target`() {
+        show(YearUiState(year = 2026, today = null))
+
+        compose.onNodeWithContentDescription("Previous year").assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
+        compose.onNodeWithContentDescription("Next year").assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun `the Today action keeps a 48dp touch target`() {
+        show(YearUiState(year = 2020, today = LocalDate.of(2026, 9, 17)))
+
+        compose.onNodeWithText("Today").assertHeightIsAtLeast(48.dp)
     }
 }

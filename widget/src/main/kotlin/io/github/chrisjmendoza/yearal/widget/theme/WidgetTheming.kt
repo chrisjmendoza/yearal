@@ -110,3 +110,14 @@ public fun applyWidgetBackgroundOpacity(
 
 /** Below this opacity a widget's title/date text gets a solid chip behind it (`docs/design-plan.md` §5.6). */
 public const val LOW_OPACITY_CHIP_THRESHOLD: Int = 50
+
+/**
+ * Whether [opacityPercent] is low enough that a widget's own text block needs the solid chip
+ * [LOW_OPACITY_CHIP_THRESHOLD] describes, rather than sitting directly on the translucent background.
+ * The one pure decision behind both [io.github.chrisjmendoza.yearal.widget.today.TodayGlanceWidget]'s
+ * date-text chip and [io.github.chrisjmendoza.yearal.widget.month.MonthGlanceWidget]'s title/span/header
+ * chip (ROADMAP M8 T1, accessibility audit finding #16) -- pulled out to a named function, rather than
+ * each widget repeating its own `< LOW_OPACITY_CHIP_THRESHOLD` comparison, so the one decision both
+ * widgets share is unit-tested once.
+ */
+public fun shouldShowLowOpacityChip(opacityPercent: Int): Boolean = opacityPercent < LOW_OPACITY_CHIP_THRESHOLD

@@ -194,7 +194,7 @@ fun YearMiniMonthTile(
                 .background(yearalColors.cardContainer)
                 .then(if (containsToday) Modifier.border(TileBorderWidth, yearalColors.todayRing, shape) else Modifier)
                 .selectable(selected = false, role = Role.Button, onClick = onClick)
-                .semantics { contentDescription = description }
+                .semantics(mergeDescendants = true) { contentDescription = description }
                 .testTag(YearOverviewTestTags.MINI_MONTH_TILE_PREFIX + month.month.number)
                 .padding(TilePadding),
         verticalArrangement = Arrangement.spacedBy(TileContentSpacing),
@@ -450,6 +450,11 @@ private fun LeapDayIndicator(
  * Gregorian date beneath says which real day it is. Shape, fill and glyph together, never colour
  * alone (CLAUDE.md rule 3).
  *
+ * Like [YearMiniMonthTile], the whole tile is one semantics node: `mergeDescendants = true` plus an
+ * explicit [androidx.compose.ui.semantics.SemanticsPropertyReceiver.contentDescription] from
+ * `IfcDateFormatter.dayDescription`, so the label, subtitle and marks never surface as separately
+ * focusable nodes.
+ *
  * @param yearDay the year's [IfcDate.YearDay].
  * @param isToday whether the real today is Year Day, matched on its Gregorian date (CLAUDE.md rule 4).
  * @param hasEvent whether Year Day carries at least one event.
@@ -477,7 +482,7 @@ fun YearDayTile(
                 .background(yearalColors.intercalaryContainer)
                 .then(if (isToday) Modifier.border(TileBorderWidth, yearalColors.todayRing, shape) else Modifier)
                 .selectable(selected = false, role = Role.Button, onClick = onClick)
-                .semantics { contentDescription = description }
+                .semantics(mergeDescendants = true) { contentDescription = description }
                 .padding(TilePadding),
         verticalArrangement = Arrangement.spacedBy(TileContentSpacing),
     ) {

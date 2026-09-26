@@ -1,13 +1,20 @@
 package io.github.chrisjmendoza.yearal.feature.calendar.today
 
 import android.content.Context
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
@@ -43,13 +50,17 @@ class TodayScreenTest {
         nextHoliday: Pair<LocalDate, String>? = null,
         agenda: List<AgendaItemUi> = emptyList(),
         onAgendaItemClick: (Long) -> Unit = {},
+        fontScale: Float = 1f,
     ) {
         compose.setContent {
-            IfcTheme(dynamicColor = false) {
-                TodayScreen(
-                    state = buildTodayUiState(today, formatter, holidays, nextHoliday, agenda),
-                    onAgendaItemClick = onAgendaItemClick,
-                )
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+                IfcTheme(dynamicColor = false) {
+                    TodayScreen(
+                        state = buildTodayUiState(today, formatter, holidays, nextHoliday, agenda),
+                        onAgendaItemClick = onAgendaItemClick,
+                    )
+                }
             }
         }
     }
@@ -174,5 +185,43 @@ class TodayScreenTest {
         compose.onNodeWithText("Standup").performClick()
 
         clicked shouldBe listOf(7L)
+    }
+
+    // a11y audit finding #21: the year-progress bar and its visible percentage label must speak as one
+    // node, not two — before the fix, TalkBack spoke "71% of the year" from the indicator's own
+    // contentDescription and then again from the plain Text below it.
+
+    @Test
+    fun `the year-progress bar and its label speak as a single node`() {
+        show(LocalDate.of(2026, 9, 17))
+
+        compose.onNodeWithContentDescription("71% of the year").assertIsDisplayed()
+        compose
+            .onAllNodes(hasText("71% of the year", substring = true).or(hasContentDescription("71% of the year")))
+            .assertCountEquals(1)
+    }
+
+    // docs/ARCHITECTURE.md §4 "Accessibility": 200% font scale, no clipping, 48dp touch targets
+    // (a11y audit finding #23 — TodayScreenTest had no Robolectric assertion for this, only previews).
+
+    @Test
+    fun `at 200 percent font scale the hero and agenda row keep their content and touch target`() {
+        val agenda =
+            listOf(
+                AgendaItemUi(
+                    eventId = 7,
+                    title = "Standup",
+                    isAllDay = false,
+                    startTime = LocalTime.of(9, 0),
+                    endTime = LocalTime.of(9, 30),
+                    colorArgb = 0xFF123F3D.toInt(),
+                ),
+            )
+        show(LocalDate.of(2026, 9, 17), agenda = agenda, fontScale = 2f)
+
+        compose.onNodeWithText("Sunday").assertIsDisplayed()
+        compose.onNodeWithText("September 8, 2026").assertIsDisplayed()
+        compose.onNodeWithContentDescription("71% of the year").assertIsDisplayed()
+        compose.onNodeWithText("Standup").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
     }
 }

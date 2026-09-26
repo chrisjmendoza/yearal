@@ -26,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -73,9 +74,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -450,7 +453,10 @@ private fun EditorTopBar(
             )
         },
         navigationIcon = {
-            IconButton(onClick = callbacks.onBack) {
+            // docs/ARCHITECTURE.md §4 "Accessibility": an explicit 48dp touch target, matching the
+            // converter's swap button (ConverterScreen.kt) — a bare IconButton has none under this
+            // project's Robolectric harness (a11y audit finding #8).
+            IconButton(onClick = callbacks.onBack, modifier = Modifier.size(MinTouchTarget)) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.events_editor_back),
@@ -459,7 +465,11 @@ private fun EditorTopBar(
         },
         actions = {
             if (loaded != null && !loaded.isNew) {
-                IconButton(onClick = callbacks.onRequestDelete, enabled = !loaded.isSaving) {
+                IconButton(
+                    onClick = callbacks.onRequestDelete,
+                    enabled = !loaded.isSaving,
+                    modifier = Modifier.size(MinTouchTarget),
+                ) {
                     Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.events_editor_delete))
                 }
             }
@@ -547,23 +557,27 @@ private fun EditorBody(
             onClick = onPickStart,
         )
         if (state.isAllDay) {
+            val endBeforeStartMessage = stringResource(R.string.events_editor_end_before_start)
             DateField(
                 label = stringResource(R.string.events_editor_end_date_label),
                 ifcLabel = null,
                 gregorianLabel = formatter.formatGregorianLong(state.allDayEndDate),
                 onClick = onPickAllDayEnd,
                 isError = state.allDayEndBeforeStart,
+                errorMessage = if (state.allDayEndBeforeStart) endBeforeStartMessage else null,
             )
-            if (state.allDayEndBeforeStart) ErrorBanner(stringResource(R.string.events_editor_end_before_start))
+            if (state.allDayEndBeforeStart) ErrorBanner(endBeforeStartMessage)
         } else {
+            val endBeforeStartMessage = stringResource(R.string.events_editor_end_before_start)
             TimeRow(
                 startMinute = state.startMinuteOfDay,
                 endMinute = state.endMinuteOfDay,
                 onPickStartTime = onPickStartTime,
                 onPickEndTime = onPickEndTime,
                 endIsError = state.endBeforeStart,
+                endErrorMessage = if (state.endBeforeStart) endBeforeStartMessage else null,
             )
-            if (state.endBeforeStart) ErrorBanner(stringResource(R.string.events_editor_end_before_start))
+            if (state.endBeforeStart) ErrorBanner(endBeforeStartMessage)
             ZoneChoiceRow(
                 zoneChoice = state.zoneChoice,
                 fixedZoneId = state.fixedZoneId.id,
@@ -743,6 +757,7 @@ private fun DateField(
     gregorianLabel: String,
     onClick: () -> Unit,
     isError: Boolean = false,
+    errorMessage: String? = null,
 ) {
     val description =
         if (ifcLabel != null) {
@@ -756,8 +771,11 @@ private fun DateField(
             onClick = onClick,
             modifier =
                 Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).semantics {
-                    contentDescription =
-                        description
+                    contentDescription = description
+                    // a11y audit finding #12: invalid state must be announced, not only coloured — the
+                    // colour/border pair from errorOutlinedBorder/errorOutlinedButtonColors below is
+                    // TalkBack-invisible on its own.
+                    if (errorMessage != null) error(errorMessage)
                 },
             border = errorOutlinedBorder(isError),
             colors = errorOutlinedButtonColors(isError),
@@ -780,6 +798,7 @@ private fun TimeRow(
     onPickStartTime: () -> Unit,
     onPickEndTime: () -> Unit,
     endIsError: Boolean = false,
+    endErrorMessage: String? = null,
 ) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(FieldSpacing)) {
         OutlinedButton(onClick = onPickStartTime, modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget)) {
@@ -787,7 +806,11 @@ private fun TimeRow(
         }
         OutlinedButton(
             onClick = onPickEndTime,
-            modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget),
+            modifier =
+                Modifier.weight(1f).heightIn(min = MinTouchTarget).semantics {
+                    // a11y audit finding #12: same TalkBack-invisible colour-only signal as DateField.
+                    if (endErrorMessage != null) error(endErrorMessage)
+                },
             border = errorOutlinedBorder(endIsError),
             colors = errorOutlinedButtonColors(endIsError),
         ) {
@@ -1043,13 +1066,18 @@ private fun RecurrenceEndSection(
             }
 
             RecurrenceEndKind.UNTIL -> {
+                val untilBeforeStartMessage = stringResource(R.string.events_editor_until_before_start)
                 OutlinedButton(
                     onClick = onPickUntil,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
+                    modifier =
+                        Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).semantics {
+                            // a11y audit finding #12: same TalkBack-invisible colour-only signal as DateField.
+                            if (state.untilBeforeStart) error(untilBeforeStartMessage)
+                        },
                     border = errorOutlinedBorder(state.untilBeforeStart),
                     colors = errorOutlinedButtonColors(state.untilBeforeStart),
                 ) { Text(formatter.formatGregorianLong(state.untilDate)) }
-                if (state.untilBeforeStart) ErrorBanner(stringResource(R.string.events_editor_until_before_start))
+                if (state.untilBeforeStart) ErrorBanner(untilBeforeStartMessage)
             }
 
             RecurrenceEndKind.COUNT -> {
@@ -1059,6 +1087,8 @@ private fun RecurrenceEndSection(
                     label = { Text(stringResource(R.string.events_editor_count_label)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    // a11y audit finding #24: this field only ever parses as an Int.
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
             }
         }
@@ -1242,7 +1272,10 @@ private fun RecurrenceOption(
  * A validation error, shown as an `errorContainer` banner with a warning icon
  * (`docs/design-plan.md` §4.5) — replaces a plain red caption. The offending field or button also gets
  * [errorOutlinedBorder]/[errorOutlinedButtonColors], so the error is legible without colour alone
- * (design-plan §2: colour is never the only signal — the icon and the outline are its twins).
+ * (design-plan §2: colour is never the only signal — the icon and the outline are its twins). A polite
+ * live region, so a screen reader announces the banner as it appears (docs/ARCHITECTURE.md §4
+ * "Accessibility"), the same pattern `ConverterScreen`'s `InvalidResult` and [RecurrenceResetNotice]
+ * already use.
  */
 @Composable
 private fun ErrorBanner(text: String) {
@@ -1250,6 +1283,9 @@ private fun ErrorBanner(text: String) {
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
         shape = MaterialTheme.shapes.medium,
+        // a11y audit finding #13: a polite live region so TalkBack announces the banner as it appears,
+        // the same pattern InvalidResult (ConverterScreen.kt) and RecurrenceResetNotice already use.
+        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(FieldSpacing),
@@ -1275,8 +1311,16 @@ private fun DeleteConfirmDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.events_editor_delete_confirm_title)) },
         text = { Text(stringResource(R.string.events_editor_delete_confirm_text)) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.events_editor_delete)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.events_editor_cancel)) } },
+        confirmButton = {
+            TextButton(onClick = onConfirm, modifier = Modifier.heightIn(min = MinTouchTarget)) {
+                Text(stringResource(R.string.events_editor_delete))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = MinTouchTarget)) {
+                Text(stringResource(R.string.events_editor_cancel))
+            }
+        },
     )
 }
 
@@ -1289,8 +1333,16 @@ private fun DiscardConfirmDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.events_editor_discard_confirm_title)) },
         text = { Text(stringResource(R.string.events_editor_discard_confirm_text)) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.events_editor_discard)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.events_editor_cancel)) } },
+        confirmButton = {
+            TextButton(onClick = onConfirm, modifier = Modifier.heightIn(min = MinTouchTarget)) {
+                Text(stringResource(R.string.events_editor_discard))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = MinTouchTarget)) {
+                Text(stringResource(R.string.events_editor_cancel))
+            }
+        },
     )
 }
 
@@ -1317,7 +1369,11 @@ private fun CalendarChooserDialog(
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.events_editor_cancel)) } },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = MinTouchTarget)) {
+                Text(stringResource(R.string.events_editor_cancel))
+            }
+        },
     )
 }
 
@@ -1334,13 +1390,17 @@ private fun IfcDateChooserDialog(
         confirmButton = {
             TextButton(
                 onClick = { pickerState.date?.let { onConfirm(it.toLocalDate()) } },
-                enabled =
-                    pickerState.date != null,
+                enabled = pickerState.date != null,
+                modifier = Modifier.heightIn(min = MinTouchTarget),
             ) {
                 Text(stringResource(R.string.events_editor_confirm))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.events_editor_cancel)) } },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = MinTouchTarget)) {
+                Text(stringResource(R.string.events_editor_cancel))
+            }
+        },
     )
 }
 
@@ -1360,11 +1420,18 @@ private fun EditorTimePickerDialog(
     TimePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { onConfirm(state.hour * MINUTES_PER_HOUR + state.minute) }) {
+            TextButton(
+                onClick = { onConfirm(state.hour * MINUTES_PER_HOUR + state.minute) },
+                modifier = Modifier.heightIn(min = MinTouchTarget),
+            ) {
                 Text(stringResource(R.string.events_editor_confirm))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.events_editor_cancel)) } },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = MinTouchTarget)) {
+                Text(stringResource(R.string.events_editor_cancel))
+            }
+        },
         title = { Text(stringResource(R.string.events_editor_pick_time_title)) },
     ) {
         TimePicker(state = state)

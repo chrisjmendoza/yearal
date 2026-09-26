@@ -9,11 +9,15 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -24,6 +28,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
@@ -116,6 +121,7 @@ class EventEditorScreenTest {
         monthlyIfcAvailable: Boolean = true,
         canSave: Boolean = true,
         endBeforeStart: Boolean = false,
+        allDayEndBeforeStart: Boolean = false,
         showDeleteConfirm: Boolean = false,
         showDiscardConfirm: Boolean = false,
         reminders: Set<Int> = emptySet(),
@@ -127,6 +133,10 @@ class EventEditorScreenTest {
         yearlyGregorianIfcShifts: Boolean = false,
         colorArgb: Int? = null,
         category: EventCategory = EventCategory.EVENT,
+        recurrenceEndKind: RecurrenceEndKind = RecurrenceEndKind.NEVER,
+        untilBeforeStart: Boolean = false,
+        count: Int = 1,
+        saveFailed: Boolean = false,
     ) = EventEditorUiState.Loaded(
         isNew = isNew,
         title = "",
@@ -139,7 +149,7 @@ class EventEditorScreenTest {
         startGregorianLabel = "Tuesday, June 30, 2026",
         startGregorianDayLabel = "Jun 30",
         allDayEndDate = startDate,
-        allDayEndBeforeStart = false,
+        allDayEndBeforeStart = allDayEndBeforeStart,
         startMinuteOfDay = EventDraft.DEFAULT_START_MINUTE,
         endMinuteOfDay = EventDraft.DEFAULT_START_MINUTE + EventDraft.DEFAULT_DURATION_MINUTES,
         endBeforeStart = endBeforeStart,
@@ -149,14 +159,14 @@ class EventEditorScreenTest {
         monthlyIfcAvailable = monthlyIfcAvailable,
         isLeapDayAnchor = isLeapDayAnchor,
         leapDayPolicy = LeapDayPolicy.JUNE_28,
-        recurrenceEndKind = RecurrenceEndKind.NEVER,
+        recurrenceEndKind = recurrenceEndKind,
         untilDate = startDate.plusYears(1),
-        untilBeforeStart = false,
-        count = 1,
+        untilBeforeStart = untilBeforeStart,
+        count = count,
         reminders = reminders,
         canSave = canSave,
         isDirty = false,
-        saveFailed = false,
+        saveFailed = saveFailed,
         showDeleteConfirm = showDeleteConfirm,
         showDiscardConfirm = showDiscardConfirm,
         exdateCount = exdateCount,
@@ -566,5 +576,90 @@ class EventEditorScreenTest {
 
         compose.onNodeWithText("The end must be on or after the start.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Error").performScrollTo().assertIsDisplayed()
+    }
+
+    // ----- a11y audit (docs/ARCHITECTURE.md §4 "Accessibility") finding #8: Back/Delete keep 48dp -----
+
+    @Test
+    fun `Back and Delete keep an explicit 48dp touch target`() {
+        show(baseState(isNew = false))
+
+        compose.onNodeWithContentDescription("Back").assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
+        compose.onNodeWithContentDescription("Delete").assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
+    }
+
+    // ----- finding #11: every dialog TextButton keeps 48dp, not just CalendarChooserDialog's own -----
+
+    @Test
+    fun `the delete confirmation dialog's buttons keep 48dp`() {
+        show(baseState(isNew = false, showDeleteConfirm = true))
+
+        compose.onNodeWithText("Delete this event?").assertIsDisplayed()
+        compose.onNodeWithText("Delete").assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithText("Cancel").assertHeightIsAtLeast(48.dp)
+    }
+
+    // ----- finding #12: invalid Start/End/until is announced through SemanticsProperties.Error, -----
+    // ----- not only shown as a coloured outline. -----
+
+    private val definedError = SemanticsMatcher.keyIsDefined(SemanticsProperties.Error)
+    private val noDefinedError = SemanticsMatcher.keyNotDefined(SemanticsProperties.Error)
+
+    @Test
+    fun `an all-day end date before the start is announced as an error, and clears once fixed`() {
+        show(baseState(isAllDay = true, canSave = false, allDayEndBeforeStart = true))
+
+        compose.onNode(hasContentDescription("Ends", substring = true)).assert(definedError)
+
+        uiState = baseState(isAllDay = true, canSave = true, allDayEndBeforeStart = false)
+        compose.onNode(hasContentDescription("Ends", substring = true)).assert(noDefinedError)
+    }
+
+    @Test
+    fun `a timed end before the start is announced as an error on the end time button`() {
+        show(baseState(isAllDay = false, canSave = false, endBeforeStart = true))
+
+        compose.onNodeWithText("10:00").assert(definedError)
+        compose.onNodeWithText("09:00").assert(noDefinedError)
+    }
+
+    @Test
+    fun `an until date before the start is announced as an error`() {
+        show(
+            baseState(
+                recurrenceKind = RecurrenceKind.WEEKLY,
+                recurrenceEndKind = RecurrenceEndKind.UNTIL,
+                canSave = false,
+                untilBeforeStart = true,
+            ),
+        )
+
+        compose.onNode(hasText("June 30, 2027", substring = true)).performScrollTo().assert(definedError)
+        compose.onNodeWithText("The end date must be on or after the start.").performScrollTo().assertIsDisplayed()
+    }
+
+    // ----- finding #13: the save-failure banner is a polite live region, like ConvertedResult -----
+
+    @Test
+    fun `the save-failed banner is announced as a polite live region`() {
+        show(baseState(saveFailed = true))
+
+        compose
+            .onNodeWithText(
+                "Couldn't save — this event or its calendar may have been deleted. Your changes are kept here.",
+            ).assertIsDisplayed()
+        compose
+            .onNode(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
+            .assertIsDisplayed()
+    }
+
+    // ----- finding #24: "Number of times" only ever parses as an Int -----
+
+    @Test
+    fun `the count field is offered only for the count end condition`() {
+        show(baseState(recurrenceKind = RecurrenceKind.WEEKLY, recurrenceEndKind = RecurrenceEndKind.COUNT, count = 5))
+
+        compose.onNodeWithText("Number of times").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("5").assertIsDisplayed()
     }
 }

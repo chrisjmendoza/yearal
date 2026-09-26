@@ -71,6 +71,36 @@ class ColorSchemeContrastTest {
             Pair("onSurface/surfaceContainer", scheme.onSurface, scheme.surfaceContainer, TEXT_MIN),
             Pair("onSurface/surfaceContainerHigh", scheme.onSurface, scheme.surfaceContainerHigh, TEXT_MIN),
             Pair("onSurface/surfaceContainerHighest", scheme.onSurface, scheme.surfaceContainerHighest, TEXT_MIN),
+            // onSurfaceVariant against every surfaceContainer* tier and cardContainer (finding #18):
+            // DayCell draws the Gregorian corner number in exactly onSurfaceVariant on exactly the
+            // gridCell/gridCellMarked fills, which are surfaceContainerLow/surfaceContainerHigh — this
+            // was an uncovered pairing even though onSurface's equivalent list (above) was complete.
+            Pair(
+                "onSurfaceVariant/surfaceContainerLowest",
+                scheme.onSurfaceVariant,
+                scheme.surfaceContainerLowest,
+                TEXT_MIN,
+            ),
+            Pair(
+                "onSurfaceVariant/surfaceContainerLow",
+                scheme.onSurfaceVariant,
+                scheme.surfaceContainerLow,
+                TEXT_MIN,
+            ),
+            Pair("onSurfaceVariant/surfaceContainer", scheme.onSurfaceVariant, scheme.surfaceContainer, TEXT_MIN),
+            Pair(
+                "onSurfaceVariant/surfaceContainerHigh",
+                scheme.onSurfaceVariant,
+                scheme.surfaceContainerHigh,
+                TEXT_MIN,
+            ),
+            Pair(
+                "onSurfaceVariant/surfaceContainerHighest",
+                scheme.onSurfaceVariant,
+                scheme.surfaceContainerHighest,
+                TEXT_MIN,
+            ),
+            Pair("onSurfaceVariant/cardContainer", scheme.onSurfaceVariant, yc.cardContainer, TEXT_MIN),
             Pair("primary/surface", scheme.primary, scheme.surface, TEXT_MIN),
             Pair("secondary/surface", scheme.secondary, scheme.surface, TEXT_MIN),
             Pair("tertiary/surface", scheme.tertiary, scheme.surface, TEXT_MIN),

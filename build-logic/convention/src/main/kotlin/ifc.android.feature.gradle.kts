@@ -2,6 +2,8 @@
 // dependencies, and the module-boundary check from docs/ARCHITECTURE.md §2 "Dependency direction":
 // a feature may depend on :core:domain, :core:designsystem, :core:navigation, :core:calendar,
 // :core:holidays and :core:testing, never on :core:data or on another feature (CLAUDE.md rule 10).
+// The check itself is `ifc.android.library`'s (applied below): every Android library module is
+// covered, not only features, so it is not repeated here.
 
 plugins {
     id("ifc.android.library")
@@ -22,23 +24,4 @@ dependencies {
     "testImplementation"(project(":core:testing"))
     "testImplementation"(libs.findLibrary("kotlinx-coroutines-test").get())
     "testImplementation"(libs.findLibrary("turbine").get())
-}
-
-val forbiddenPrefixes = listOf(":feature:", ":core:data")
-
-afterEvaluate {
-    configurations
-        .filter { it.name.endsWith("implementation", ignoreCase = true) || it.name.endsWith("api", ignoreCase = true) }
-        .forEach { configuration ->
-            configuration.dependencies
-                .filterIsInstance<ProjectDependency>()
-                .map { it.path }
-                .filter { path -> forbiddenPrefixes.any { path.startsWith(it) } }
-                .forEach { path ->
-                    throw GradleException(
-                        "${project.path} may not depend on $path via ${configuration.name}: features depend only on " +
-                            ":core:* interfaces, never on :core:data or another feature (CLAUDE.md rule 10).",
-                    )
-                }
-        }
 }

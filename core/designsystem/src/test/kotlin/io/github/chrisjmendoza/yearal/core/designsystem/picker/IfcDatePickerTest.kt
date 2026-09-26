@@ -229,6 +229,10 @@ class IfcDatePickerTest {
 
         yearField().performTextReplacement("1582")
         yearField().assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Error))
+        // Finding #20: the announced error text is this app's own range wording (the same string the
+        // visible supportingText shows), not just some error being present — TalkBack must not fall
+        // back to OutlinedTextField's generic default announcement.
+        yearField().assert(SemanticsMatcher.expectValue(SemanticsProperties.Error, "Enter a year from 1583 to 9999"))
         state.date.shouldBeNull()
 
         yearField().performTextReplacement("1583")

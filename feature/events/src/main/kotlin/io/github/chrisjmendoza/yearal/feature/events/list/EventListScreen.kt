@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -68,6 +69,7 @@ private val LeadingBarWidth = Dimens.SpaceXs
 private val SectionSpacing = Dimens.SpaceS
 private val ChipSpacing = Dimens.SpaceS
 private val EmptyStateIconSize = 48.dp
+private val MinTouchTarget = 48.dp
 
 /**
  * The events list (`EventListKey`, `docs/FEATURES.md` E1, E3, E5–E7, E9; docs/ARCHITECTURE.md §4
@@ -252,7 +254,9 @@ private fun SearchField(
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
             if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
+                // docs/ARCHITECTURE.md §4 "Accessibility": an explicit 48dp touch target — a bare
+                // IconButton has none under this project's Robolectric harness (a11y audit finding #9).
+                IconButton(onClick = { onQueryChange("") }, modifier = Modifier.size(MinTouchTarget)) {
                     Icon(Icons.Filled.Clear, contentDescription = stringResource(R.string.events_search_clear))
                 }
             }

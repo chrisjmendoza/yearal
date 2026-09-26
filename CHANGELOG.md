@@ -224,6 +224,16 @@ Architecture, tooling and CI:
   next Year Day / Leap Day. **Known limitation:** a widget's own theme override has no effect while the
   colour source is Material You, because Glance's dynamic colour set follows the system UI mode and
   cannot be overridden per widget.
+- "Send feedback" in the More hub (ROADMAP M8 T6): opens an email chooser with a version-stamped subject
+  and a body of device, app and settings diagnostics — never your events or holiday packs — falling back
+  to a plain, selectable address when no email app is installed.
+- Build-logic (ROADMAP R7, M0 T4): `configureIfcAndroid` now generates every Android module's Robolectric
+  SDK pin (`sdk=<catalog targetSdk>`) instead of a hand-copied `robolectric.properties`, and
+  `DependencyRules.kt`'s two shared checks — a deny-list in `ifc.android.library` (no `:feature:*` or
+  `:core:data`, now covering `:widget` and `:core:scheduling` too, not only features) and an allow-list in
+  `ifc.jvm.library` (pure-JVM modules depend only on each other; `:core:calendar` depends on nothing at
+  all) — replace the feature-only dependency rule check and complete it against the module boundaries in
+  `docs/ARCHITECTURE.md` §2 and CLAUDE.md rules 1, 10 and 11.
 
 ### Changed
 
@@ -297,8 +307,21 @@ Architecture, tooling and CI:
   unit tests: `:app`'s first Compose test launches the real app twice against the same persisted settings
   and confirms the intro appears on a first launch and never again once dismissed (R10).
 
+- Schema v1 (`:core:data`) now has its migration safety net (M8 T5): `SchemaFreezeMigrationTest` validates
+  the compiled `YearalDatabase` against the exported `1.json` with `androidx.room3:room3-testing`'s
+  `MigrationTestHelper`, `LegacyDatabaseOpenTest` proves a database written by raw SQL against the frozen
+  v1 columns still opens and reads back through the real production builder, and `SchemaExportGuardTest`
+  guards the exported schema directory itself.
+
 ### Fixed
 
+- Accessibility audit fixes in `:core:designsystem` (ROADMAP M8 T1): `DayCell`, `IntercalaryBand` and the
+  Year overview's mini-month/Year Day tiles now merge their descendants (`mergeDescendants = true`), so
+  TalkBack speaks each one's description once instead of also re-announcing the inner day numbers, labels
+  and marks as separate stops; the year field of `IfcDatePicker` now attaches its own localized range text
+  as the announced error, replacing `OutlinedTextField`'s generic default error announcement; and
+  `ColorSchemeContrastTest` now also checks `onSurfaceVariant` against every `surfaceContainer*` tier and
+  `cardContainer`, closing a gap that let the grid's Gregorian corner number go unchecked.
 - The Year overview's mini-months looked broken after the design pass: the 28 day squares were painted in
   the same colour as the card they sit on, so each month was a blank card with a few loose diamonds on it.
   Every square now has a visible fill, its IFC day number, and its holiday diamond / event dot beneath the
@@ -325,3 +348,29 @@ Architecture, tooling and CI:
 - Both home-screen widgets ignored the app's theme entirely — always Material You dynamic colour, always
   the system dark setting — regardless of what the user had chosen in Settings; they now read
   `UserSettings` and match what the app itself shows (design-plan.md §4.9).
+- Accessibility fixes in the Calendar tab (M8 T1 audit): the day-card agenda row now clears the 48dp touch
+  target, the Year/Month app-bar's previous/next-year, jump-to-date and "Today" actions carry an explicit
+  48dp floor instead of relying on `minimumInteractiveComponentSize()` (which has no effect under this
+  project's Robolectric harness), the Today hero's year-progress bar and its percentage label now speak as
+  one TalkBack node instead of twice, and `TodayScreenTest` gained a 200% font-scale assertion matching
+  `DayCardTest`/`YearScreenTest`.
+- Accessibility audit fixes (ROADMAP M8 T1) in Events, Converter and Holidays: bare `IconButton`s
+  (event editor Back/Delete, event list "Clear search", Holidays Back/Previous year/Next year) and every
+  event editor dialog's `TextButton`s now keep an explicit 48dp touch target; an invalid Start/End/until
+  date in the event editor is now announced through `SemanticsProperties.Error`, not only shown as a
+  coloured outline; the converter's result card and the editor's save-failure banner are now polite live
+  regions so a screen reader announces them as they appear; and the recurrence "Number of times" field now
+  shows a numeric keyboard.
+- Accessibility audit fixes (ROADMAP M8 T1): each of the Month widget's 28 day cells now carries its own
+  short TalkBack description instead of being announced as a bare digit; the Today widget's resizable
+  minimum height was raised to clear the 48dp touch-target floor, and the Month widget's resizable
+  minimum width was raised as far toward that floor as a 360dp-wide phone's launcher grid allows (a
+  widget a launcher refuses to place is worse than a slightly small cell); and the Month widget's
+  title/Gregorian-span/header-row block now sits on the same low-opacity chip the Today widget's date
+  text already used, so it stays legible at a low widget background opacity.
+- Settings and the More hub (M8 T1 a11y audit): the 13-month illustration's highlighted Sol block now
+  differs in shape (a capsule/pill), not only colour; Settings' "Colour source"/"Palette"/"Widgets"
+  sub-headings are reachable by TalkBack's heading gesture like every other heading; the first-run intro
+  resets its scroll position and moves focus to each page's heading on Back/Next instead of landing
+  scrolled past it; and every More hub row, including Send feedback, now shares one full-width, ≥48dp
+  touch target.

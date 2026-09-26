@@ -10,15 +10,24 @@
   `WidgetPreviewUpdater`'s `setWidgetPreview` call (docs/ARCHITECTURE.md §5 "Picker previews"), and fall
   back to this attribute only if that call has not yet succeeded once. Keep every other attribute
   identical to the base file.
+
+  minWidth/minResizeWidth/maxResizeWidth/targetCellWidth (ROADMAP M8 T1, accessibility audit finding
+  #14): see res/xml/month_widget_info.xml's comment for the full arithmetic and the trade-off it states
+  honestly. 320dp is not the 48dp touch-target floor itself (that would need 352dp, `(352 - 16) / 7 = 48`)
+  — it is the largest value that still fits a 360dp-wide phone's launcher grid, chosen because an
+  unplaceable widget is worse than a too-small cell. At this minimum a column is `(320 - 16) / 7 ~= 43.4dp`,
+  about 5dp under the floor; the floor is met once a placement reaches six or more of the launcher's
+  nominal cells (about 390dp and up, the same `70dp * cells - 30dp` formula). 460dp only raises the
+  resize ceiling enough to stay a valid, larger bound above the new floor (`70dp * 7 cells - 30dp`).
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="250dp"
+    android:minWidth="320dp"
     android:minHeight="180dp"
-    android:minResizeWidth="250dp"
+    android:minResizeWidth="320dp"
     android:minResizeHeight="180dp"
-    android:maxResizeWidth="320dp"
+    android:maxResizeWidth="460dp"
     android:maxResizeHeight="320dp"
-    android:targetCellWidth="4"
+    android:targetCellWidth="5"
     android:targetCellHeight="3"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"

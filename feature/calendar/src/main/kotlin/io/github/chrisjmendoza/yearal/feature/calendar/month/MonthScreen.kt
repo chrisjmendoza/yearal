@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -279,14 +280,30 @@ fun MonthScreen(
                         explanation = stringResource(DesignSystemR.string.weekday_explainer_body),
                         modifier = Modifier.testTag(MonthGridTestTags.WEEKDAY_EXPLAINER),
                     )
-                    IconButton(onClick = { jumpChooserVisible = true }) {
+                    // heightIn/widthIn floor the tap target at 48dp (docs/ARCHITECTURE.md §4
+                    // "Accessibility"): under this project's Robolectric harness,
+                    // Modifier.minimumInteractiveComponentSize() — the modifier IconButton relies on
+                    // internally — measures no effect at all (see MonthTitlePill's KDoc below), so
+                    // IconButton's own default sizing cannot be trusted either (a11y audit finding #6).
+                    IconButton(
+                        onClick = { jumpChooserVisible = true },
+                        modifier =
+                            Modifier
+                                .heightIn(min = Dimens.DayCellMinSize)
+                                .widthIn(min = Dimens.DayCellMinSize),
+                    ) {
                         Icon(
                             imageVector = Icons.Filled.Search,
                             contentDescription = stringResource(R.string.month_jump_to_date),
                         )
                     }
                     if (todayPage != null && todayPage != pagerState.currentPage) {
-                        TextButton(onClick = { scope.launch { pagerState.animateScrollToPage(todayPage) } }) {
+                        // heightIn alone: Material3's own TextButton defaults to ~40dp and is not
+                        // boosted by minimumInteractiveComponentSize() (a11y audit finding #7).
+                        TextButton(
+                            onClick = { scope.launch { pagerState.animateScrollToPage(todayPage) } },
+                            modifier = Modifier.heightIn(min = Dimens.DayCellMinSize),
+                        ) {
                             Text(stringResource(R.string.month_today))
                         }
                     }

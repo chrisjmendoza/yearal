@@ -13,8 +13,12 @@ import org.xmlpull.v1.XmlPullParser
 /**
  * Proves the values in `res/xml/month_widget_info.xml` (ROADMAP M5 T3; docs/ARCHITECTURE.md §5
  * "Configuration"): the 4-hour self-healing backstop, both resize directions, `home_screen` only (not
- * `keyguard`, `docs/security-and-privacy.md` §3.2), and the min/target size matching
- * [MonthGlanceWidget.COMPACT] (about 4x3 home-screen cells).
+ * `keyguard`, `docs/security-and-privacy.md` §3.2), and the min/target size, raised since ROADMAP M8 T1
+ * (accessibility audit finding #14) as far toward the 48dp touch-target floor as a 360dp-wide phone's
+ * launcher grid allows -- no longer [MonthGlanceWidget.COMPACT]'s own 250dp, which is a
+ * `SizeMode.Responsive` breakpoint for content, not a touch-target size, and not the full 352dp the
+ * floor itself would need, which the XML file's own comment explains would make the widget unplaceable
+ * on that phone.
  */
 @RunWith(AndroidJUnit4::class)
 class MonthWidgetInfoTest {
@@ -51,24 +55,33 @@ class MonthWidgetInfoTest {
         category shouldBe "0x1"
     }
 
+    /**
+     * `minWidth`/`minResizeWidth` were raised from 250dp to 320dp (ROADMAP M8 T1, accessibility audit
+     * finding #14) -- five nominal 70dp home-screen cells (`70 * 5 - 30 = 320`), not the 352dp the 48dp
+     * touch-target floor itself needs: 352dp+ does not fit a 360dp-wide phone's launcher grid and would
+     * make the widget unplaceable there, a worse outcome than a too-small cell. At 320dp a column is
+     * `(320 - 16) / 7 ~= 43.4dp`, about 5dp under the floor; the floor is only met once a placement
+     * reaches six or more nominal cells (about 390dp and up). See the XML file's own comment for the
+     * full arithmetic. `minHeight` is unchanged -- the finding was about the columns, not the rows.
+     */
     @Test
-    fun `min size matches about 4 by 3 home-screen cells`() {
+    fun `min width is the largest value that still fits a 360dp phone, min height is unchanged`() {
         val attrs = rootAttributes()
-        magnitudeOf(attrs.getValue("minWidth")) shouldBe 250f
+        magnitudeOf(attrs.getValue("minWidth")) shouldBe 320f
         magnitudeOf(attrs.getValue("minHeight")) shouldBe 180f
     }
 
     @Test
-    fun `max resize size matches the full responsive breakpoint`() {
+    fun `max resize width stays a valid upper bound above the new min width`() {
         val attrs = rootAttributes()
-        magnitudeOf(attrs.getValue("maxResizeWidth")) shouldBe 320f
+        magnitudeOf(attrs.getValue("maxResizeWidth")) shouldBe 460f
         magnitudeOf(attrs.getValue("maxResizeHeight")) shouldBe 320f
     }
 
     @Test
-    fun `target cell size is about 4 by 3`() {
+    fun `target cell width matches the new min width, in cell units`() {
         val attrs = rootAttributes()
-        attrs.getValue("targetCellWidth").toInt() shouldBe 4
+        attrs.getValue("targetCellWidth").toInt() shouldBe 5
         attrs.getValue("targetCellHeight").toInt() shouldBe 3
     }
 

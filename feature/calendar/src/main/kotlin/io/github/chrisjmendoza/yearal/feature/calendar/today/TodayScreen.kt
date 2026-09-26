@@ -35,6 +35,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -188,18 +189,23 @@ private fun HeroCard(state: TodayUiState.Loaded) {
                 text = stringResource(R.string.today_day_week_quarter, state.dayAndWeek, state.quarter),
                 style = MaterialTheme.typography.bodyLarge,
             )
-            LinearProgressIndicator(
-                progress = { state.yearProgress },
-                trackColor = YearalTheme.colors.onHero.copy(alpha = PROGRESS_TRACK_ALPHA),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .semantics { contentDescription = state.yearProgressLabel },
-            )
-            Text(
-                text = state.yearProgressLabel,
-                style = MaterialTheme.typography.bodySmall,
-            )
+            // clearAndSetSemantics on the wrapper is the single spoken node for both children
+            // (a11y audit finding #21): without it, the indicator's own contentDescription and the
+            // visible Text below it — the identical "71% of the year" string — were two separate
+            // semantics nodes, so TalkBack spoke the same phrase twice back to back.
+            Column(
+                modifier = Modifier.clearAndSetSemantics { contentDescription = state.yearProgressLabel },
+            ) {
+                LinearProgressIndicator(
+                    progress = { state.yearProgress },
+                    trackColor = YearalTheme.colors.onHero.copy(alpha = PROGRESS_TRACK_ALPHA),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    text = state.yearProgressLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
 }

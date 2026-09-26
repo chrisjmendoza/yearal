@@ -13,6 +13,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -217,6 +218,15 @@ class EventListScreenTest {
         compose.onNode(hasText("Search events")).performTextInput("picnic")
 
         queries shouldContainExactly listOf("picnic")
+    }
+
+    // a11y audit (docs/ARCHITECTURE.md §4 "Accessibility") finding #9: a bare IconButton has no
+    // guaranteed touch target under this project's Robolectric harness.
+    @Test
+    fun `the Clear search button keeps an explicit 48dp touch target`() {
+        show(EventListUiState.Loaded(items = listOf(sol13), query = "picnic", hasAnyEvents = true))
+
+        compose.onNodeWithContentDescription("Clear search").assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
     }
 
     @Test

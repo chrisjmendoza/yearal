@@ -53,9 +53,11 @@ private const val SUBTITLE_MAX_LINES = 2
  * It is a first-class selectable day: the same today ring and selected fill as [DayCell], the same
  * marks, `Role.Button`, the `selected` state and a content description from
  * `IfcDateFormatter.dayDescription` (`Year Day, no IFC weekday. Gregorian Thursday, December 31,
- * 2026.`). It shows [YearalTheme.colors]`.intercalaryContainer` plus an icon, the label ("Leap Day" /
- * "Year Day"), the Gregorian date and the real weekday with the "no IFC weekday" note (spec §4.1
- * item 5).
+ * 2026.`). Semantics merge the label, subtitle and marks into that one description, the same
+ * `mergeDescendants = true` convention [DayCell] uses, so TalkBack speaks the sentence once instead
+ * of also re-announcing the inner `Text`s. It shows [YearalTheme.colors]`.intercalaryContainer` plus
+ * an icon, the label ("Leap Day" / "Year Day"), the Gregorian date and the real weekday with the "no
+ * IFC weekday" note (spec §4.1 item 5).
  *
  * The band is at least [intercalarySlotHeight] tall, the same minimum as [IntercalaryPlaceholder],
  * so the month pager never changes height between months.
@@ -97,7 +99,7 @@ fun IntercalaryBand(
                 .clip(shape)
                 .background(containerColor)
                 .selectable(selected = isSelected, role = Role.Button, onClick = onClick)
-                .semantics { contentDescription = description }
+                .semantics(mergeDescendants = true) { contentDescription = description }
                 .testTag(MonthGridTestTags.INTERCALARY_BAND),
         contentAlignment = Alignment.CenterStart,
     ) {

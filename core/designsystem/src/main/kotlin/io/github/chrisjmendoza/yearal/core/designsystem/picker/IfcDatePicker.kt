@@ -30,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
@@ -176,21 +177,30 @@ fun rememberIfcDatePickerState(initialDate: IfcDate): IfcDatePickerState =
 /**
  * The year text field: free-typed digits, an error state while [IfcDatePickerValue.year] is `null`
  * (empty, partial, or outside [DatePickerRange]), and a supporting caption spelling out the range.
+ *
+ * While in the error state, the same caption is also attached as
+ * [androidx.compose.ui.semantics.SemanticsPropertyReceiver.error] so TalkBack announces this app's own
+ * range wording instead of `OutlinedTextField`'s generic default error announcement layered on top of
+ * it (docs/ARCHITECTURE.md §4 "Accessibility").
  */
 @Composable
 private fun YearField(
     value: IfcDatePickerValue,
     onValueChange: (IfcDatePickerValue) -> Unit,
 ) {
+    val isYearError = value.year == null
+    val yearRangeMessage =
+        stringResource(R.string.picker_year_range, DatePickerRange.MIN_YEAR, DatePickerRange.MAX_YEAR)
     OutlinedTextField(
         value = value.yearText,
         onValueChange = { onValueChange(value.withYearText(it)) },
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .semantics { if (isYearError) error(yearRangeMessage) },
         label = { Text(stringResource(R.string.picker_year_label)) },
-        supportingText = {
-            Text(stringResource(R.string.picker_year_range, DatePickerRange.MIN_YEAR, DatePickerRange.MAX_YEAR))
-        },
-        isError = value.year == null,
+        supportingText = { Text(yearRangeMessage) },
+        isError = isYearError,
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
     )

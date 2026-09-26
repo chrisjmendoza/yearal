@@ -61,3 +61,21 @@ spotless {
 tasks.named("check") {
     dependsOn("dokkaGenerate")
 }
+
+// Module-boundary check (ROADMAP M0 T4): a pure-JVM module may depend only on another pure-JVM module,
+// never on an Android module or on :core:data (CLAUDE.md rule 11 — this project's minSdk 26 means the
+// JDK classes an Android module sees are Android's own, not the desktop JVM's, so a JVM-only module
+// pulling one in would compile here and fail on-device in ways this build cannot detect).
+// `:core:calendar` is stricter still (CLAUDE.md rule 1: pure, zero project dependencies), hence the
+// empty allow-list for it specifically rather than the shared pure-JVM set.
+val pureJvmModules = setOf(":core:calendar", ":core:domain", ":core:holidays", ":core:testing")
+
+restrictProjectDependenciesTo(
+    allowedPaths = if (project.path == ":core:calendar") emptySet() else pureJvmModules,
+    ruleCitation = if (project.path == ":core:calendar") {
+        ":core:calendar depends on nothing else in the project (CLAUDE.md rule 1)."
+    } else {
+        "a pure-JVM module depends only on another pure-JVM module, never an Android module or " +
+            ":core:data (CLAUDE.md rule 11)."
+    },
+)

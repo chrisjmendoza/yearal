@@ -1,16 +1,22 @@
 package io.github.chrisjmendoza.yearal.feature.settings.settings
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
@@ -20,6 +26,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.domain.settings.ColorPalette
@@ -73,31 +81,38 @@ class SettingsScreenTest {
         settings: UserSettings = UserSettings.DEFAULT,
         dynamicColorSupported: Boolean = true,
         deleteAllDataStep: DeleteAllDataStep = DeleteAllDataStep.NONE,
+        fontScale: Float = 1f,
     ) {
         loadedState = SettingsUiState.Loaded(settings, dynamicColorSupported, deleteAllDataStep)
         compose.setContent {
-            IfcTheme(dynamicColor = false) {
-                SettingsScreen(
-                    state = loadedState,
-                    onBack = { backPresses++ },
-                    onWeekdayDisplaySelected = { weekdaySelections += it },
-                    onThemeModeSelected = { themeSelections += it },
-                    onColorSourceSelected = { colorSourceSelections += it },
-                    onPaletteSelected = { paletteSelections += it },
-                    onPureBlackChanged = { pureBlackChanges += it },
-                    onTodayWidgetThemeSelected = { todayWidgetThemeSelections += it },
-                    onMonthWidgetThemeSelected = { monthWidgetThemeSelections += it },
-                    onWidgetBackgroundOpacityChanged = { widgetBackgroundOpacityChanges += it },
-                    onOpenHolidays = { holidaysOpened++ },
-                    onRequestDeleteAllData = { deleteAllDataRequested++ },
-                    onContinueDeleteAllData = { deleteAllDataContinued++ },
-                    onCancelDeleteAllData = { deleteAllDataCancelled++ },
-                    onConfirmDeleteAllData = { deleteAllDataConfirmed++ },
-                    onDismissDeleteAllDataDone = { deleteAllDataDoneDismissed++ },
-                )
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+                IfcTheme(dynamicColor = false) {
+                    SettingsScreen(
+                        state = loadedState,
+                        onBack = { backPresses++ },
+                        onWeekdayDisplaySelected = { weekdaySelections += it },
+                        onThemeModeSelected = { themeSelections += it },
+                        onColorSourceSelected = { colorSourceSelections += it },
+                        onPaletteSelected = { paletteSelections += it },
+                        onPureBlackChanged = { pureBlackChanges += it },
+                        onTodayWidgetThemeSelected = { todayWidgetThemeSelections += it },
+                        onMonthWidgetThemeSelected = { monthWidgetThemeSelections += it },
+                        onWidgetBackgroundOpacityChanged = { widgetBackgroundOpacityChanges += it },
+                        onOpenHolidays = { holidaysOpened++ },
+                        onRequestDeleteAllData = { deleteAllDataRequested++ },
+                        onContinueDeleteAllData = { deleteAllDataContinued++ },
+                        onCancelDeleteAllData = { deleteAllDataCancelled++ },
+                        onConfirmDeleteAllData = { deleteAllDataConfirmed++ },
+                        onDismissDeleteAllDataDone = { deleteAllDataDoneDismissed++ },
+                    )
+                }
             }
         }
     }
+
+    private fun heading(text: String) =
+        compose.onNode(hasText(text).and(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)))
 
     @Test
     fun `weekday options render with their explanations and the stored one is selected`() {
@@ -333,6 +348,17 @@ class SettingsScreenTest {
         holidaysOpened shouldBe 1
     }
 
+    // A11y audit finding #25: GroupHeading ("Colour source", "Palette", "Widgets") must expose the same
+    // TalkBack heading semantics as SectionHeading, or the heading-navigation gesture skips them.
+    @Test
+    fun `group headings are exposed as TalkBack headings`() {
+        show()
+
+        heading("Colour source").performScrollTo().assertIsDisplayed()
+        heading("Palette").performScrollTo().assertIsDisplayed()
+        heading("Widgets").performScrollTo().assertIsDisplayed()
+    }
+
     @Test
     fun `back arrow calls onBack`() {
         show()
@@ -416,6 +442,31 @@ class SettingsScreenTest {
         compose.onAllNodesWithText("Delete all data?").assertCountEquals(0)
         compose.onAllNodesWithText("This can't be undone").assertCountEquals(0)
         compose.onAllNodesWithText("All data deleted").assertCountEquals(0)
+    }
+
+    // A11y audit finding #28 (docs/ARCHITECTURE.md §4 "Accessibility"): the 48dp touch-target floor,
+    // proven on the rows/controls whose sizing does not depend on Modifier.minimumInteractiveComponentSize()
+    // (which this Robolectric harness cannot measure) -- the explicit heightIn/ListItem-default ones.
+    @Test
+    fun `key rows and segmented controls meet the 48dp touch-target floor`() {
+        show()
+
+        compose.onNodeWithText("Holiday sets").performScrollTo().assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithText("Delete all data").performScrollTo().assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithText("Yearal palette").performScrollTo().assertHeightIsAtLeast(48.dp)
+        compose
+            .onNodeWithTag(SettingsTestTags.TODAY_WIDGET_THEME_PREFIX + WidgetTheme.LIGHT.name)
+            .performScrollTo()
+            .assertHeightIsAtLeast(48.dp)
+    }
+
+    // docs/ARCHITECTURE.md §4 "Accessibility": 200% font scale never clips.
+    @Test
+    fun `at 200 percent font scale the section headings and a control stay displayed`() {
+        show(fontScale = 2f)
+
+        compose.onNodeWithText("Appearance").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Delete all data").performScrollTo().assertIsDisplayed()
     }
 
     @Test

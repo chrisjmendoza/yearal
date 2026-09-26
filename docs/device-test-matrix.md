@@ -18,10 +18,12 @@ version and date when it passes. Target coverage: API 26, 33 and 36, plus one Sa
 | W7 | Add, edit and delete an event: the Month widget's dot appears or disappears within about a second, also after a burst of quick edits. | |
 | W8 | An event on Year Day and one on Leap Day (2028) mark the band. | |
 | W9 | Widget picker previews on API ≤ 30, 31–34 and 35+. | ❌ 2026-09-19, Samsung (One UI), build `6175108`: both entries showed only a loading spinner — that build's `previewLayout` was the loading layout. M5 T5 (`ed1aa22`) replaces it with static mock-ups; **re-check on the same phone with a build from `ed1aa22` or later**, and if the spinner persists, investigate the Samsung launcher's handling of `previewLayout` / `previewImage`. |
-| W10 | TalkBack on the Month widget: what is actually read out (one description, or every day number). | |
+| W10 | TalkBack on the Month widget: swipe through the grid and confirm each of the 28 day cells is announced with its own short description (`Sol 13`, `Sol 13, today`, `Sol 21, holiday, has events`) rather than a bare digit, and that the title/header block above the grid is still one separate stop with the merged month/today description (ROADMAP M8 T1, accessibility audit finding #1). Note whether any cell is announced twice (once for the cell, once for a child number) — unit tests cannot see whether Glance/RemoteViews merges child `Text`s into the cell's own node on a real device. | |
 | W11 | logcat shows no WorkManager complaint about the removed `ACCESS_NETWORK_STATE`. | |
 | W12 | Set each widget's own appearance override (Settings → Appearance → widget theme) to Light and to Dark while the app itself is on System/the opposite mode: the widget follows its own override, not the app, on both home screen placements. Set both back to "Follow app" and confirm they track the app's `ThemeMode` (including System) again. Also try a non-`TEAL` palette and Material You: both widgets pick it up after the debounced refresh (within a couple of seconds of leaving Settings), without a manual widget re-add. | |
-| W13 | Transparent-widget contrast (design-plan §5.6): set the widget background opacity to 0%, 40% and 100% on a busy home-screen wallpaper, for both widgets, light and dark. Below 50% the Today widget's date text should sit on its own solid chip; the Month widget's day numbers and marks should stay readable because each cell keeps its own opaque fill even when the surrounding widget background is transparent. Confirm nothing is unreadable at 0%. Robolectric's contrast test does not cover this (`ColorSchemeContrastTest` only asserts fixed role pairs, not a wallpaper showing through). | |
+| W13 | Transparent-widget contrast (design-plan §5.6): set the widget background opacity to 0%, 40% and 100% on a busy home-screen wallpaper, for both widgets, light and dark. Below 50% the Today widget's date text, and the Month widget's title/Gregorian-span/header-row block, should each sit on their own solid chip (ROADMAP M8 T1, accessibility audit finding #16 added the Month widget's); the Month widget's day numbers and marks should stay readable regardless, because each cell keeps its own opaque fill even when the surrounding widget background is transparent. Confirm nothing is unreadable at 0%. Robolectric's contrast test does not cover this (`ColorSchemeContrastTest` only asserts fixed role pairs, not a wallpaper showing through). | |
+| W14 | Resize the Today widget down to its new minimum (accessibility audit finding #15) and confirm with a layout inspector or a ruler overlay that the whole widget measures at least 48dp tall. For the Month widget (finding #14), the declared minimum (320dp) is a known-short 43dp per column, not 48dp — that trade-off is deliberate (see `month_widget_info.xml`'s own comment: 352dp would clear 48dp but does not fit a 360dp-wide phone's launcher grid, so 320dp was chosen to stay placeable). Confirm instead that the widget **can be placed at all** on a 360dp-wide phone at its declared minimum, and separately resize it up to a six-cell-or-larger width and confirm a column then measures at least 48dp. The gate's `MonthWidgetInfoTest`/`TodayWidgetInfoTest` only prove the declared XML attributes, not what a real launcher actually renders at either size. | |
+| W15 | Widget-picker preview at 200% system font scale (Settings → Accessibility → Display size and text → Font size, or `adb shell settings put system font_scale 2.0`): open the widget picker and confirm the Month widget's static preview (`month_widget_preview.xml`) does not clip or overlap its day-cell digits. Not shown to clip from reading the XML alone (accessibility audit finding #29: no `maxLines`/`ellipsize` is set, so a `wrap_content`-height `TextView` wraps rather than truncates, but the picker renders this layout into a fixed-size thumbnail whose real dimensions are launcher-controlled and not reproducible under Robolectric) — **verify on device**; if it does clip, cap the day-cell `TextView`s with `android:maxLines="3"` plus `android:autoSizeTextType="uniform"` (or a fixed smaller `textSize`) in `res/layout/month_widget_preview.xml`. | |
 
 ## Live date and zone (R1)
 
@@ -57,6 +59,31 @@ version and date when it passes. Target coverage: API 26, 33 and 36, plus one Sa
 | N3 | Tap the Today widget: the Today tab opens. | |
 | N4 | Leave the app in the background until Android kills it, then reopen it from a widget or a notification: it routes correctly, and rotating afterwards does not route a second time. | |
 | N5 | At expanded width (tablet or unfolded foldable), a widget or notification tap opens the Month on that day, with the day selected in the right-hand pane — no sheet. | |
+
+## TalkBack (M8 T1)
+
+The accessibility audit of 2026-09-26 (ROADMAP M8 T1) was done by code review; these are the checks
+that need a screen reader on a device. TalkBack on, English, default font scale unless a row says
+otherwise. Expected text comes from each module's own `strings.xml`; substitute today's real dates.
+
+| # | Check | Result |
+|---|---|---|
+| T1 | Today: swipe to the hero. The bare weekday above the date (e.g. "Thursday") is spoken as "IFC weekday: Thursday", never as the bare word; on Year Day / Leap Day there is no such line at all. | |
+| T2 | Today, further down the hero: a line spoken as "Actual weekday: <today's real weekday>", distinct from T1. | |
+| T3 | Today: the year-progress bar and its "N% of the year" caption are one spoken node — you hear the percentage once, not twice in a row. | |
+| T4 | Today: the Holidays and Today's events cards read either their quiet empty line or one merged sentence per row. | |
+| T5 | Month: the header rows announce "IFC weekdays" then the abbreviated names, then "Actual weekdays" and its row. | |
+| T6 | Month: focus a day cell. One sentence ("Sol 13, IFC Friday. Gregorian Tuesday, June 30, 2026. 2 events. Holiday: …", with "Today." on the current date) and **no stray bare number** spoken after it. Repeat on the Year Day / Leap Day band and on a Year-overview mini-month tile. | |
+| T7 | Month: the Year Day / Leap Day band reads "no IFC weekday, actual <weekday>", never an unlabelled weekday. | |
+| T8 | Month day card: an event row is announced as a button and is comfortably tappable (≥48dp); TalkBack's actions menu on it offers "Delete this occurrence" / "Delete event" without a real long-press. | |
+| T9 | Converter: a date on Year Day or Leap Day reads "no IFC weekday, actual <weekday>"; changing the input to a new date announces the new result on its own (polite live region) without swiping back to it. | |
+| T10 | Event editor: Back and Delete in the top bar, and every dialog button, are easy to hit (≥48dp). Set End before Start and swipe to the End field itself: TalkBack says the field is invalid right there, not only at the banner; a failed save announces its banner. | |
+| T11 | Event editor: "Number of times" opens the numeric keyboard. | |
+| T12 | Holidays: a set's switch is one merged node ("…, switch, on/off"); Back and the Previous/Next-year buttons are easy to hit. | |
+| T13 | Settings and More: every group heading is announced as a heading; every More row (Holidays, Settings, Learn, Privacy, Send feedback) is a full-width button. Intro: switching pages starts at the top of the new page with its heading focused. | |
+| T14 | Month widget: each day cell reads "Sol 13", "Sol 13, today", "Sol 21, holiday, has events" — never an event title; the widget root still reads both labelled weekdays. Today widget at its smallest size: the tap target is not cramped. | |
+| T15 | 200% font (Settings → Accessibility → Display size and text): Today, Month with its day card, Year, Events, Settings and More show nothing clipped or overlapping; grid cells and buttons stay tappable. | |
+| T16 | Reduced motion (Settings → Accessibility → Remove animations): note that the Month/Year pager still animates page changes — recorded as the one unimplemented bullet of ARCHITECTURE §4 "Accessibility" (audit finding #22, deferred). | |
 
 ## App
 

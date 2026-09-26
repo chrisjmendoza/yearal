@@ -1,6 +1,7 @@
 package io.github.chrisjmendoza.yearal.feature.settings.intro
 
 import android.content.res.Configuration
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,11 +18,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -92,6 +97,12 @@ fun IntroRoute(
  * @param onFinish finishes from the last screen without the birthday hook; marks it seen.
  * @param onFindBirthday the closing hook (FEATURES L1, D3): marks the intro seen and opens the converter.
  * @param onLearnMore opens the Learn screen without marking the intro seen or finished.
+ *
+ * **On every page change** (`page++`/`page--`), the shared [rememberScrollState] resets to the top and
+ * accessibility/keyboard focus moves to the new page's [PageHeading] (a11y audit finding #26) — without
+ * this, a user who scrolled down on one page would land on the next page already scrolled past its own
+ * heading, since [androidx.compose.foundation.ScrollState] does not reset itself just because its
+ * content changed underneath it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,6 +115,15 @@ fun IntroScreen(
 ) {
     var page by rememberSaveable { mutableIntStateOf(0) }
     val formatter = rememberIfcDateFormatter()
+    val scrollState = rememberScrollState()
+    val headingFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(page) {
+        // Reset first: a screen reader announcing the newly focused heading should find it already at
+        // the top, not mid-scroll.
+        scrollState.scrollTo(0)
+        headingFocusRequester.requestFocus()
+    }
 
     Scaffold(
         modifier = modifier,
@@ -131,7 +151,7 @@ fun IntroScreen(
                 Modifier
                     .padding(padding)
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scrollState)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
             Text(
@@ -141,9 +161,9 @@ fun IntroScreen(
                 modifier = Modifier.padding(bottom = 8.dp),
             )
             when (page) {
-                0 -> WhatIsIfcPage()
-                1 -> WeekdayPage(formatter)
-                else -> FloatingDaysPage(formatter)
+                0 -> WhatIsIfcPage(headingFocusRequester)
+                1 -> WeekdayPage(formatter, headingFocusRequester)
+                else -> FloatingDaysPage(formatter, headingFocusRequester)
             }
             TextButton(onClick = onLearnMore, modifier = Modifier.padding(top = 8.dp)) {
                 Text(stringResource(R.string.intro_learn_more))
@@ -184,20 +204,23 @@ private fun IntroNavigationBar(
 
 /** Screen 1: what the IFC is (calendar-spec §2.2 R4) — month count, day count, and where Sol sits. */
 @Composable
-private fun WhatIsIfcPage() {
+private fun WhatIsIfcPage(headingFocusRequester: FocusRequester) {
     GridIllustration(
         variant = GridIllustrationVariant.THIRTEEN_MONTHS,
         contentDescription = stringResource(R.string.illustration_thirteen_months_description),
         modifier = Modifier.padding(bottom = Dimens.SpaceL),
     )
-    PageHeading(stringResource(R.string.intro_what_heading))
+    PageHeading(stringResource(R.string.intro_what_heading), headingFocusRequester)
     BodyParagraph(stringResource(R.string.intro_what_months, IntroFacts.monthCount, IntroFacts.daysPerMonth))
     BodyParagraph(stringResource(R.string.intro_what_sol))
 }
 
 /** Screen 2: nominal vs. actual weekday (calendar-spec §4.1), with the spec's own worked example. */
 @Composable
-private fun WeekdayPage(formatter: IfcDateFormatter) {
+private fun WeekdayPage(
+    formatter: IfcDateFormatter,
+    headingFocusRequester: FocusRequester,
+) {
     val nominal = requireNotNull(IntroFacts.weekdayExampleIfc.nominalDayOfWeek)
     val nominalName = formatter.weekdayName(nominal)
     val actualName = formatter.weekdayName(IntroFacts.weekdayExampleIfc.actualDayOfWeek)
@@ -209,7 +232,7 @@ private fun WeekdayPage(formatter: IfcDateFormatter) {
         actualWeekdayLabel = actualName,
         modifier = Modifier.padding(bottom = Dimens.SpaceL),
     )
-    PageHeading(stringResource(R.string.intro_weekday_heading))
+    PageHeading(stringResource(R.string.intro_weekday_heading), headingFocusRequester)
     BodyParagraph(stringResource(R.string.intro_weekday_intro))
     BodyParagraph(
         stringResource(
@@ -225,13 +248,16 @@ private fun WeekdayPage(formatter: IfcDateFormatter) {
 
 /** Screen 3: Year Day and Leap Day (calendar-spec §2.4 R8, R9), ending with the birthday hook's prompt. */
 @Composable
-private fun FloatingDaysPage(formatter: IfcDateFormatter) {
+private fun FloatingDaysPage(
+    formatter: IfcDateFormatter,
+    headingFocusRequester: FocusRequester,
+) {
     GridIllustration(
         variant = GridIllustrationVariant.YEAR_DAY,
         contentDescription = stringResource(R.string.illustration_year_day_description),
         modifier = Modifier.padding(bottom = Dimens.SpaceL),
     )
-    PageHeading(stringResource(R.string.intro_floating_heading))
+    PageHeading(stringResource(R.string.intro_floating_heading), headingFocusRequester)
     BodyParagraph(
         stringResource(
             R.string.intro_floating_year_day,
@@ -249,12 +275,25 @@ private fun FloatingDaysPage(formatter: IfcDateFormatter) {
     BodyParagraph(stringResource(R.string.intro_find_birthday_prompt))
 }
 
+/**
+ * @param headingFocusRequester attached so [IntroScreen]'s page-change [LaunchedEffect] can move
+ * accessibility/keyboard focus here (a11y audit finding #26); [Modifier.focusable] is what makes this
+ * [Text] a valid focus target in the first place, since plain text is not focusable by default.
+ */
 @Composable
-private fun PageHeading(text: String) {
+private fun PageHeading(
+    text: String,
+    headingFocusRequester: FocusRequester,
+) {
     Text(
         text = text,
         style = MaterialTheme.typography.headlineSmall,
-        modifier = Modifier.padding(bottom = 12.dp).semantics { heading() },
+        modifier =
+            Modifier
+                .padding(bottom = 12.dp)
+                .semantics { heading() }
+                .focusRequester(headingFocusRequester)
+                .focusable(),
     )
 }
 

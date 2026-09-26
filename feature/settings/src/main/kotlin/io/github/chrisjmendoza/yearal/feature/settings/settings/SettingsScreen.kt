@@ -714,14 +714,22 @@ internal object SettingsTestTags {
     const val MONTH_WIDGET_THEME_PREFIX: String = "settings:monthWidgetTheme:"
 }
 
-/** A small, muted heading for a control group inside a section (e.g. "Colour source", "Widgets"). */
+/**
+ * A small, muted heading for a control group inside a section (e.g. "Colour source", "Widgets").
+ * Carries `.semantics { heading() }` like [SectionHeading], the section-level heading it nests under —
+ * otherwise TalkBack's heading-navigation gesture would skip these sub-group labels inconsistently on
+ * the same screen (a11y audit finding #25).
+ */
 @Composable
 private fun GroupHeading(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+        modifier =
+            Modifier
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
+                .semantics { heading() },
     )
 }
 

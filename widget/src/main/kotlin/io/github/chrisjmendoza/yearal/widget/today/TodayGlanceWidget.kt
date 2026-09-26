@@ -35,9 +35,9 @@ import io.github.chrisjmendoza.yearal.core.domain.ZoneProvider
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.widget.R
 import io.github.chrisjmendoza.yearal.widget.di.WidgetEntryPoint
-import io.github.chrisjmendoza.yearal.widget.theme.LOW_OPACITY_CHIP_THRESHOLD
 import io.github.chrisjmendoza.yearal.widget.theme.applyWidgetBackgroundOpacity
 import io.github.chrisjmendoza.yearal.widget.theme.resolveWidgetColors
+import io.github.chrisjmendoza.yearal.widget.theme.shouldShowLowOpacityChip
 import kotlinx.coroutines.flow.first
 import java.time.Clock
 import java.time.Instant
@@ -121,11 +121,23 @@ class TodayGlanceWidget : GlanceAppWidget() {
 
     /** Breakpoints shared with `today_widget_info.xml`'s min/max resize attributes. */
     companion object {
-        /** 2 cells wide, 1 cell tall: the IFC date only. */
-        val SMALL: DpSize = DpSize(110.dp, 40.dp)
+        /**
+         * 2 cells wide, 1 cell tall: the IFC date only. Height is 48dp, not the nominal-cell 40dp
+         * (`70dp * 1 cell - 30dp`), because that is also `today_widget_info.xml`'s `minHeight` --
+         * raised to the 48dp touch-target floor for the whole widget's single tap target (ROADMAP M8
+         * T1, accessibility audit finding #15). Keeping this constant in step with that floor matters
+         * because [TodayWidgetContent] compares `LocalSize.current` to this exact value while composing
+         * at [SMALL] size (`size.height > SMALL.height`, always false there since the two are equal):
+         * if this stayed at 40dp
+         * while the true minimum height became 48dp, the "date only" appearance below would still be
+         * correct in code (that comparison is self-referential either way), but the constant itself
+         * would no longer describe the smallest size a user can actually resize to.
+         */
+        val SMALL: DpSize = DpSize(110.dp, 48.dp)
 
-        /** 3 cells wide, 1 cell tall: adds the Gregorian date line. */
-        val MEDIUM: DpSize = DpSize(180.dp, 40.dp)
+        /** 3 cells wide, 1 cell tall: adds the Gregorian date line. Height matches [SMALL]'s for the
+         * same reason (ROADMAP M8 T1, accessibility audit finding #15). */
+        val MEDIUM: DpSize = DpSize(180.dp, 48.dp)
 
         /** 3 cells wide, 2 cells tall: adds the labelled actual weekday. */
         val LARGE: DpSize = DpSize(180.dp, 110.dp)
@@ -159,13 +171,14 @@ class TodayGlanceWidget : GlanceAppWidget() {
  *
  * **Background opacity** ([UserSettings.widgetBackgroundOpacity]) is applied only to the widget's own
  * outer background -- never to the text itself -- via
- * [io.github.chrisjmendoza.yearal.widget.theme.applyWidgetBackgroundOpacity]. Below
- * [io.github.chrisjmendoza.yearal.widget.theme.LOW_OPACITY_CHIP_THRESHOLD] the text block sits on its
- * own solid chip (the *opaque* widget-background colour, unaffected by the opacity setting) so it stays
- * legible however transparent the widget itself is -- `:widget` has no `surfaceContainer` role to draw
- * this chip from (`androidx.glance.color.ColorProviders` only exposes the pre-tonal-surface Material 3
- * roles), so the opaque widget-background colour is the nearest available one, the same substitution
- * [io.github.chrisjmendoza.yearal.widget.month.MonthGlanceWidget] makes for its day cells.
+ * [io.github.chrisjmendoza.yearal.widget.theme.applyWidgetBackgroundOpacity]. When
+ * [io.github.chrisjmendoza.yearal.widget.theme.shouldShowLowOpacityChip] says so, the text block sits on
+ * its own solid chip (the *opaque* widget-background colour, unaffected by the opacity setting) so it
+ * stays legible however transparent the widget itself is -- `:widget` has no `surfaceContainer` role to
+ * draw this chip from (`androidx.glance.color.ColorProviders` only exposes the pre-tonal-surface
+ * Material 3 roles), so the opaque widget-background colour is the nearest available one, the same
+ * substitution [io.github.chrisjmendoza.yearal.widget.month.MonthGlanceWidget] makes for its day cells
+ * and, since ROADMAP M8 T1 (accessibility audit finding #16), for its own title/span/header block.
  */
 @Composable
 private fun TodayWidgetContent(
@@ -203,7 +216,7 @@ private fun TodayWidgetContent(
             modifier = modifier.clickable(actionStartActivity(intent))
         }
 
-        val lowOpacity = settings.widgetBackgroundOpacity < LOW_OPACITY_CHIP_THRESHOLD
+        val lowOpacity = shouldShowLowOpacityChip(settings.widgetBackgroundOpacity)
         val textBlockModifier =
             if (lowOpacity) {
                 GlanceModifier.background(ColorProvider(opaqueBackground)).cornerRadius(8.dp).padding(6.dp)

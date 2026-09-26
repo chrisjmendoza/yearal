@@ -258,6 +258,47 @@ class DayCardTest {
         compose.onNodeWithText("Add event").assertHeightIsAtLeast(48.dp)
     }
 
+    // a11y audit finding #5: AgendaRow's vertical padding must floor it at 48dp, same as
+    // TodayScreen.kt's TodayAgendaRow, at both the default and 200% font scale.
+
+    @Test
+    fun `an agenda row's touch target is at least 48dp tall`() {
+        val agenda =
+            listOf(
+                AgendaItemUi(
+                    eventId = 1,
+                    title = "Conference",
+                    isAllDay = true,
+                    startTime = null,
+                    endTime = null,
+                    colorArgb = 0xFF123F3D.toInt(),
+                ),
+            )
+        show(LocalDate.of(2026, 9, 17), agenda = agenda)
+
+        // The row's mergeDescendants semantics make "Conference" resolve to the row itself, same as
+        // the existing long-press test above.
+        compose.onNodeWithText("Conference").assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun `an agenda row's touch target is still at least 48dp tall at 200 percent font scale`() {
+        val agenda =
+            listOf(
+                AgendaItemUi(
+                    eventId = 1,
+                    title = "Conference",
+                    isAllDay = true,
+                    startTime = null,
+                    endTime = null,
+                    colorArgb = 0xFF123F3D.toInt(),
+                ),
+            )
+        show(LocalDate.of(2026, 9, 17), agenda = agenda, fontScale = 2f)
+
+        compose.onNodeWithText("Conference").assertHeightIsAtLeast(48.dp)
+    }
+
     // The popup Day detail's Loading/Unavailable states are gone with it (docs/ROADMAP.md, the day-card
     // merge): an invalid MonthKey.selectedEpochDay now just fails soft to no selection (MonthPages.selectedDateOf),
     // so the card only ever has two states — no day yet (before the first date tick) or a real one.

@@ -6,9 +6,34 @@
   so lint's UnusedAttribute check (correctly) rejects them here at minSdk 26. A `-v31` resource file
   replaces this one entirely rather than merging with it, so keep both files in step.
 
-  Sizes match MonthGlanceWidget's SizeMode.Responsive steps in Kotlin (COMPACT/FULL): about 4x3
-  home-screen cells at minimum (the task's "sensible min/target cells"), matching
-  docs/ARCHITECTURE.md §5's "Month grid: 4x3 and larger".
+  minWidth/minResizeWidth (ROADMAP M8 T1, accessibility audit finding #14): raised from 250dp to 320dp
+  — not all the way to the 48dp touch-target floor (docs/ARCHITECTURE.md §4 "Accessibility"), because
+  that trade-off is real and stated honestly rather than hidden behind a rounder number. The arithmetic,
+  from MonthGlanceWidget's own layout constants: MonthWidgetContent's outer Column pads the whole widget
+  by 8dp on every side (16dp off the total width), and the seven columns then split what is left evenly
+  (DayNumberCell's `defaultWeight()`), so one column's width is `(minWidth - 16dp) / 7`. Solving
+  `(minWidth - 16) / 7 >= 48` gives `minWidth >= 352dp` — but a 352dp+ minimum does not fit a 360dp-wide
+  phone's launcher grid (a 4-column grid there gives about `4 * 90 - 30 = 330dp`; a 5-column grid about
+  `5 * 72 - 30 = 330dp`; both under 352dp), and a launcher that cannot fit a widget's declared minWidth
+  refuses to place it at all, which is a worse outcome than a too-small cell. 320dp — five of the
+  platform's nominal 70dp home-screen cells minus the 30dp gap it always subtracts (`70 * 5 - 30 = 320`)
+  — is chosen instead because it fits that 360dp phone (330dp >= 320dp) while getting as close to the
+  floor as that constraint allows: `(320 - 16) / 7 ~= 43.4dp` per column, about 5dp under the 48dp floor
+  at this minimum. The floor is only actually met once a placement spans six or more of the launcher's
+  nominal cells (about 390dp and up by the same `70 * cells - 30` formula); this file's real guarantee is
+  "48dp met at any six-cell-or-larger placement, within 5dp of it at the five-cell minimum" — not "48dp
+  everywhere", because a widget that cannot be placed helps no one. maxResizeWidth stays 460dp (seven
+  cells, `70 * 7 - 30 = 460`) — already a valid, generous upper bound above the new minResizeWidth.
+  targetCellWidth moves from 4 to 5 to match. Height is untouched: the finding was about the seven
+  *columns*, and 180dp minHeight already gives every row well over 48dp (four rows, no shared horizontal
+  division).
+
+  Sizes otherwise match MonthGlanceWidget's SizeMode.Responsive steps in Kotlin (COMPACT/FULL):
+  docs/ARCHITECTURE.md §5's "Month grid: 4x3 and larger" describes the COMPACT/FULL breakpoints
+  themselves, which are unchanged — SizeMode.Responsive selects between them by the widget's actual
+  size at render time, not by this file's min/max attributes, so raising the resize floor here does not
+  stop the widget from ever being small in Glance's eyes; a real device is simply never offered a
+  narrower size to resize down to.
 
   updatePeriodMillis is the layer-3 self-healing backstop of the midnight rollover
   (docs/ARCHITECTURE.md §5 "Midnight rollover (layered)"), the same four hours as the Today widget;
@@ -29,9 +54,9 @@
   No android:configure: the optional config activity is ROADMAP M5 T4, out of scope here.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="250dp"
+    android:minWidth="320dp"
     android:minHeight="180dp"
-    android:minResizeWidth="250dp"
+    android:minResizeWidth="320dp"
     android:minResizeHeight="180dp"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"

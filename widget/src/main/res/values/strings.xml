@@ -41,6 +41,16 @@
          (ROADMAP M5 T6). Reveals only that something exists, never a title or a count (CLAUDE.md rule 8). -->
     <string name="month_widget_has_events_hint">Has events.</string>
 
+    <!-- Per-day-cell TalkBack qualifiers (ROADMAP M8 T1, accessibility audit finding #1): short,
+         lower-case fragments appended after the cell's day name and a comma, e.g. "Sol 13, today" or
+         "Sol 21, holiday, has events". Presence only — never a holiday's name or an event's count or
+         title (CLAUDE.md rule 8), the same rule month_widget_has_events_hint above already follows. No
+         weekday is named on a cell (calendar-spec §4.1 item 7 requires any weekday shown to be labelled
+         IFC/actual; the simplest way to satisfy that is to show none at all here). -->
+    <string name="month_widget_cell_today">today</string>
+    <string name="month_widget_cell_holiday">holiday</string>
+    <string name="month_widget_cell_has_event">has events</string>
+
     <!-- Widget-picker preview content (ROADMAP M5 T5): a fixed, illustrative sample date, never live
          data (`res/layout/today_widget_preview.xml`, `res/layout/month_widget_preview.xml`). The sample
          is a regular day on purpose (CLAUDE.md rule 6: a static mock-up of Year Day or Leap Day could

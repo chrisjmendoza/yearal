@@ -45,6 +45,7 @@ import io.github.chrisjmendoza.yearal.widget.R
 import io.github.chrisjmendoza.yearal.widget.di.WidgetEntryPoint
 import io.github.chrisjmendoza.yearal.widget.theme.applyWidgetBackgroundOpacity
 import io.github.chrisjmendoza.yearal.widget.theme.resolveWidgetColors
+import io.github.chrisjmendoza.yearal.widget.theme.shouldShowLowOpacityChip
 import io.github.chrisjmendoza.yearal.widget.today.dayLaunchIntent
 import io.github.chrisjmendoza.yearal.widget.today.monthLaunchIntent
 import io.github.chrisjmendoza.yearal.widget.today.todayDate
@@ -107,6 +108,12 @@ class MonthGlanceWidget : GlanceAppWidget() {
         val formatter = IfcDateFormatter(context.resources, Locale.getDefault())
         val tapHint = context.getString(R.string.today_widget_tap_hint)
         val hasEventsLabel = context.getString(R.string.month_widget_has_events_hint)
+        // Per-cell TalkBack qualifiers (ROADMAP M8 T1, accessibility audit finding #1); see
+        // MonthWidgetState.dayCellContentDescription's KDoc for what each one means and why there is no
+        // per-cell weekday.
+        val cellTodayLabel = context.getString(R.string.month_widget_cell_today)
+        val cellHolidayLabel = context.getString(R.string.month_widget_cell_holiday)
+        val cellEventLabel = context.getString(R.string.month_widget_cell_has_event)
         // One snapshot, bounded and caught (fetchMonthEventPresence's KDoc): a slow or broken database
         // must never hang or crash this render, only cost it its dots for one cycle.
         val today = todayDate(clock, zoneProvider)
@@ -126,6 +133,9 @@ class MonthGlanceWidget : GlanceAppWidget() {
                 hasEventsLabel,
                 holidayDates,
                 settings,
+                cellTodayLabel,
+                cellHolidayLabel,
+                cellEventLabel,
             )
         }
     }
@@ -145,6 +155,9 @@ class MonthGlanceWidget : GlanceAppWidget() {
         val formatter = IfcDateFormatter(context.resources, Locale.getDefault())
         val tapHint = context.getString(R.string.today_widget_tap_hint)
         val hasEventsLabel = context.getString(R.string.month_widget_has_events_hint)
+        val cellTodayLabel = context.getString(R.string.month_widget_cell_today)
+        val cellHolidayLabel = context.getString(R.string.month_widget_cell_holiday)
+        val cellEventLabel = context.getString(R.string.month_widget_cell_has_event)
         provideContent {
             // A fixed UserSettings.DEFAULT, not a live SettingsRepository read -- a picker preview must
             // not depend on live data, matching PREVIEW_EVENT_DATES/PREVIEW_HOLIDAY_DATES above.
@@ -157,6 +170,9 @@ class MonthGlanceWidget : GlanceAppWidget() {
                 hasEventsLabel,
                 PREVIEW_HOLIDAY_DATES,
                 UserSettings.DEFAULT,
+                cellTodayLabel,
+                cellHolidayLabel,
+                cellEventLabel,
             )
         }
     }
@@ -220,10 +236,16 @@ class MonthGlanceWidget : GlanceAppWidget() {
  *   own use of the same function -- and its [UserSettings.widgetBackgroundOpacity] is applied only to
  *   the outermost background. Day cells and the intercalary band keep their own **opaque** fill
  *   regardless of the opacity setting (`docs/design-plan.md` §5.6's "transparent widget" concern is
- *   about the surrounding chrome), which is this widget's answer to the "keep text readable at low
- *   opacity" requirement -- the cheaper option next to
- *   [io.github.chrisjmendoza.yearal.widget.today.TodayGlanceWidget]'s solid chip, since here the grid
- *   already gives every number and mark its own opaque patch to sit on.
+ *   about the surrounding chrome). **As built (ROADMAP M8 T1, accessibility audit finding #16):** the
+ *   title/span/header block above the grid has no such opaque fill of its own, so below
+ *   [io.github.chrisjmendoza.yearal.widget.theme.LOW_OPACITY_CHIP_THRESHOLD] it now sits on the same
+ *   solid chip [io.github.chrisjmendoza.yearal.widget.today.TodayGlanceWidget] already gives its own
+ *   text block, keeping it legible at any background opacity; the grid and intercalary band still need
+ *   no chip, since every cell already gives its own number and marks an opaque patch to sit on.
+ * @param cellTodayLabel the localized "today" qualifier for each grid cell's own TalkBack description
+ *   ([dayCellContentDescription], ROADMAP M8 T1, accessibility audit finding #1).
+ * @param cellHolidayLabel the localized "holiday" qualifier, presence only (CLAUDE.md rule 8).
+ * @param cellEventLabel the localized "has events" qualifier, presence only (CLAUDE.md rule 8).
  */
 @Composable
 private fun MonthWidgetContent(
@@ -235,6 +257,9 @@ private fun MonthWidgetContent(
     hasEventsLabel: String,
     holidayDates: Set<LocalDate>,
     settings: UserSettings,
+    cellTodayLabel: String,
+    cellHolidayLabel: String,
+    cellEventLabel: String,
 ) {
     val colors = resolveWidgetColors(settings, settings.monthWidgetTheme, Build.VERSION.SDK_INT) ?: GlanceTheme.colors
     GlanceTheme(colors = colors) {
@@ -242,17 +267,24 @@ private fun MonthWidgetContent(
         // Read fresh on every composition, per CLAUDE.md rule 2 -- never `remember`, never a value
         // computed once outside this function and passed down.
         val today = todayDate(clock, zoneProvider)
-        val state = buildMonthWidgetState(today, formatter, tapHint, eventDates, hasEventsLabel, holidayDates)
+        val state =
+            buildMonthWidgetState(
+                today,
+                formatter,
+                tapHint,
+                eventDates,
+                hasEventsLabel,
+                holidayDates,
+                cellTodayLabel,
+                cellHolidayLabel,
+                cellEventLabel,
+            )
         val size = LocalSize.current
         val isFull = size.width >= MonthGlanceWidget.FULL.width && size.height >= MonthGlanceWidget.FULL.height
 
+        val opaqueBackground = GlanceTheme.colors.widgetBackground.getColor(context)
         val translucentBackground =
-            ColorProvider(
-                applyWidgetBackgroundOpacity(
-                    GlanceTheme.colors.widgetBackground.getColor(context),
-                    settings.widgetBackgroundOpacity,
-                ),
-            )
+            ColorProvider(applyWidgetBackgroundOpacity(opaqueBackground, settings.widgetBackgroundOpacity))
         var modifier =
             GlanceModifier
                 .fillMaxSize()
@@ -269,34 +301,51 @@ private fun MonthWidgetContent(
             modifier = modifier.clickable(actionStartActivity(intent))
         }
 
+        // Accessibility audit finding #16: below the threshold, the title/span/header block gets the
+        // same solid chip TodayGlanceWidget already draws behind its own text, since (unlike the grid
+        // below) none of these lines have an opaque fill of their own to stay legible on.
+        val headerBlockModifier =
+            if (shouldShowLowOpacityChip(settings.widgetBackgroundOpacity)) {
+                GlanceModifier
+                    .fillMaxWidth()
+                    .background(
+                        ColorProvider(opaqueBackground),
+                    ).cornerRadius(8.dp)
+                    .padding(6.dp)
+            } else {
+                GlanceModifier.fillMaxWidth()
+            }
+
         Column(modifier = modifier) {
-            Text(
-                text = state.monthTitle,
-                style =
-                    TextStyle(
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = GlanceTheme.colors.onSurface,
-                    ),
-                modifier = GlanceModifier.fillMaxWidth().padding(bottom = 2.dp),
-            )
-            if (isFull) {
-                // Directly under the title rather than after the grid: it names the whole month, so it
-                // belongs with the month's heading, and putting it last left the grid's final row and the
-                // span competing for the eye at the bottom edge (owner device feedback, 2026-09-19).
+            Column(modifier = headerBlockModifier) {
                 Text(
-                    text = state.gregorianSpanLabel,
+                    text = state.monthTitle,
                     style =
                         TextStyle(
-                            fontSize = 11.sp,
-                            color = GlanceTheme.colors.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = GlanceTheme.colors.onSurface,
                         ),
-                    modifier = GlanceModifier.fillMaxWidth().padding(bottom = 4.dp),
+                    modifier = GlanceModifier.fillMaxWidth().padding(bottom = 2.dp),
                 )
-                WeekdayHeaderRow(state.nominalWeekdayHeaders, GlanceTheme.colors.onSurface)
+                if (isFull) {
+                    // Directly under the title rather than after the grid: it names the whole month, so it
+                    // belongs with the month's heading, and putting it last left the grid's final row and the
+                    // span competing for the eye at the bottom edge (owner device feedback, 2026-09-19).
+                    Text(
+                        text = state.gregorianSpanLabel,
+                        style =
+                            TextStyle(
+                                fontSize = 11.sp,
+                                color = GlanceTheme.colors.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                            ),
+                        modifier = GlanceModifier.fillMaxWidth().padding(bottom = 4.dp),
+                    )
+                    WeekdayHeaderRow(state.nominalWeekdayHeaders, GlanceTheme.colors.onSurface)
+                }
+                WeekdayHeaderRow(state.actualWeekdayHeaders, GlanceTheme.colors.onSurfaceVariant)
             }
-            WeekdayHeaderRow(state.actualWeekdayHeaders, GlanceTheme.colors.onSurfaceVariant)
             // The grid's rule lines, without a single extra view: this container is filled with the
             // line colour, every cell insets itself by GRID_LINE and paints the widget background over
             // the rest, so what shows through the inset is a hairline between and around the cells.
@@ -352,9 +401,15 @@ private fun WeekdayHeaderRow(
  * task: "shape/weight, not colour alone"): a rounded, filled pill plus bold text. [dayCell.hasEvent]
  * adds a small dot glyph beneath the number (ROADMAP M5 T6) -- its **presence**, not a colour, is the
  * signal (CLAUDE.md rule 3), and every cell reserves the same line for it (an empty [EVENT_DOT_GLYPH]
- * text otherwise) so a dot never shifts the grid's row height. Carries no semantics of its own, exactly
- * like the day number beside it (docs/ARCHITECTURE.md §5, "not the app's full-grid pattern of one rich
- * description per cell").
+ * text otherwise) so a dot never shifts the grid's row height.
+ *
+ * **As built (ROADMAP M8 T1, accessibility audit finding #1):** the cell's own clickable node carries
+ * [dayCell.contentDescription] ([dayCellContentDescription]), so TalkBack announces what the cell is
+ * (`Sol 13`, `Sol 13, today`, `Sol 21, holiday, has events`) rather than a bare digit -- superseding the
+ * earlier docs/ARCHITECTURE.md §5 ruling that this widget would carry only one merged description for
+ * the whole grid. The day number, the Gregorian day and the mark glyphs inside the cell remain plain,
+ * non-clickable `Text`s with no semantics of their own; they do not need any, since they are not
+ * independently focusable and this description on their clickable ancestor is what TalkBack reports.
  *
  * When [isFull] is set the cell also shows the day of [dayCell.gregorianDate] in a smaller,
  * secondary style beneath the IFC number, the same "IFC day large, Gregorian day small" pairing the
@@ -387,7 +442,12 @@ private fun RowScope.DayNumberCell(
 ) {
     val colors = GlanceTheme.colors
     val context = LocalContext.current
-    var cellModifier = GlanceModifier.defaultWeight().fillMaxHeight().padding(GRID_LINE)
+    var cellModifier =
+        GlanceModifier
+            .defaultWeight()
+            .fillMaxHeight()
+            .padding(GRID_LINE)
+            .semantics { contentDescription = dayCell.contentDescription }
     dayLaunchIntent(context, dayCell.gregorianDate.toEpochDay())?.let { intent ->
         cellModifier = cellModifier.clickable(actionStartActivity(intent))
     }

@@ -331,6 +331,9 @@ internal fun IntercalaryHeader(state: DayDetailUi) {
  * Long-pressing the row, or its TalkBack custom action (`AccessibilityAction.ACTION_LONG_CLICK`'s
  * spoken-menu equivalent — reachable without a long press), invokes [onRequestDelete]: "delete this
  * occurrence" for a recurring event, a plain delete otherwise ([AgendaItemUi.isRecurring]).
+ *
+ * Vertical padding keeps the row's touch target at least 48dp tall (docs/ARCHITECTURE.md §4
+ * "Accessibility"), matching `TodayScreen.kt`'s `TodayAgendaRow`.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -362,6 +365,10 @@ internal fun AgendaRow(
             Modifier
                 .fillMaxWidth()
                 .combinedClickable(role = Role.Button, onClick = onClick, onLongClick = onRequestDelete)
+                // Vertical padding floors the row at 48dp (docs/ARCHITECTURE.md §4 "Accessibility"),
+                // matching TodayScreen.kt's TodayAgendaRow — without it a 12dp dot plus two lines of
+                // bodyLarge/bodySmall text measures under the floor (a11y audit finding #5).
+                .padding(vertical = Dimens.SpaceS)
                 .semantics(mergeDescendants = true) {
                     contentDescription = "$title, $timeLabel"
                     customActions =

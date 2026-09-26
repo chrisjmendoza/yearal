@@ -10,12 +10,16 @@
   `WidgetPreviewUpdater`'s `setWidgetPreview` call (docs/ARCHITECTURE.md §5 "Picker previews"), and fall
   back to this attribute only if that call has not yet succeeded once. Keep every other attribute
   identical to the base file.
+
+  minHeight/minResizeHeight (ROADMAP M8 T1, accessibility audit finding #15): raised to 48dp, the
+  touch-target floor — see res/xml/today_widget_info.xml's comment. maxResizeHeight (110dp, unchanged)
+  was already above the new floor, so it needs no change.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="110dp"
-    android:minHeight="40dp"
+    android:minHeight="48dp"
     android:minResizeWidth="110dp"
-    android:minResizeHeight="40dp"
+    android:minResizeHeight="48dp"
     android:maxResizeWidth="180dp"
     android:maxResizeHeight="110dp"
     android:targetCellWidth="2"

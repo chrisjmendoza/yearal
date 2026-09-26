@@ -10,6 +10,14 @@
   launcher's default placement and the responsive breakpoints agree: 2x1 minimum (date only) up to
   3x2 (date, Gregorian line, actual weekday).
 
+  minHeight/minResizeHeight (ROADMAP M8 T1, accessibility audit finding #15): raised from 40dp to 48dp,
+  the touch-target floor docs/ARCHITECTURE.md §4 "Accessibility" sets. Unlike the Month widget's seven
+  columns (finding #14), there is no shared division to account for here: the whole widget is one
+  clickable region (TodayWidgetContent's outer Column carries both the tap target and its own padding),
+  so its clickable height is simply the declared height itself, and 48dp both clears the floor and is
+  the value used. TodayGlanceWidget.SMALL's own height moves from 40dp to 48dp to match, so the
+  responsive breakpoint that shows "date only" still lines up with the true smallest resizable size.
+
   updatePeriodMillis is the layer-3 self-healing backstop of the midnight rollover
   (docs/ARCHITECTURE.md §5 "Midnight rollover (layered)"); layers 1 and 2 (the alarm and the system-event
   receivers in :core:scheduling) do the real work, so this only needs to be frequent enough to recover
@@ -30,9 +38,9 @@
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="110dp"
-    android:minHeight="40dp"
+    android:minHeight="48dp"
     android:minResizeWidth="110dp"
-    android:minResizeHeight="40dp"
+    android:minResizeHeight="48dp"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="14400000"

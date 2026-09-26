@@ -3,6 +3,7 @@ package io.github.chrisjmendoza.yearal.widget.month
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
+import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.testing.FakeZoneProvider
 import io.github.chrisjmendoza.yearal.core.testing.MutableClock
@@ -300,5 +301,111 @@ class MonthWidgetStateTest {
             "September 2026. September 8, IFC Sunday. Gregorian Thursday, September 17, 2026. Today. $tapHint"
         withEventButNoLabel.contentDescription shouldBe
             "September 2026. September 8, IFC Sunday. Gregorian Thursday, September 17, 2026. Today. $tapHint"
+    }
+
+    // -- ROADMAP M8 T1: per-cell descriptions (accessibility audit finding #1) ----------------------
+
+    @Test
+    fun `formatDay names the day alone, and dayCellContentDescription matches it when nothing qualifies`() {
+        val date = IfcDate.Regular(2026, IfcMonth.SEPTEMBER, 13)
+
+        dayCellContentDescription(formatter, date, isToday = false, hasHoliday = false, hasEvent = false) shouldBe
+            formatter.formatDay(date)
+        formatter.formatDay(date) shouldBe "September 13"
+    }
+
+    @Test
+    fun `today, holiday and event each append their own short qualifier after a comma`() {
+        val date = IfcDate.Regular(2026, IfcMonth.SEPTEMBER, 13)
+
+        dayCellContentDescription(
+            formatter,
+            date,
+            isToday = true,
+            hasHoliday = false,
+            hasEvent = false,
+            todayLabel = "today",
+        ) shouldBe "September 13, today"
+        dayCellContentDescription(
+            formatter,
+            date,
+            isToday = false,
+            hasHoliday = true,
+            hasEvent = false,
+            holidayLabel = "holiday",
+        ) shouldBe "September 13, holiday"
+        dayCellContentDescription(
+            formatter,
+            date,
+            isToday = false,
+            hasHoliday = false,
+            hasEvent = true,
+            eventLabel = "has events",
+        ) shouldBe "September 13, has events"
+    }
+
+    @Test
+    fun `all three qualifiers join in today, holiday, event order`() {
+        val date = IfcDate.Regular(2026, IfcMonth.SEPTEMBER, 21)
+
+        dayCellContentDescription(
+            formatter,
+            date,
+            isToday = true,
+            hasHoliday = true,
+            hasEvent = true,
+            todayLabel = "today",
+            holidayLabel = "holiday",
+            eventLabel = "has events",
+        ) shouldBe "September 21, today, holiday, has events"
+    }
+
+    @Test
+    fun `a qualifier is never appended when its flag is set but no label was given`() {
+        val date = IfcDate.Regular(2026, IfcMonth.SEPTEMBER, 13)
+
+        dayCellContentDescription(formatter, date, isToday = true, hasHoliday = true, hasEvent = true) shouldBe
+            "September 13"
+    }
+
+    @Test
+    fun `dayCellContentDescription never names a holiday or a weekday, only presence`() {
+        val date = IfcDate.Regular(2026, IfcMonth.SEPTEMBER, 15)
+
+        val description =
+            dayCellContentDescription(
+                formatter,
+                date,
+                isToday = false,
+                hasHoliday = true,
+                hasEvent = false,
+                holidayLabel = "holiday",
+            )
+
+        description shouldBe "September 15, holiday"
+        description.contains("Sunday") shouldBe false
+        description.contains("Monday") shouldBe false
+    }
+
+    @Test
+    fun `buildMonthWidgetState wires the per-cell labels into each cell's own description`() {
+        val today = LocalDate.of(2026, 9, 17) // IFC September 8, 2026 -- today.
+        val holidayDate = LocalDate.of(2026, 9, 24) // IFC September 15.
+
+        val state =
+            buildMonthWidgetState(
+                TodayDate(IfcDate.from(today), today),
+                formatter,
+                tapHint,
+                eventDates = setOf(today),
+                holidayDates = setOf(holidayDate),
+                cellTodayLabel = "today",
+                cellHolidayLabel = "holiday",
+                cellEventLabel = "has events",
+            )
+
+        state.days.single { it.dayOfMonth == 8 }.contentDescription shouldBe "September 8, today, has events"
+        state.days.single { it.dayOfMonth == 15 }.contentDescription shouldBe "September 15, holiday"
+        state.days.single { it.dayOfMonth == 1 }.contentDescription shouldBe "September 1"
     }
 }

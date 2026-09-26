@@ -140,6 +140,7 @@ fun IfcApp(
                             navigator = tabs,
                             appName = stringResource(R.string.app_name),
                             versionName = BuildConfig.VERSION_NAME,
+                            versionCode = BuildConfig.VERSION_CODE,
                         )
                     }
                     entry<HolidaysKey> { HolidaysRoute(navigator = tabs) }

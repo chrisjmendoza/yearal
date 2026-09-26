@@ -13,6 +13,7 @@ is the authority for versions and §1 explains the choices. Progress per task is
 | **ARCHITECTURE.md** (this file) | Tech stack, module boundaries, data model, UI/widget architecture, testing, CI/CD |
 | [holidays-and-import.md](holidays-and-import.md) | Holiday rule engine and data format, holiday data licensing, device-calendar overlay, `.ics` import/export |
 | [security-and-privacy.md](security-and-privacy.md) | Threat model, permissions, backup rules, Play policy, repo hygiene |
+| [privacy-policy.md](privacy-policy.md), [play-data-safety.md](play-data-safety.md) | The published end-user policy text and the Play Data safety / content-rating answers, both derived from security-and-privacy.md |
 | [competitive-analysis.md](competitive-analysis.md) | Evidence behind priorities; naming collisions |
 | [ROADMAP.md](ROADMAP.md) | Milestones, task breakdown for parallel agents, open questions |
 | [WORKFLOW.md](WORKFLOW.md) | How work is done: the gate, Definition of Done, KDoc standard, anti-drift rules, rules for LLM agents |
@@ -244,7 +245,9 @@ Dependencies are strictly one-way: `feature:*` and `widget` depend on `core:desi
 - Features depend on `:core:domain` interfaces and never on `:core:data`.
 - Only `:app` depends on `:core:data`, `:core:scheduling`, `:core:devicecalendar` and `:widget`. It needs them to put the Hilt bindings on the classpath.
 - Features never depend on other features. Cross-feature navigation goes through `:core:navigation` keys.
-- Add a Gradle check in the feature convention plugin that fails the build if a `feature` module depends on another `feature` or on `:core:data`.
+- **As built (ROADMAP M0 T4):** the Gradle check lives in `ifc.android.library` (§2 "build-logic" below),
+  so it covers every Android library module, not only `:feature:*`, and fails the build if one depends
+  on a `feature` or on `:core:data`.
 
 Three pure-JVM modules hold all the logic that must be correct. They build and test in seconds with no Android toolchain, which makes them ideal for delegated agents.
 
@@ -262,20 +265,56 @@ Yes, add it, but keep it minimal. With about 17 modules, copy-pasted `android {}
 
 - Plugins, modelled on Now in Android and written against the AGP 9 new-DSL `CommonExtension`
   (shared code in `IfcAndroid.kt`; the API-shape rules are in [adr/0001-toolchain.md](adr/0001-toolchain.md)):
-  - `ifc.jvm.library`: Kotlin JVM, Jupiter, Kotest, `explicitApi()`, Dokka KDoc gate.
-  - `ifc.android.library`: SDK levels from the catalog, Java 17, lint as an error gate, JUnit4 + Robolectric.
+  - `ifc.jvm.library`: Kotlin JVM, Jupiter, Kotest, `explicitApi()`, Dokka KDoc gate, and the pure-JVM
+    dependency rule check below.
+  - `ifc.android.library`: SDK levels from the catalog, Java 17, lint as an error gate, JUnit4 +
+    Robolectric, the generated Robolectric SDK pin, and the Android dependency rule check below.
   - `ifc.android.compose`: Compose compiler, BOM dependencies, Roborazzi.
-  - `ifc.android.feature`: library, compose and hilt, plus the standard `:core:*` dependencies, Turbine, and the dependency rule check (fails on `:feature:*` → `:feature:*` or `:core:data`).
+  - `ifc.android.feature`: library, compose and hilt, plus the standard `:core:*` dependencies and
+    Turbine. The dependency rule check is `ifc.android.library`'s own (below), inherited because this
+    plugin applies it.
   - `ifc.android.application`: target SDK and the SemVer `versionCode`.
   - `ifc.hilt`: Hilt + KSP.
   - `ifc.kotlin.serialization` and `ifc.room`: the compiler plugins must be applied from `build-logic`'s classpath (ADR 0001, decision 3).
 - Spotless is configured per module by the convention plugins (ktlint from the catalog).
-- Do not write custom tasks beyond these.
-- **A new Android module needs `src/test/resources/robolectric.properties` with `sdk=36`** (the app's
-  `targetSdk`). A library module has no `targetSdk` in its test manifest, so without that file Robolectric
-  silently picks the newest SDK it ships and every Compose interaction test fails with a cryptic
-  `InputManager.getInstance()` `NoSuchMethodException`. All eight Android modules carry an identical copy;
-  making it a convention-plugin default is ROADMAP **R7**.
+- Do not write custom tasks beyond these, `generateRobolectricProperties` (below) excepted.
+- **Module dependency rule check (ROADMAP M0 T4), `DependencyRules.kt`.** Two small functions, shared by
+  the convention plugins that need them, walk every `implementation`/`api` configuration's declared
+  project dependencies at `afterEvaluate` and fail the build with a message citing the broken CLAUDE.md
+  rule:
+  - `forbidProjectDependencies` (deny-list): every module that applies `ifc.android.library` — which
+    `ifc.android.feature` also applies, so this covers `:feature:*` too — may not depend on a
+    `:feature:*` module or on `:core:data`. This is what keeps `:core:designsystem`, `:core:navigation`,
+    `:core:data` itself, `:core:scheduling` and `:widget` from depending on a feature or on `:core:data`
+    (CLAUDE.md rule 10; only `:app` wires those together, per "Dependency direction" above — the
+    `:widget` "may not depend on `:feature:calendar`" and "cannot depend on `:app`" notes in §5 are this
+    same rule stated for `:widget` by name).
+  - `restrictProjectDependenciesTo` (allow-list): every module that applies `ifc.jvm.library` may depend
+    only on another pure-JVM module (`:core:calendar`, `:core:domain`, `:core:holidays`, `:core:testing`
+    — never an Android module or `:core:data`, CLAUDE.md rule 11); `:core:calendar` gets an empty
+    allow-list instead of that set, since it depends on nothing in the project at all (CLAUDE.md rule 1).
+  - Both were verified empirically by temporarily adding a forbidden dependency to a module and
+    confirming the build fails with the expected message, then reverting.
+- **The Robolectric SDK pin (ROADMAP R7) is generated, not hand-copied.** `configureIfcAndroid`
+  registers a `generateRobolectricProperties` task per Android module that writes
+  `sdk=<catalog targetSdk>` to a `robolectric.properties` under `build/generated/robolectricProperties`,
+  and prepends that directory onto every `Test` task's own `classpath` (`testOptions.unitTests.all`). A
+  library module's test manifest has no `targetSdk` of its own, so without a pin Robolectric defaults to
+  the newest SDK it ships, ahead of what the Compose test rule's Espresso input injection supports, and
+  every Compose interaction test fails with a cryptic `InputManager.getInstance()`
+  `NoSuchMethodException`. **Verified empirically that the fix must be a `robolectric.properties` file on
+  the classpath, not a system property**: Robolectric only resolves its `sdk` config value through
+  `Config.Implementation.fromProperties` via a classpath resource lookup; the `robolectric.<key>`
+  system-property override its docs advertise wires up only the enum-valued configs (`LooperMode`,
+  `GraphicsMode`, ...) through a different mechanism (`SingleValueConfigurer`) that `sdk` has no path
+  into — `systemProperty("robolectric.sdk", ...)` is silently ignored. Declaring the generated directory
+  as a `testImplementation` file dependency was tried first and also silently dropped: AGP's variant
+  dependency model does not carry a plain file dependency on that bucket through to the resolved
+  per-variant unit-test runtime classpath. Mutating the `Test` task's `classpath` directly is what
+  worked, confirmed by deleting `:feature:calendar`'s hand-written copy and watching its Compose tests
+  fail with the `InputManager` exception until the generated file was actually on that classpath.
+  `:core:designsystem`'s `RobolectricSdkPinTest` pins the guarantee permanently (`Build.VERSION.SDK_INT`
+  equals the catalog's `targetSdk`) in a module with no properties file of its own to hide behind.
 - **Prefer a scrollable `Column` over `LazyColumn` for a bounded list in a screen that has Robolectric
   tests.** Robolectric's default window never composes off-screen lazy items and `performScrollTo()`
   cannot realise them, so assertions on anything past the fold fail with no hint at the cause. Every
@@ -351,6 +390,15 @@ events(
 event_exdates(event_id FK CASCADE, epoch_day, PK(event_id, epoch_day))     -- "delete this occurrence"; the occurrence's own start date
 reminders(id PK, event_id FK CASCADE, minutes_before INT, UNIQUE(event_id, minutes_before))
 ```
+
+Schema v1 above is frozen (ROADMAP M8 T5): `SchemaFreezeMigrationTest` and `LegacyDatabaseOpenTest`
+(`:core:data`) validate the compiled entities against a byte-for-byte frozen copy of the exported schema
+at `core/data/src/test/resources/frozen-schemas/` — never against the live, KSP-rewritten
+`core/data/schemas/` directly, since Room's own export task keeps that file in sync with the current
+entities whenever the version number is unchanged — and `SchemaExportGuardTest` keeps the live export
+and the frozen copy from drifting apart; a real schema change is always version bump + a new exported
+JSON + a `Migration` + a migration test here + (only then) a refreshed frozen copy, never an edit to
+either `1.json` on its own.
 
 - **IFC recurrence** is modelled as `sealed IfcRecurrence { YearlyOnDate(month, day), YearlyOnIntercalary(day), MonthlyOnDay(day) }`, plus `interval` and `until/count`.
   - `YearlyOnIntercalary(LeapDay)` carries a common-year policy, `JUNE_28 | SKIP | SOL_1`. User-created events default to `JUNE_28`, which keeps the Gregorian date at June 17 every year. The rule text always spells the policy out (`COMMONYEAR=`).
@@ -584,7 +632,12 @@ months that stay warm" pins the query count.
     resolved. Its content description names the selected palette (`settings_palette_preview_description`,
     "Preview of the %s palette"). The More hub's four navigation rows (Holidays, Settings, Learn,
     Privacy) each get a 40dp `secondaryContainer` circle around their leading icon, tinted
-    `onSecondaryContainer`; the non-interactive About row is unchanged.
+    `onSecondaryContainer`; the non-interactive About row is unchanged. **"Send feedback"** (done,
+    ROADMAP M8 T6): a fifth, identically styled row between Privacy and About opens an `ACTION_SENDTO`
+    `mailto:` chooser (`docs/security-and-privacy.md` §6.3) prefilled with a version-stamped subject and
+    a body assembled by the pure `buildFeedbackBody` from device, app and settings diagnostics only —
+    never event or holiday-pack content (CLAUDE.md rule 8) — falling back to plain, selectable address
+    text when no email app resolves.
   - **Learn** (done, M3 T3, `:feature:settings`): static sections (what the IFC is, the floating days, nominal-vs-actual weekdays, how dates are calculated, a brief history, an FAQ) plus an expandable-FAQ list. Every worked-example date is computed through `:core:calendar` (`LearnFacts`) and rendered with `IfcDateFormatter`, never typed as a literal. Its first row, "Watch the intro again," pushes `IntroKey` — the re-open path FEATURES L1 requires for a user who skipped it. **Grid illustrations** (done, ROADMAP wave 3 J3, design-plan §4.8): the "What is the IFC", "Why the weekdays differ" and "The two days outside the week" sections each open with a `GridIllustration` (package `art`) — the same three the first-run intro shows, reused as section headers so the two never disagree — built purely from `Canvas` and the design tokens (no bitmap assets), each with a caller-supplied `contentDescription` and its own visible text hidden from TalkBack behind it (`Modifier.clearAndSetSemantics`).
   - **Privacy** (done, the in-app half of M2 T12, `:feature:settings`): a static, truthful statement of what the app stores and what its two declared permissions (`RECEIVE_BOOT_COMPLETED`, `WAKE_LOCK`) are for, sourced from `docs/security-and-privacy.md`'s allow-list; the hosted-policy URL is left blank until one exists.
   - **First-run intro** (done, `:feature:settings`, package `intro`; FEATURES L1): three screens behind `IntroKey` — what the IFC is (calendar-spec §2.2 R4: 13 months of 28 days, Sol between June and July); the nominal-vs-actual weekday distinction, with the spec's own worked example (§4.1); Year Day and Leap Day (§2.4 R8, R9), ending with a "find my IFC birthday" button. Every worked example comes from `IntroFacts`, which reuses `LearnFacts`'s values directly (both objects are `internal`, so same-module visibility is enough) rather than recomputing them, so the two screens can never disagree. Plain Back/Next buttons, not a swipeable pager — a new visual language is exactly what M2 T13 owns, not this task. **Each page opens with a `GridIllustration`** (done, ROADMAP wave 3 J3, design-plan §4.8, package `art`): screen 1 draws a 13-block month strip with Sol picked out in `intercalaryContainer`; screen 2 draws the 4×7 dot grid with one weekday column ringed `todayRing`, plus two caption rows naming that column's IFC and actual weekday from the same `IntroFacts` worked example the body text already uses; screen 3 draws the dot grid with a Year Day pill (the `ic_intercalary` icon) shown outside it. Colour is never the only signal: every highlight also differs in shape from the rest (a ring, a distinct block, a pill outside the grid). The birthday hook calls `navigator.navigate(ConverterKey())`, the same "push onto whatever tab is current" pattern day card's "Open in converter" action already uses; `ConverterKey`'s existing `prefillEpochDay = null` default ("follow today, but the user can pick any date") already is the "let me pick a date" behavior FEATURES D3 wants, so no new key shape was needed. `IfcApp` decides whether to show it: `IntroGateViewModel` (`:app`) maps `SettingsRepository.settings` to a `StateFlow<Boolean?>` of `hasSeenIntro` that starts `null` (deliberately distinct from the persisted `false` a fresh install also has) until the store has actually been read once, so a returning user is never shown a flash of the intro while `MainViewModel.settings` is still sitting at `UserSettings.DEFAULT`. The first time that flow resolves non-null and `false`, a `LaunchedEffect` in `IfcApp` pushes `IntroKey` onto the Today tab's stack — literally "over" `TodayKey`, the tab's static root — guarded by a `rememberSaveable` flag so it fires at most once per process. Skipping or finishing marks `UserSettings.hasSeenIntro = true` through `IntroViewModel.markSeen()` before popping back off; "Learn more" pushes `LearnKey` without marking it seen, so leaving the intro unfinished still shows it again on the next cold start. **Known edge case, not handled:** if the very first launch is also routed by a widget or notification intent (see "Intent routing" above), the intro's `LaunchedEffect` and the intent-routing `LaunchedEffect` both act on the tab back stacks independently; which one "wins" the Today tab's top slot is not deterministic. In practice a first launch cannot yet have an existing widget tap or event reminder (both require the app to have run once already), so this has not been given a specific ordering rule.
@@ -784,7 +837,7 @@ directly rather than re-wrapped, since `WindowWidthClass` already hides it from 
 ### Accessibility
 
 - Cells are at least 48dp. Seven columns at 360dp gives 51dp.
-- Each cell has a merged description, for example "Sol 13, IFC Friday. Gregorian Tuesday, June 30, 2026. 2 events. Holiday: …", with "Today." appended on the current date.
+- Each cell has a merged description, for example "Sol 13, IFC Friday. Gregorian Tuesday, June 30, 2026. 2 events. Holiday: …", with "Today." appended on the current date; `mergeDescendants = true` on `DayCell`, `IntercalaryBand` and the Year overview's tiles enforces that the inner numbers, labels and marks never surface as separately focusable nodes, pinned by a zero-children assertion in `MonthGridTest`/`YearOverviewTilesTest`.
 - Use `selected` and `Role.Button` semantics, a heading on the month title, and traversal groups on the grid.
 - Today, holidays and intercalary days are never encoded by color alone. Each also has a shape or icon.
 - Screenshot tests run at font scale 2.0. Respect the reduced-motion setting.
@@ -862,8 +915,11 @@ first thing in `:widget`, on Glance 1.2.0.
   from `TodayWidgetRolloverListener` in M5 T3, once it covered more than one widget) calls a small
   `WidgetRefresher` seam (`GlanceWidgetRefresher.refreshAll` updates every widget the module owns, one
   `updateAll` call each) so the listener is unit-testable without a real `AppWidgetManager`.
-- Three `SizeMode.Responsive` breakpoints, `SMALL` (110x40dp, 2x1: date only), `MEDIUM` (180x40dp, adds
-  the Gregorian line) and `LARGE` (180x110dp, adds the labelled actual weekday). **As built (Wave 3 I3):**
+- Three `SizeMode.Responsive` breakpoints, `SMALL` (110x48dp, 2x1: date only), `MEDIUM` (180x48dp, adds
+  the Gregorian line) and `LARGE` (180x110dp, adds the labelled actual weekday); `SMALL`/`MEDIUM`'s
+  height moved from 40dp to 48dp in ROADMAP M8 T1 (accessibility audit finding #15), matching
+  `today_widget_info.xml`'s `minHeight`, raised to the 48dp touch-target floor for the widget's single
+  tap region. **As built (Wave 3 I3):**
   `LARGE` also adds the year-progress line (`Day 260 of 365 · 71%`) and the next-intercalary countdown
   (`Year Day in 105 days`), the review's "large widgets should show more" (design-plan §4.9). Both are
   computed from `IfcDate` alone (`widget/today/TodayLargeContent.kt`): `dayOfYear`/`toLocalDate().
@@ -916,9 +972,24 @@ package `widget.month`) is the second widget in `:widget`, built the same way as
   Gregorian day number under the IFC one in every cell. That last pairing is the same "IFC day large,
   Gregorian day small" the app's own `MonthGrid` cell uses (FEATURES C1), and it exists because the two
   header rows name an IFC weekday *and* a real one: cells carrying a single number promise a second date
-  the grid never delivers (owner device feedback, 2026-09-19). `res/xml/month_widget_info.xml`
-  and the `res/xml-v31` split mirror the Today widget's pattern exactly, with `targetCellWidth`/`Height` at
-  4x3 and the same 4-hour `updatePeriodMillis` backstop.
+  the grid never delivers (owner device feedback, 2026-09-19).
+  `COMPACT`/`FULL` are `SizeMode.Responsive` content breakpoints, not touch-target sizes. ROADMAP M8 T1
+  (accessibility audit finding #14) raised `month_widget_info.xml`'s `minWidth`/`minResizeWidth`
+  separately — but not all the way to the 48dp touch-target floor. The seven grid columns split what is
+  left of the width after the widget's own 8dp padding on each side, so a column is
+  `(minWidth - 16dp) / 7`; clearing 48dp needs `minWidth >= 352dp`. A 352dp+ minimum, though, does not
+  fit a 360dp-wide phone's launcher grid (a 4-column grid there gives about `4 * 90 - 30 = 330dp`; a
+  5-column grid about `5 * 72 - 30 = 330dp`; both under 352dp) — and a launcher that cannot fit a
+  widget's declared minimum simply refuses to place it, which is worse than a too-small cell. `minWidth`
+  is 320dp instead (five nominal 70dp home-screen cells, `70 * 5 - 30 = 320`, fitting that 330dp phone
+  grid): a column there is `(320 - 16) / 7 ~= 43.4dp`, about 5dp under the 48dp floor. The floor itself
+  is met once a placement reaches six or more of the launcher's nominal cells (about 390dp and up, the
+  same `70dp * cells - 30dp` formula) — so the real guarantee this file gives is "48dp met at any
+  six-cell-or-larger placement, within 5dp of it at the five-cell minimum," not "48dp everywhere."
+  `res/xml/month_widget_info.xml` and the `res/xml-v31` split mirror the Today widget's pattern, with the
+  same 4-hour `updatePeriodMillis` backstop; `targetCellWidth`/`Height` was 4x3 until this task moved
+  `targetCellWidth` to 5, matching the new `minWidth`. `maxResizeWidth` moved to 460dp (seven cells,
+  `70 * 7 - 30 = 460`) only to stay a valid, larger bound above the new minimum.
 - **A widget larger than `FULL` is stretched, not re-laid-out.** `SizeMode.Responsive` picks the largest
   breakpoint that fits and the launcher stretches that RemoteViews, so on a tall widget every
   `wrap_content` child pins to the top and the rest is dead space. The four grid rows therefore carry a
@@ -955,13 +1026,26 @@ package `widget.month`) is the second widget in `:widget`, built the same way as
   modifier (unlike the app's own `MonthGrid`/`IntercalaryBand`, which use a border ring), so the widget
   uses a filled shape instead; both satisfy "shape, not colour alone".
 - One merged content description (month, today's IFC date with both labelled weekdays, and the Gregorian
-  equivalent, built from `IfcDateFormatter.dayDescription`) sits on the whole tappable widget, the same
-  place Today puts its description. The 28 day-number `Text` elements and the two header rows carry no
-  semantics of their own — deliberately not the app's full-grid pattern of one rich description per cell
-  (`docs/ARCHITECTURE.md` §4 "Accessibility"), which would put 28-plus nodes on a home-screen widget.
-  Glance/RemoteViews in 1.2.0 has no modifier to mark a child unimportant for accessibility, so a screen
-  reader may still traverse the day numbers individually; this is a platform limitation, not a design
-  choice, and is worth revisiting if Glance adds one.
+  equivalent, built from `IfcDateFormatter.dayDescription`) sits on the whole tappable widget outside the
+  grid (the title, header rows and Gregorian span), the same place Today puts its own description.
+- **As built (ROADMAP M8 T1, accessibility audit finding #1) — supersedes the single-description-only
+  ruling this section used to record.** Each of the 28 day cells also carries its own short
+  `GlanceModifier.semantics { contentDescription = … }`: the cell's day name alone (`Sol 13`,
+  `IfcDateFormatter.formatDay` — no weekday, since a cell that names none cannot mislabel one under
+  calendar-spec §4.1 item 7) with `today`/`holiday`/`has events` appended as short, comma-joined,
+  presence-only qualifiers (never a holiday's name or an event's count or title, CLAUDE.md rule 8 —
+  `docs/security-and-privacy.md` §3.2). The old reasoning was that 28 extra TalkBack nodes were the
+  greater harm; the audit's finding is that a clickable cell with **no** description is announced as a
+  bare, context-free digit, which is worse for a screen-reader user who can already tap that cell
+  individually (ROADMAP M3 T5's per-day routing): they could act on the cell but not hear what it was.
+  Glance/RemoteViews 1.2.0 still has no modifier to mark a *child* unimportant for accessibility, but
+  that does not block this fix — the day number, the Gregorian day and the mark glyphs inside a cell are
+  plain, non-clickable `Text`s with no semantics of their own, so this description on the cell's own
+  clickable node is what TalkBack reports, exactly as the whole-widget description above already works
+  for the title/header block without hiding any of its own children. The two weekday header rows still
+  carry no semantics of their own: they are static labels read once for the whole grid, not per-cell
+  state, and are not themselves clickable, so the "clickable cell, no description" harm this finding
+  addresses does not apply to them.
 - The tap action builds on the same `launchAppIntent` helper as Today (`docs/security-and-privacy.md`
   §6.4). **As built (ROADMAP M3 T5):** the whole-widget area (title, header rows, Gregorian-span line)
   uses `monthLaunchIntent` (`WidgetIntents.ACTION_OPEN_MONTH`, opens the current month); each of the 28
@@ -1032,10 +1116,14 @@ config activity and no per-instance Glance state; both widgets read the same glo
 - **Background opacity.** `UserSettings.widgetBackgroundOpacity` (0..100) becomes the alpha of the
   resolved `widgetBackground` colour (`Color.copy(alpha = …)`, `applyWidgetBackgroundOpacity`), applied
   only to each widget's outermost background -- never to a day cell's or the intercalary band's own
-  fill. Below 50% the Today widget wraps its date text in its own opaque chip (the un-adjusted
-  `widgetBackground` colour, since `androidx.glance.color.ColorProviders` has no `surfaceContainer` role
-  to draw a proper chip from); the Month widget instead relies on its day cells and intercalary band
-  already carrying their own opaque fill, the cheaper option once a grid exists to provide it.
+  fill. Below `LOW_OPACITY_CHIP_THRESHOLD` (`shouldShowLowOpacityChip`, 50%) the Today widget wraps its
+  date text in its own opaque chip (the un-adjusted `widgetBackground` colour, since
+  `androidx.glance.color.ColorProviders` has no `surfaceContainer` role to draw a proper chip from); the
+  Month widget's grid and intercalary band need no such chip, since every cell already carries its own
+  opaque fill. **As built (ROADMAP M8 T1, accessibility audit finding #16):** the Month widget's
+  title/Gregorian-span/header-row block, which sits directly on the translucent background and has no
+  opaque fill of its own the way the grid does, now gets the same chip treatment as Today's text below
+  the same threshold -- the one gap the grid's own opaque cells did not cover.
 - **Month widget cell fills.** `DayNumberCell`'s own background changed from painting over
   `widgetBackground` (the hairline trick alone) to `surface`/`surfaceVariant` with a 4dp corner radius
   (`surfaceVariant` when the cell has a holiday or event mark) -- the nearest roles `ColorProviders`
@@ -1122,7 +1210,7 @@ config activity and no per-instance Glance state; both widgets read the same glo
 | | DataStore serializer round trip and corruption fallback. | |
 | | ICS parser fixtures. | |
 | ViewModels | Fakes from `:core:testing`, a fake `Clock` and `DateTicker`, Turbine, and `runTest`. Include a test that advances the clock across midnight. | JUnit4 |
-| Compose UI | Stateless `XScreen` tests under Robolectric (`@GraphicsMode(NATIVE)` for any test that depends on text metrics — legacy mode fakes every Text at one height). Cover semantics (content descriptions, selection) and the intercalary band in June 2028 and in December. Library modules pin `sdk=36` in `src/test/resources/robolectric.properties`: without a `targetSdk` in the test manifest Robolectric picks its newest SDK, where the Compose test rule's input injection breaks. | JUnit4 plus Robolectric 4.17 |
+| Compose UI | Stateless `XScreen` tests under Robolectric (`@GraphicsMode(NATIVE)` for any test that depends on text metrics — legacy mode fakes every Text at one height). Cover semantics (content descriptions, selection) and the intercalary band in June 2028 and in December. `configureIfcAndroid` pins every library module's Robolectric run to `sdk=<catalog targetSdk>` (generated, ROADMAP R7 — see "build-logic" above): without a `targetSdk` in the test manifest Robolectric picks its newest SDK, where the Compose test rule's input injection breaks. | JUnit4 plus Robolectric 4.17 |
 | Screenshots | Roborazzi. `generateComposePreviewRobolectricTests` (the Compose preview scanner) auto-captures every `@Preview` it finds; as of R6 / M2 T10 that is wired for `:core:designsystem` only — the features follow once `:core:designsystem`'s goldens are committed and reviewed. | `verifyRoborazziDebug`, guarded in CI (§6 "Goldens") |
 | | The MonthGrid matrix {normal, June-leap, December} x {light, dark} x {font 1.0, 2.0} x {compact, expanded} x {LTR, RTL} and the IfcDatePicker matrix {regular, Leap Day, Year Day, clamped, invalid year} x {dark, font 2.0, narrow} are `@Preview` combinations in `MonthGridPreviews.kt` / `IfcDatePickerPreviews.kt`, not hand-written Roborazzi tests — the scanner captures each combination once per preview function. | |
 | | Glance widgets through glance-appwidget-testing or previews. | |

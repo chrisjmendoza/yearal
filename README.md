@@ -52,16 +52,17 @@ what's listed in [Privacy](#privacy).
   illustrations built from the app's own 13×28 grid), a plain-language privacy statement, and an
   Appearance section: weekday-header style, theme, six curated colour palettes (or Material You on
   Android 12+), a pure-black option for dark mode, per-widget theming, holiday packs, plus "Delete all
-  data".
+  data". The More hub can also send feedback by email, with device diagnostics but never your events.
 - **Colour throughout the UI, not just accents** — a coloured Today hero, filled and marked grid cells,
   intercalary (Year Day / Leap Day) accents shared across every screen and both widgets, per-event colour
   and category, and a live palette preview in Settings before you commit to one.
 
 ## What's not here yet
 
-- **Snooze, notification actions and tapping a reminder straight into its event** — reminders currently
-  open the app.
-- **Widget configuration** (per-widget options) and an agenda widget — M5/M7a.
+- **Snooze and notification actions** — tapping a reminder opens its event, but there is no snooze or
+  dismiss button on the notification yet.
+- **An agenda widget** — 1.1 (M7a), together with a widget privacy mode. Widgets are styled through
+  Settings (per widget type), not through a per-widget configuration screen.
 - **Device-calendar overlay, `.ics` import/export, and URL subscriptions** — releases 1.1–1.3
   ([docs/ROADMAP.md](docs/ROADMAP.md) release map).
 - **A Play Store listing.** Release builds are signed and installable
@@ -79,6 +80,7 @@ what's listed in [Privacy](#privacy).
 | [docs/contracts/](docs/contracts/Events.md) | Frozen public APIs: the calendar core and the events model |
 | [docs/holidays-and-import.md](docs/holidays-and-import.md) | Holiday rule engine, data licensing, device-calendar overlay, `.ics` import/export |
 | [docs/security-and-privacy.md](docs/security-and-privacy.md) | Threat model, permissions, backups, Play policy, repo hygiene |
+| [docs/privacy-policy.md](docs/privacy-policy.md) | The end-user privacy policy text (to be published on GitHub Pages); [play-data-safety.md](docs/play-data-safety.md) holds the Play Data safety answers |
 | [docs/competitive-analysis.md](docs/competitive-analysis.md) | Existing IFC apps, what their users say, and the gaps |
 | [docs/WORKFLOW.md](docs/WORKFLOW.md) | How work is done here: the gate, Definition of Done, documentation and anti-drift rules |
 | [docs/adr/](docs/adr/README.md) | Architecture decision records — choices made after the planning baseline |
@@ -112,7 +114,8 @@ No `INTERNET` permission and no server — the app itself cannot send your data 
 can leave the phone is Android's own encrypted device backup, which the user controls.
 No ads, no analytics, no accounts, no crash SDKs. Full detail, including exactly which permissions are
 declared and why, is in [docs/security-and-privacy.md](docs/security-and-privacy.md); the same statement
-ships in-app as the Privacy screen (More → Privacy).
+ships in-app as the Privacy screen (More → Privacy), and the plain-language policy to be published is
+[docs/privacy-policy.md](docs/privacy-policy.md).
 
 ## License
 

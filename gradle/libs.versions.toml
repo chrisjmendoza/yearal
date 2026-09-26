@@ -87,6 +87,8 @@ androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", vers
 androidx-datastore = { module = "androidx.datastore:datastore", version.ref = "datastore" }
 androidx-room3-runtime = { module = "androidx.room3:room3-runtime", version.ref = "room3" }
 androidx-room3-compiler = { module = "androidx.room3:room3-compiler", version.ref = "room3" }
+# MigrationTestHelper (ROADMAP M8 T5): the schema-freeze and legacy-database tests in :core:data.
+androidx-room3-testing = { module = "androidx.room3:room3-testing", version.ref = "room3" }
 androidx-sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
 # JVM variant: carries the desktop sqliteJni natives that Robolectric DAO tests need (ADR 0001).
 androidx-sqlite-bundled-jvm = { module = "androidx.sqlite:sqlite-bundled-jvm", version.ref = "sqlite" }

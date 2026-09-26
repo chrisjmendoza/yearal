@@ -86,6 +86,10 @@ internal object HolidaysTestTags {
 private val PackDotSize = 12.dp
 private val HolidayDiamondSize = 8.dp
 
+/** An explicit 48dp touch target for this screen's bare `IconButton`s (`docs/ARCHITECTURE.md` §4
+ *  "Accessibility"; a11y audit finding #10), matching the converter's swap button. */
+private val MinTouchTarget = 48.dp
+
 /**
  * The Holidays screen (docs/FEATURES.md H1, H2, H3, H5, H7; ROADMAP M6 T2): collects
  * [HolidaysViewModel.uiState] with the lifecycle and renders it through the stateless
@@ -147,7 +151,7 @@ fun HolidaysScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.holidays_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, modifier = Modifier.size(MinTouchTarget)) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.holidays_back),
@@ -296,7 +300,11 @@ private fun YearNav(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = { onGoToYear(state.year - 1) }, enabled = state.canGoPreviousYear) {
+        IconButton(
+            onClick = { onGoToYear(state.year - 1) },
+            enabled = state.canGoPreviousYear,
+            modifier = Modifier.size(MinTouchTarget),
+        ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                 contentDescription = stringResource(R.string.holidays_year_previous),
@@ -309,7 +317,11 @@ private fun YearNav(
             textAlign = TextAlign.Center,
             modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = { onGoToYear(state.year + 1) }, enabled = state.canGoNextYear) {
+        IconButton(
+            onClick = { onGoToYear(state.year + 1) },
+            enabled = state.canGoNextYear,
+            modifier = Modifier.size(MinTouchTarget),
+        ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = stringResource(R.string.holidays_year_next),

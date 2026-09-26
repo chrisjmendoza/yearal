@@ -484,6 +484,26 @@ class MonthGridTest {
         cell(IfcDate.Regular(2026, IfcMonth.SOL, 12)).assertIsNotSelected()
     }
 
+    // Finding #2: mergeDescendants = true must fold the corner Gregorian number and the IFC day
+    // number into the cell's one node, or TalkBack speaks the merged sentence and then re-announces
+    // the bare digits as separate stops.
+
+    @Test
+    fun `a cell's merged node has no separately reachable children`() {
+        show(sol2026)
+
+        cell(sol13).onChildren().assertCountEquals(0)
+    }
+
+    // Finding #3: same convention on the intercalary band's label, subtitle and marks.
+
+    @Test
+    fun `the intercalary band's merged node has no separately reachable children`() {
+        show(june2028)
+
+        compose.onNodeWithTag(MonthGridTestTags.INTERCALARY_BAND).onChildren().assertCountEquals(0)
+    }
+
     @Test
     fun `event dots are capped at three while the description keeps the count`() {
         show(sol2026, eventCounts = mapOf(june30 to 5, LocalDate.of(2026, 6, 19) to 1))
