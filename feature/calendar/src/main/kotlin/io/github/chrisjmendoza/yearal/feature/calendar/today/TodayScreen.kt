@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -38,12 +41,16 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.currentWindowWidthClass
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.limitContentWidth
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
@@ -53,7 +60,10 @@ import io.github.chrisjmendoza.yearal.core.navigation.EventEditorKey
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
 import io.github.chrisjmendoza.yearal.feature.calendar.R
 import io.github.chrisjmendoza.yearal.feature.calendar.agenda.AgendaItemUi
+import io.github.chrisjmendoza.yearal.feature.calendar.common.FactsLine
+import io.github.chrisjmendoza.yearal.feature.calendar.common.GregorianDateBlock
 import io.github.chrisjmendoza.yearal.feature.calendar.common.HolidayDiamondMark
+import io.github.chrisjmendoza.yearal.feature.calendar.common.IfcDateBlock
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -62,11 +72,21 @@ import io.github.chrisjmendoza.yearal.core.designsystem.R as DesignSystemR
 
 private val IntercalaryIconSize = 20.dp
 
+/** The hero column's share of the width at expanded widths; the cards column takes the rest. */
+private const val HERO_COLUMN_WEIGHT = 0.55f
+
+/** Test tag of the hero column, present only in the expanded-width two-column layout. */
+const val TODAY_HERO_COLUMN_TEST_TAG: String = "ifc:todayHeroColumn"
+
+/** Test tag of the Holidays/Events column, present only in the expanded-width two-column layout. */
+const val TODAY_CARDS_COLUMN_TEST_TAG: String = "ifc:todayCardsColumn"
+
 /**
  * The Today tab (docs/FEATURES.md T1–T4, T6): collects [TodayViewModel.uiState] with the lifecycle
  * and renders it through the stateless [TodayScreen]. This is the composable `:app` places behind
  * `TodayKey`. Tapping an agenda row pushes [EventEditorKey] with the event's id only (CLAUDE.md rule
- * 8); holidays stay non-tappable (docs/ROADMAP.md, left over from M4 T7).
+ * 8); holidays stay non-tappable (docs/ROADMAP.md, left over from M4 T7). The window's
+ * [WindowWidthClass] ([currentWindowWidthClass], the same source `MonthRoute` reads) picks the layout.
  *
  * @param navigator where an agenda row tap navigates.
  * @param modifier applied to the screen's root; the screen adds its own safe-drawing insets.
@@ -80,6 +100,7 @@ fun TodayRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     TodayScreen(
         state = state,
+        widthClass = currentWindowWidthClass(),
         onAgendaItemClick = { eventId -> navigator.navigate(EventEditorKey(eventId = eventId)) },
         modifier = modifier,
     )
@@ -94,19 +115,28 @@ fun TodayRoute(
  * the real date with its real weekday — then one facts line (the numeric IFC form, day of year, week,
  * quarter) and the year-progress bar. Every fact appears once (owner, 2026-09-27: no redundancy).
  * Below it: an amber intercalary countdown chip, a Holidays card and an Events card, both showing a
- * quiet line rather than vanishing when there is nothing to show (§4.1).
+ * quiet line rather than vanishing when there is nothing to show (§4.1). The blocks are the shared
+ * [IfcDateBlock], [GregorianDateBlock] and [FactsLine] the Month day card also uses.
  *
+ * The layout follows [widthClass] (docs/ARCHITECTURE.md §4 "Adaptive layouts", FEATURES C11): one
+ * scrolling column at compact and medium widths, capped with [limitContentWidth] so it is never
+ * stretched wider than [Dimens.ContentMaxWidth]; at expanded widths two columns side by side — the hero
+ * card with the countdown chip under it on the left, the Holidays and Events cards on the right — each
+ * scrolling on its own and each its own TalkBack traversal group (hero first), like `TwoPaneLayout`.
+ *
+ * @param widthClass the window's width bucket; [TodayRoute] reads it, tests and previews pass it.
  * @param onAgendaItemClick invoked with an agenda row's event id (FEATURES T5); holidays are plain text.
  */
 @Composable
 fun TodayScreen(
     state: TodayUiState,
     modifier: Modifier = Modifier,
+    widthClass: WindowWidthClass = WindowWidthClass.COMPACT,
     onAgendaItemClick: (Long) -> Unit = {},
 ) {
     when (state) {
         TodayUiState.Loading -> LoadingContent(modifier)
-        is TodayUiState.Loaded -> LoadedContent(state, modifier, onAgendaItemClick)
+        is TodayUiState.Loaded -> LoadedContent(state, widthClass, modifier, onAgendaItemClick)
     }
 }
 
@@ -124,26 +154,99 @@ private fun LoadingContent(modifier: Modifier) {
 @Composable
 private fun LoadedContent(
     state: TodayUiState.Loaded,
+    widthClass: WindowWidthClass,
     modifier: Modifier,
     onAgendaItemClick: (Long) -> Unit,
 ) {
+    when (widthClass) {
+        WindowWidthClass.COMPACT, WindowWidthClass.MEDIUM -> {
+            Column(
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .safeDrawingPadding()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = Dimens.SpaceL, vertical = Dimens.SpaceXl)
+                        .limitContentWidth(),
+                verticalArrangement = Arrangement.spacedBy(Dimens.SpaceL),
+            ) {
+                HeroColumnContent(state)
+                CardsColumnContent(state, onAgendaItemClick)
+            }
+        }
+
+        WindowWidthClass.EXPANDED -> {
+            Row(
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .safeDrawingPadding()
+                        .padding(horizontal = Dimens.SpaceL),
+                horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceL),
+            ) {
+                TodayColumn(
+                    weight = HERO_COLUMN_WEIGHT,
+                    traversalIndex = 0f,
+                    testTag = TODAY_HERO_COLUMN_TEST_TAG,
+                ) {
+                    HeroColumnContent(state)
+                }
+                TodayColumn(
+                    weight = 1f - HERO_COLUMN_WEIGHT,
+                    traversalIndex = 1f,
+                    testTag = TODAY_CARDS_COLUMN_TEST_TAG,
+                ) {
+                    CardsColumnContent(state, onAgendaItemClick)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One column of the expanded-width layout: its own vertical scroll and its own TalkBack traversal group
+ * ([isTraversalGroup], ordered by [traversalIndex]), so TalkBack reads the whole hero column before the
+ * cards column rather than interleaving the two — the same ordering `TwoPaneLayout` gives Month.
+ */
+@Composable
+private fun RowScope.TodayColumn(
+    weight: Float,
+    traversalIndex: Float,
+    testTag: String,
+    content: @Composable () -> Unit,
+) {
     Column(
         modifier =
-            modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = Dimens.SpaceL, vertical = Dimens.SpaceXl),
+            Modifier
+                .weight(weight)
+                .fillMaxHeight()
+                .testTag(testTag)
+                .semantics {
+                    isTraversalGroup = true
+                    this.traversalIndex = traversalIndex
+                }.verticalScroll(rememberScrollState())
+                .padding(vertical = Dimens.SpaceXl),
         verticalArrangement = Arrangement.spacedBy(Dimens.SpaceL),
     ) {
-        HeroCard(state)
-
-        state.countdown?.let { countdown -> IntercalaryChip(countdown) }
-
-        HolidaysCard(state.holidays, state.nextHolidayDays, state.nextHolidayName)
-
-        EventsCard(state.agenda, onAgendaItemClick)
+        content()
     }
+}
+
+/** The hero card with the intercalary countdown chip under it: the first column at expanded widths. */
+@Composable
+private fun HeroColumnContent(state: TodayUiState.Loaded) {
+    HeroCard(state)
+    state.countdown?.let { countdown -> IntercalaryChip(countdown) }
+}
+
+/** The Holidays and Events cards: the second column at expanded widths. */
+@Composable
+private fun CardsColumnContent(
+    state: TodayUiState.Loaded,
+    onAgendaItemClick: (Long) -> Unit,
+) {
+    HolidaysCard(state.holidays, state.nextHolidayDays, state.nextHolidayName)
+    EventsCard(state.agenda, onAgendaItemClick)
 }
 
 /**
@@ -169,44 +272,27 @@ private fun HeroCard(state: TodayUiState.Loaded) {
             modifier = Modifier.padding(Dimens.SpaceL),
             verticalArrangement = Arrangement.spacedBy(Dimens.SpaceS),
         ) {
-            Eyebrow(stringResource(R.string.eyebrow_ifc))
             // The IFC weekday, bare under its block's "IFC" eyebrow (owner ruling, 2026-09-25); on Year
             // Day and Leap Day the same slot says "no IFC weekday" (spec §4.1 item 5). TalkBack hears both
             // weekdays here, labelled ("IFC Sunday, actual Thursday", item 7), so it is never mistaken for
             // the real one.
-            Text(
-                text = state.heroWeekday ?: state.nominalWeekday,
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.semantics { contentDescription = state.weekdaysDescription },
-            )
-            Text(
-                text = state.heroDate,
-                style = MaterialTheme.typography.displayMedium,
-                modifier = Modifier.semantics { heading() },
+            IfcDateBlock(
+                weekday = state.heroWeekday ?: state.nominalWeekday,
+                weekdaysDescription = state.weekdaysDescription,
+                date = state.heroDate,
+                weekdayStyle = MaterialTheme.typography.titleLarge,
+                dateStyle = MaterialTheme.typography.displayMedium,
             )
 
             Spacer(modifier = Modifier.height(Dimens.SpaceS))
 
-            EyebrowValue(
-                eyebrow = stringResource(R.string.eyebrow_gregorian),
-                value = state.gregorianLongDate,
-                style = MaterialTheme.typography.bodyLarge,
-            )
+            GregorianDateBlock(date = state.gregorianLongDate)
 
             Spacer(modifier = Modifier.height(Dimens.SpaceS))
 
             // The facts line: the canonical numeric form keeps its `IFC` prefix (CLAUDE.md rule 5) — here
             // it is a fact among facts, not a second copy of the headline date.
-            Text(
-                text =
-                    stringResource(
-                        R.string.today_numeric_day_week_quarter,
-                        state.numericDate,
-                        state.dayAndWeek,
-                        state.quarter,
-                    ),
-                style = MaterialTheme.typography.bodyLarge,
-            )
+            FactsLine(numeric = state.numericDate, dayAndWeek = state.dayAndWeek, quarter = state.quarter)
             // clearAndSetSemantics on the wrapper is the single spoken node for both children
             // (a11y audit finding #21): without it, the indicator's own contentDescription and the
             // visible Text below it — the identical "71% of the year" string — were two separate
@@ -225,25 +311,6 @@ private fun HeroCard(state: TodayUiState.Loaded) {
                 )
             }
         }
-    }
-}
-
-/** An eyebrow caption (`labelSmall`, uppercased) naming the block beneath it, e.g. "IFC" or "GREGORIAN". */
-@Composable
-private fun Eyebrow(text: String) {
-    Text(text = text.uppercase(), style = MaterialTheme.typography.labelSmall)
-}
-
-/** One [Eyebrow] over its value, e.g. "GREGORIAN" over "Thursday, September 17, 2026". */
-@Composable
-private fun EyebrowValue(
-    eyebrow: String,
-    value: String,
-    style: TextStyle = MaterialTheme.typography.bodyMedium,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXs / 2)) {
-        Eyebrow(eyebrow)
-        Text(text = value, style = style)
     }
 }
 
@@ -484,13 +551,29 @@ internal fun TodayScreenYearDayLargeFontPreview() {
     TodayPreview(LocalDate.of(2026, 12, 31))
 }
 
+/**
+ * The expanded-width two-column layout on a 10-inch landscape tablet (FEATURES C11): the hero and the
+ * countdown chip on the left, the Holidays and Events cards on the right.
+ */
+@Preview(name = "Regular day — tablet", showBackground = true, device = "spec:width=1280dp,height=800dp")
+@Composable
+internal fun TodayScreenTabletPreview() {
+    TodayPreview(
+        today = LocalDate.of(2026, 9, 17),
+        widthClass = WindowWidthClass.EXPANDED,
+        holidays = listOf("Autumn Equinox"),
+    )
+}
+
 @Composable
 private fun TodayPreview(
     today: LocalDate,
     darkTheme: Boolean = false,
+    widthClass: WindowWidthClass = WindowWidthClass.COMPACT,
+    holidays: List<String> = emptyList(),
 ) {
     IfcTheme(darkTheme = darkTheme, dynamicColor = false) {
         val formatter = rememberIfcDateFormatter()
-        TodayScreen(state = buildTodayUiState(today, formatter))
+        TodayScreen(state = buildTodayUiState(today, formatter, holidays), widthClass = widthClass)
     }
 }

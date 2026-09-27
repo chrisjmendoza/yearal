@@ -245,11 +245,23 @@ Architecture, tooling and CI:
 
 ### Changed
 
+- Phones stay in portrait. Tablets and unfolded foldables still rotate freely; the lock is decided at
+  runtime from the screen size, never declared for large screens.
 - The Today card says each thing once. It is now two labelled blocks — "IFC" over the IFC weekday and
   date, "Gregorian" over the real date with its weekday — followed by one facts line ("IFC 2026-10-17 ·
   Day 269 · Week 39 of 52 · Q3") and the year progress. The separate "IFC weekday / Actual weekday" box
   is gone, since each block already names its weekday; on Year Day and Leap Day the weekday slot reads
   "no IFC weekday". Screen readers still hear both weekdays, labelled, on the IFC weekday line.
+- The Month day card and the converter's result now follow the same rule as the Today card: "IFC" over
+  the IFC weekday and date, "Gregorian" over the real date with its weekday, then one facts line with the
+  numeric IFC date, day, week and quarter. The old "IFC weekday / Actual weekday" box and the
+  "Gregorian: …" line are gone from both; Year Day and Leap Day still show "no IFC weekday", inside the
+  amber header on the day card. Copied and shared conversions read exactly as before.
+- Tablets and unfolded foldables get layouts of their own (FEATURES C11): Today shows the date card and
+  the countdown beside the Holidays and Events cards; the converter shows its input beside the result, so
+  the answer never scrolls out of view; the Month grid keeps square cells on medium-width windows and
+  splits half and half with the day card on wide ones, where the day card now scrolls; the Year view
+  sits in a centred column of four tiles per row instead of spreading across the screen.
 - **The version shown in More and in feedback emails now identifies the exact build**, e.g.
   `0.1.0+45.72dbfa1`: the release number, the build number and the commit it was built from (`.dirty` if it
   had uncommitted changes). The build number (`versionCode`) is now the commit count of `main`, which only
@@ -343,6 +355,11 @@ Architecture, tooling and CI:
   only, never an event's title, notes or location) and what "Send feedback" sends (device/app/version
   diagnostics only, never events, and only once the user actually sends it), closing two gaps found while
   drafting `docs/privacy-policy.md`.
+
+- **Tablet layouts (M8 T9).** Settings, More, Learn, Privacy, the first-run intro and the Events list no
+  longer stretch edge to edge on a tablet or an unfolded foldable — their content now sits in a centred,
+  readable column. Holidays instead shows "Holiday sets" and "Holidays this year" side by side on a wide
+  window, so both stay in view together instead of one being a lonely strip above the other.
 
 ### Fixed
 

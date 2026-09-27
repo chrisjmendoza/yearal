@@ -77,8 +77,8 @@ otherwise. Expected text comes from each module's own `strings.xml`; substitute 
 | T5 | Month: the header rows announce "IFC weekdays" then the abbreviated names, then "Actual weekdays" and its row. | |
 | T6 | Month: focus a day cell. One sentence ("Sol 13, IFC Friday. Gregorian Tuesday, June 30, 2026. 2 events. Holiday: …", with "Today." on the current date) and **no stray bare number** spoken after it. Repeat on the Year Day / Leap Day band and on a Year-overview mini-month tile. | |
 | T7 | Month: the Year Day / Leap Day band reads "no IFC weekday, actual <weekday>", never an unlabelled weekday. | |
-| T8 | Month day card: an event row is announced as a button and is comfortably tappable (≥48dp); TalkBack's actions menu on it offers "Delete this occurrence" / "Delete event" without a real long-press. | |
-| T9 | Converter: a date on Year Day or Leap Day reads "no IFC weekday, actual <weekday>"; changing the input to a new date announces the new result on its own (polite live region) without swiping back to it. | |
+| T8 | Month day card: as on Today (T1, T2), "IFC" is announced, then the bare IFC weekday is spoken as "IFC Sunday, actual Thursday" ("no IFC weekday, actual <weekday>" on Year Day / Leap Day), then the IFC date as a heading; "Gregorian" and the real date follow, and neither weekday is announced a third time. An event row is announced as a button and is comfortably tappable (≥48dp); TalkBack's actions menu on it offers "Delete this occurrence" / "Delete event" without a real long-press. | |
+| T9 | Converter: the result's IFC weekday line reads "IFC Sunday, actual Thursday", and on Year Day or Leap Day "no IFC weekday, actual <weekday>"; changing the input to a new date announces the new result on its own (polite live region) without swiping back to it. | |
 | T10 | Event editor: Back and Delete in the top bar, and every dialog button, are easy to hit (≥48dp). Set End before Start and swipe to the End field itself: TalkBack says the field is invalid right there, not only at the banner; a failed save announces its banner. | |
 | T11 | Event editor: "Number of times" opens the numeric keyboard. | |
 | T12 | Holidays: a set's switch is one merged node ("…, switch, on/off"); Back and the Previous/Next-year buttons are easy to hit. | |
@@ -86,6 +86,28 @@ otherwise. Expected text comes from each module's own `strings.xml`; substitute 
 | T14 | Month widget: each day cell reads "Sol 13", "Sol 13, today", "Sol 21, holiday, has events" — never an event title; the widget root still reads both labelled weekdays. Today widget at its smallest size: the tap target is not cramped. | |
 | T15 | 200% font (Settings → Accessibility → Display size and text): Today, Month with its day card, Year, Events, Settings and More show nothing clipped or overlapping; grid cells and buttons stay tappable. | |
 | T16 | Reduced motion (Settings → Accessibility → Remove animations): open Month on a month other than today's and tap "Today" — the page should jump straight there with no scroll animation (ARCHITECTURE §4 "Accessibility", audit finding #22, done; `rememberReducedMotion()` in `:core:designsystem`). Year has no pager animation to check. | |
+
+## Tablet (M8 T8, T9)
+
+FEATURES C11. Run on a 10-inch tablet in landscape **and** portrait, and on an unfolded foldable (or the
+Android Studio "Resizable" / "Pixel Tablet" and "Pixel Fold" emulators); where a row says "medium", use
+the foldable unfolded in portrait or the tablet in split screen at half width. The navigation rail
+replaces the bottom bar on all of these.
+
+| # | Check | Result |
+|---|---|---|
+| TB1 | Today, landscape tablet: the hero card and the Year Day / Leap Day countdown chip on the left, the Holidays and Today's events cards on the right, both starting at the top; each column scrolls on its own. TalkBack reads the whole left column before the right one. Portrait tablet (still expanded at ≥840dp) keeps two columns; a medium window shows one column, nothing stretched past ~840dp. | |
+| TB2 | Month, medium window: the grid and the day card below it sit in a centred ~600dp column — cells roughly square, not wide slivers — and the side margins are empty. Swipe between months in the margins as well as on the grid. | |
+| TB3 | Month, expanded (landscape tablet, unfolded foldable): the grid and the day card split the window about half and half; every day cell is comfortably tappable at the narrowest expanded width (840dp window with the rail). A day with many events (add eight or so) scrolls inside the right-hand pane down to "Open in converter"; nothing is clipped at the bottom, also at 200% font. | |
+| TB4 | Year, landscape tablet: the thirteen month tiles and the Year Day tile sit in a centred column of four tiles per row (December and Year Day on the last row), tiles the same size as on a phone. | |
+| TB5 | Converter, expanded: the direction switch and the date input on the left, the result card and Copy / Share / Open day on the right. In "IFC to Gregorian", change the IFC day: the answer on the right updates without scrolling, and TalkBack announces it (polite live region). The pair is centred, not spread to the window edges. A medium window shows one column. | |
+| TB6 | Fold / unfold (or resize the window) on each of the four screens: the selected day, the converter input and scroll position survive; nothing resets to today. | |
+| TB7 | On a 600–839dp window (a small tablet, or a phone rotated/an unfolded small foldable), Settings, More, Learn, Privacy and the Events list each show their content in a centred, capped column rather than stretched edge to edge; the Events editor's fields keep a comfortable line length too. | |
+| TB8 | On an 840dp+ window, the same screens keep the capped column; Holidays instead shows "Holiday sets" and "Holidays this year" side by side, both visible without scrolling one out of view to see the other. | |
+| TB9 | At 840dp+, opening an event from the Events list still shows the list and the editor side by side (unchanged by this task); the editor's text fields and segmented rows do not stretch across the whole detail pane. | |
+| TB10 | Resize a desktop-window or unfold/refold a foldable while Settings, Holidays or the Events list is open: the layout switches between the single capped column and (Holidays only) the side-by-side split live, with no crash and no lost scroll position worth worrying about. | |
+| TB11 | The nav rail (medium and expanded widths) still shows a label under every tab icon, not icons alone. | |
+| TB12 | Rotate a phone: the app stays portrait (upside-down portrait follows the system auto-rotate setting); rotate a tablet or an unfolded foldable: it rotates and re-lays out (the phone-only lock, ARCHITECTURE §4 "Adaptive layouts"). | |
 
 ## Release build (M8 T2)
 

@@ -32,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.limitContentWidth
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.YearDayTile
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.YearMiniMonthTile
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
@@ -96,7 +97,10 @@ fun YearRoute(
  * Thirteen [YearMiniMonthTile]s (Sol between June and July) plus a fourteenth [YearDayTile]
  * for Year Day, in a `LazyVerticalGrid(GridCells.Adaptive(160.dp))` — two columns of seven rows on a
  * typical phone, exactly matching docs/ARCHITECTURE.md §4's "Year Day takes the 14th slot". Neither
- * tile builds 28 heavyweight day cells; see [YearMiniMonthTile]'s KDoc for why. The app bar holds the
+ * tile builds 28 heavyweight day cells; see [YearMiniMonthTile]'s KDoc for why. The grid is capped at
+ * [Dimens.ContentMaxWidth] ([limitContentWidth]) and centred, so on a tablet or an unfolded foldable it
+ * shows four columns of tiles rather than stretching the year across the window (docs/ARCHITECTURE.md
+ * §4 "Adaptive layouts"); a phone never reaches the cap. The app bar holds the
  * year with previous/next actions (FEATURES C7), each disabled at the ends of
  * [io.github.chrisjmendoza.yearal.core.designsystem.picker.DatePickerRange], and a "Today" action shown
  * only while another year is on screen.
@@ -180,7 +184,14 @@ fun YearScreen(
     ) { padding ->
         LazyVerticalGrid(
             columns = GridCells.Adaptive(TileMinWidth),
-            modifier = Modifier.fillMaxSize().testTag(YEAR_GRID_TEST_TAG),
+            // Capped at Dimens.ContentMaxWidth and centred (FEATURES C11): on a tablet or an unfolded
+            // foldable the thirteen tiles form four columns of phone-sized tiles instead of scattering
+            // across the whole window in rows of six or seven. Inert on a phone, which is never that wide.
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .limitContentWidth()
+                    .testTag(YEAR_GRID_TEST_TAG),
             // padding, not Modifier.padding: a Scaffold's inner padding alone left the top row clipped
             // under the app bar (docs/design-plan.md §4.3) — contentPadding insets the grid's own
             // scrollable content instead of just offsetting the LazyVerticalGrid's bounds, and GridPadding

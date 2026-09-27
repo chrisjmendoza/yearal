@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -49,6 +50,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.currentWindowWidthClass
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.limitContentWidth
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
@@ -70,6 +72,15 @@ private val SectionSpacing = Dimens.SpaceS
 private val ChipSpacing = Dimens.SpaceS
 private val EmptyStateIconSize = 48.dp
 private val MinTouchTarget = 48.dp
+
+/** Test tags [EventListScreenTest] needs to reach past the screen's own content. */
+internal object EventListScreenTestTags {
+    /**
+     * The screen's content [Column] (search field + list), capped at [Dimens.ContentMaxWidth] at
+     * compact/medium widths (tablet pass, docs/ARCHITECTURE.md §4 "Adaptive layouts").
+     */
+    const val CONTENT_COLUMN: String = "eventsList:contentColumn"
+}
 
 /**
  * The events list (`EventListKey`, `docs/FEATURES.md` E1, E3, E5–E7, E9; docs/ARCHITECTURE.md §4
@@ -197,7 +208,18 @@ fun EventListScreen(
             }
         },
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    // Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): caps the list at
+                    // Dimens.ContentMaxWidth at compact/medium widths. A no-op at expanded widths,
+                    // where this screen is only ever composed as TwoPaneLayout's list pane
+                    // (EventListDetailScreen) and is already narrower than the cap there.
+                    .limitContentWidth()
+                    .testTag(EventListScreenTestTags.CONTENT_COLUMN),
+        ) {
             SearchField(
                 query = if (state is EventListUiState.Loaded) state.query else "",
                 onQueryChange = onQueryChange,

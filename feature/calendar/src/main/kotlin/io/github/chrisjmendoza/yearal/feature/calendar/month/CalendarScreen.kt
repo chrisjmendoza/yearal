@@ -2,6 +2,9 @@ package io.github.chrisjmendoza.yearal.feature.calendar.month
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -10,8 +13,18 @@ import androidx.compose.ui.Modifier
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.TwoPaneLayout
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.feature.calendar.agenda.AgendaItemUi
 import java.time.LocalDate
+
+/**
+ * The grid pane's share of the expanded-width split (FEATURES C11): half, not `TwoPaneLayout`'s default
+ * 0.38. The grid's cells have a 48dp touch-target floor (docs/ARCHITECTURE.md §4 "Accessibility"), and
+ * at the narrowest expanded window — 840dp, less the 80dp navigation rail — a 0.38 share left 289dp
+ * for seven columns (41dp cells); half leaves 380dp, room for seven 48dp cells plus the page's 16dp side
+ * padding. On a 1,280dp landscape tablet the day card still gets a phone-and-a-half of width.
+ */
+private const val MONTH_LIST_WEIGHT = 0.5f
 
 /**
  * Every callback the day card reports (docs/ROADMAP.md M3 T4; the day-card merge), grouped like
@@ -101,9 +114,11 @@ fun CalendarScreen(
 /**
  * The expanded-width Calendar list-detail Scene (docs/ARCHITECTURE.md §4 "Adaptive layouts";
  * docs/ROADMAP.md M3 T4): [MonthScreen] (with `showDayCard = false`) as [TwoPaneLayout]'s list pane, the
- * selected day's [DayCard] as its detail pane. The detail pane always has content — [DayCard] itself
+ * selected day's [DayCard] as its detail pane, split half and half so the grid's cells keep their 48dp
+ * floor at the narrowest expanded width. The detail pane always has content — [DayCard] itself
  * falls back to today when [MonthUiState.selected] is `null`, exactly as the compact/medium card does —
- * so there is no separate empty state to show or hide. Never navigates: [onSelectDay] only updates
+ * so there is no separate empty state to show or hide. The detail pane scrolls on its own and insets the
+ * card, so a long day is never clipped at the bottom of the window. Never navigates: [onSelectDay] only updates
  * [monthState]'s own selection, so rotating back to compact/medium sees the same selected day.
  *
  * The unit for this screen's own Compose tests (`CalendarScreenTest`), which pass plain [MonthUiState]
@@ -131,6 +146,7 @@ fun MonthListDetailScreen(
 ) {
     TwoPaneLayout(
         modifier = modifier,
+        listWeight = MONTH_LIST_WEIGHT,
         list = {
             MonthScreen(
                 state = monthState,
@@ -143,6 +159,9 @@ fun MonthListDetailScreen(
         },
         detail = {
             Box(modifier = Modifier.fillMaxSize()) {
+                // The pane scrolls on its own and insets the card from the divider and the window edge
+                // (FEATURES C11): a day with many events, or a 200% font scale, is never clipped at the
+                // bottom of a landscape tablet.
                 DayCard(
                     state = monthState,
                     onEventClick = dayCallbacks.onEventClick,
@@ -151,6 +170,10 @@ fun MonthListDetailScreen(
                     onRequestDelete = dayCallbacks.onRequestDelete,
                     onConfirmDelete = dayCallbacks.onConfirmDelete,
                     onCancelDelete = dayCallbacks.onCancelDelete,
+                    modifier =
+                        Modifier
+                            .verticalScroll(rememberScrollState())
+                            .padding(Dimens.SpaceM),
                 )
                 if (snackbarHostState != null) {
                     SnackbarHost(

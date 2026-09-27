@@ -6,18 +6,18 @@
     <!-- Spoken description of the progress spinner shown until the first date tick arrives. -->
     <string name="today_loading">Loading today’s date</string>
 
-    <!-- Eyebrow captions of the Today hero card's date pair (`docs/design-plan.md` §4.1) and the Month
-         summary's date pair (§4.2): "IFC" labels the long IFC date, "Gregorian" the Gregorian long
-         date. Shown in `labelSmall`, uppercased for display. Reused by both screens so the two never
-         drift out of sync. -->
+    <!-- Eyebrow captions of the labelled date blocks on the Today hero card (`docs/design-plan.md` §4.1)
+         and the Month day card (§4.4): "IFC" labels the block with the IFC weekday and the IFC long
+         date, "Gregorian" the block with the real date and its real weekday. Shown in `labelSmall`,
+         uppercased for display. Reused by both screens so the two never drift out of sync. -->
     <string name="eyebrow_ifc">IFC</string>
     <string name="eyebrow_gregorian">Gregorian</string>
 
-    <!-- Joins the day-and-week text with the quarter on one line.
-         %1$s = "Day 260 · Week 38 of 52", %2$s = "Q3". -->
-    <!-- The hero's facts line: the numeric IFC date (with its mandatory prefix), then day/week, then the
-         quarter, e.g. "IFC 2026-10-08 · Day 260 · Week 38 of 52 · Q3". -->
-    <string name="today_numeric_day_week_quarter">%1$s · %2$s · %3$s</string>
+    <!-- The facts line under the two date blocks, on the Today hero and the day card: the numeric IFC
+         date (with its mandatory "IFC" prefix), then day/week, then the quarter.
+         %1$s = "IFC 2026-10-08", %2$s = "Day 260 · Week 38 of 52", %3$s = "Q3";
+         e.g. "IFC 2026-10-08 · Day 260 · Week 38 of 52 · Q3". -->
+    <string name="facts_line">%1$s · %2$s · %3$s</string>
 
     <!-- Shown in the Holidays card when today has none, instead of hiding the card (`docs/design-plan.md`
          §4.1: "Empty Today ... shows one quiet line inside a card, not nothing"). -->
@@ -76,14 +76,6 @@
 
     <!-- The day card (FEATURES C5): the merged day detail below the Month grid (or, at expanded
          widths, beside it) — see docs/design-plan.md §4.2, owner note 2. -->
-
-    <!-- The Gregorian equivalent of the shown IFC date, labelled so it is never confused with the IFC
-         date above it. %1$s = the full Gregorian date with its weekday, e.g. "Thursday, December 31, 2026". -->
-    <string name="day_gregorian">Gregorian: %1$s</string>
-
-    <!-- Joins the day-and-week text with the quarter on one line.
-         %1$s = "Day 260 · Week 38 of 52", %2$s = "Q3". -->
-    <string name="day_day_week_quarter">%1$s · %2$s</string>
 
     <!-- Badge shown on the day card when the shown day is the real today. -->
     <string name="day_today">Today</string>

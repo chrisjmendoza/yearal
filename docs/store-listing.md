@@ -185,7 +185,7 @@ uploading**; Google has changed these numbers before)
   asked for a 16:9 or 9:16 aspect ratio; recent Console versions accept a wider range and auto-crop for
   the store listing preview, so treat "16:9/9:16" as a safe target rather than a hard rule until checked.
 - **Tablet screenshots (7-inch and 10-inch):** required if the listing opts into tablet distribution
-  (which it should — the app has real dual-pane tablet/foldable layouts, ROADMAP M3 T4). Play has, at
+  (which it should — the app has real tablet/foldable layouts on every screen, ROADMAP M3 T4 and M8 T8–T9). Play has, at
   different times, required at least one screenshot per tablet size class and, separately, offered to
   generate tablet previews automatically from phone screenshots if none are supplied. **Do not rely on
   memory for this one** — confirm the current minimum count and whether auto-generation is still offered

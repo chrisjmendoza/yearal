@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -20,11 +21,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.width
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.YearOverviewTestTags
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.kotest.matchers.floats.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import org.junit.Rule
 import org.junit.Test
@@ -32,6 +35,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
+import kotlin.math.absoluteValue
 
 /**
  * [YearScreen] under Robolectric, written from `docs/calendar-spec.md` §2.2, §7.2 and docs/FEATURES.md
@@ -243,5 +247,31 @@ class YearScreenTest {
         show(YearUiState(year = 2020, today = LocalDate.of(2026, 9, 17)))
 
         compose.onNodeWithText("Today").assertHeightIsAtLeast(48.dp)
+    }
+
+    // FEATURES C11 (tablet layouts): the grid is capped at Dimens.ContentMaxWidth (840dp) and centred,
+    // so a landscape tablet shows four columns of phone-sized tiles instead of rows of seven scattered
+    // across the whole window.
+
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp")
+    fun `on a landscape tablet the grid is capped at 840dp, centred, four tiles to a row`() {
+        show(YearUiState(year = 2026, today = null))
+
+        val grid = compose.onNodeWithTag(YEAR_GRID_TEST_TAG).getUnclippedBoundsInRoot()
+        (grid.width <= 840.dp) shouldBe true
+        ((grid.left + grid.right) / 2 - 640.dp).value.absoluteValue shouldBeLessThan 1f
+
+        val tops = (1..5).map { compose.onNodeWithTag(tileTag(it)).getUnclippedBoundsInRoot().top }
+        tops.take(4).distinct().size shouldBe 1
+        (tops[4] > tops[0]) shouldBe true
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h3600dp")
+    fun `on a phone the cap never binds and the grid spans the window`() {
+        show(YearUiState(year = 2026, today = null))
+
+        (compose.onNodeWithTag(YEAR_GRID_TEST_TAG).getUnclippedBoundsInRoot().width >= 410.dp) shouldBe true
     }
 }

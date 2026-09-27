@@ -21,6 +21,7 @@ import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -28,12 +29,15 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
 /**
  * [HolidaysScreen] under Robolectric: every set row reflects its on/off state and reports a toggle with
@@ -285,6 +289,66 @@ class HolidaysScreenTest {
             .performScrollTo()
             .assertHeightIsAtLeast(48.dp)
             .assertWidthIsAtLeast(48.dp)
+    }
+
+    // Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): at compact/medium widths the single
+    // content column caps at Dimens.ContentMaxWidth rather than stretching every row edge to edge.
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp")
+    fun `at 840dp exactly the screen splits into two panes rather than a capped single column`() {
+        show(loaded())
+
+        // 840dp is the expanded breakpoint itself (WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND),
+        // so this width already renders the side-by-side split, not the single capped column.
+        compose.onNodeWithTag(HolidaysTestTags.SETS_PANE).assertIsDisplayed()
+        compose.onNodeWithTag(HolidaysTestTags.YEAR_PANE).assertIsDisplayed()
+    }
+
+    // The split (chosen because a single ContentMaxWidth column left "Holiday sets" — a handful of
+    // rows — as a lonely strip above a much taller year list on a wide tablet) puts the sets pane on
+    // the left and the year pane on the right, both visible without either one needing to scroll the
+    // other out of view first.
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp")
+    fun `the sets and year panes are displayed side by side at expanded width`() {
+        show(loaded())
+
+        val setsNode = compose.onNodeWithTag(HolidaysTestTags.SETS_PANE).fetchSemanticsNode()
+        val yearNode = compose.onNodeWithTag(HolidaysTestTags.YEAR_PANE).fetchSemanticsNode()
+        val setsRightEdge = (setsNode.positionInRoot.x + setsNode.size.width).toInt()
+        val yearLeftEdge = yearNode.positionInRoot.x.toInt()
+
+        // Side by side: the sets pane sits entirely to the left of the year pane, and both are on
+        // screen at the same time (neither is scrolled out of view to see the other's heading).
+        setsRightEdge shouldBeLessThanOrEqual yearLeftEdge
+        compose.onNodeWithText("Holiday sets").assertIsDisplayed()
+        compose.onNodeWithText("Holidays this year").assertIsDisplayed()
+    }
+
+    // Every screen this task caps must still lay out cleanly right at the breakpoint itself; Holidays
+    // is exercised at compact/medium by the class's other tests (no @Config = the small default width),
+    // so this proves the single-column, capped case just below 840dp too. Measured on the "International
+    // Fixed Calendar" set row rather than the capped Column's own tag: `limitContentWidth()`'s outer
+    // `fillMaxWidth()` reports the *window's* width up through its own `wrapContentWidth`/`widthIn`
+    // wrapping (that is how it re-centres the narrower content), so the column's own semantics bounds
+    // never shrink — the cap is only provable on a `fillMaxWidth()` row actually laid out *inside* the
+    // column's now-narrowed measurement.
+    @Test
+    @Config(qualifiers = "w600dp-h1200dp")
+    fun `at medium width the single content column caps at ContentMaxWidth`() {
+        show(loaded())
+
+        val rowWidthPx =
+            compose
+                .onNodeWithText("International Fixed Calendar")
+                .performScrollTo()
+                .fetchSemanticsNode()
+                .size.width
+        val maxWidthPx = with(compose.density) { Dimens.ContentMaxWidth.roundToPx() }
+
+        rowWidthPx shouldBeLessThanOrEqual maxWidthPx
+        compose.onNodeWithText("Holiday sets").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Holidays this year").performScrollTo().assertIsDisplayed()
     }
 
     @Test

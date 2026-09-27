@@ -27,6 +27,9 @@ machine-checked vectors in [docs/calendar-spec.md](docs/calendar-spec.md) §6.4.
 Everything below is implemented and covered by tests on `main`. Nothing here needs a permission beyond
 what's listed in [Privacy](#privacy).
 
+- **Phone, tablet and foldable layouts** — phones stay in portrait; tablets and unfolded foldables get a
+  navigation rail, Month beside its day card, the Events list beside the editor, a two-column Today,
+  and centred columns everywhere else instead of stretched text.
 - **Today, Month, Year and Day-detail views** — a swipeable month grid and a 13-mini-month year overview,
   both with the Leap Day / Year Day bands and both real and IFC weekdays shown side by side. Tap any
   day and the card below the grid shows its Gregorian equivalent, both weekdays, holidays and events, with

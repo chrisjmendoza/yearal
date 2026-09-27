@@ -190,8 +190,37 @@ Each item says what changes and what it fixes; nothing here changes behaviour.
 **2026-09-25 (owner):** Day detail is no longer a sheet. Its content lives in the Month screen's day
 card below the grid (and in the expanded-width detail pane), so everything below now describes that card.
 
-- Year Day and Leap Day get the **intercalary header**: amber container, the intercalary icon and the
-  "no IFC weekday" explanation inside it, matching what the user tapped in Month or Year.
+```
+┌────────────────────────────────────────┐
+│ IFC                          [ Today ] │  eyebrow; the Today badge at its far end
+│ Sunday                                 │  the IFC weekday, bare
+│ September 8, 2026                      │  the IFC date — the card's heading
+│ GREGORIAN                              │  eyebrow
+│ Thursday, September 17, 2026           │  the real weekday lives here, once
+│ IFC 2026-10-08 · Day 260 · Week 38 of 52 · Q3 │  the facts line
+│ HOLIDAYS  ◆ …        EVENTS  ● …       │
+│ [ + Add event ]  ( Open in converter ) │
+└────────────────────────────────────────┘
+```
+
+- **The labelled-block rule, as on Today (owner, 2026-09-27).** The card used to stack the IFC long date,
+  the numeric form, "Gregorian: Saturday, September 12, 2026", and then a bubble repeating both weekdays
+  as "IFC weekday: … / Actual weekday: …" — each weekday twice, "IFC" three times. The owner's rule, which
+  §4.1 already applies to the hero: "If we have an inner bubble of IFC weekday and Gregorian weekday, then
+  we don't need the day listed above them. If we remove that bubble, then we keep the weekday listing."
+  The bubble goes; the weekday listing stays, labelled by its block. So the card reads "IFC → Sunday /
+  September 8, 2026", then "Gregorian → Thursday, September 17, 2026", then one facts line with the
+  numeric form (prefix kept, CLAUDE.md rule 5), day/week and quarter. The IFC weekday is bare under its
+  eyebrow and speaks both weekdays labelled ("IFC Sunday, actual Thursday", spec §4.1 item 7); on Year Day
+  and Leap Day its slot says "no IFC weekday" (item 5). Today and the card render these blocks with the
+  same composables, so the two cannot drift.
+- The IFC date is the card's heading, one step below the hero (`headlineSmall`, the weekday in
+  `titleMedium`); the "Today" badge moves to the end of the IFC eyebrow row instead of taking a row of its
+  own.
+- Year Day and Leap Day get the **intercalary header**: the amber container now wraps the IFC block —
+  the intercalary icon before the eyebrow, "no IFC weekday" in the weekday slot, the date — matching what
+  the user tapped in Month or Year. The Gregorian block and the facts line follow on the card as on any
+  other day.
 - Holidays rows carry the diamond; events rows the swatch; "Add event" and "Open in converter" become a
   `FilledTonalButton` and an `OutlinedButton`.
 - ~~The expanded-width empty pane gets a muted calendar glyph over its text.~~ No empty pane since 2026-09-25: it always shows the selected day or today.
@@ -213,6 +242,16 @@ card below the grid (and in the expanded-width detail pane), so everything below
 - The result becomes a **card on `heroContainer`**, the same component as Today's hero, so the answer
   looks like an answer. The swap-arrows icon (`SwapHoriz`) sits between the two directions, replacing the
   glyph the review said reads as "refresh". Copy / Share / Open day get icons.
+- **The labelled-block rule, as on Today (owner, 2026-09-27).** The card had an "IFC" value pair, a
+  numeric line, a "Gregorian" value pair, then a sage bubble repeating both weekdays as "IFC weekday: … /
+  Actual weekday: …". The bubble goes. The card now reads "IFC → Sunday / September 8, 2026" (the
+  intercalary icon beside the eyebrow on Year Day and Leap Day, "no IFC weekday" in the weekday slot) and
+  "Gregorian → Thursday, September 17, 2026", then one facts line, "IFC 2026-10-08 · Day 260 · Week 38 of
+  52 · Q3" — the same shape as the hero, with the quarter added so the two facts lines match. The
+  direction's answer still comes first and larger; the restated input follows, smaller. The IFC weekday
+  speaks both weekdays labelled (spec §4.1 item 7), the dates keep their spoken "IFC: …" / "Gregorian: …"
+  labels (spec §7.3), the card stays a polite live region, and the copy/share text is unchanged — it
+  already carries both forms.
 
 ### 4.7 Holidays (🟡)
 

@@ -69,6 +69,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -85,11 +86,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.limitContentWidth
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.GregorianDatePickerDialog
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.IfcDatePicker
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.rememberIfcDatePickerState
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
@@ -307,6 +310,15 @@ data class EventEditorCallbacks(
 /** Which date field a picker dialog is currently editing. */
 private enum class PickerTarget { START, ALL_DAY_END, UNTIL }
 
+/** Test tags [EventEditorScreenTest] needs to reach past the screen's own content. */
+internal object EventEditorScreenTestTags {
+    /**
+     * The form's scrolling content [Column], capped at [Dimens.ContentMaxWidth] both full-screen and
+     * inside the expanded list-detail pane (tablet pass, docs/ARCHITECTURE.md §4 "Adaptive layouts").
+     */
+    const val CONTENT_COLUMN: String = "eventEditor:contentColumn"
+}
+
 /**
  * The stateless event editor — the unit for previews and Compose tests. Title/notes/location, the
  * colour row and category control (`docs/design-plan.md` §5.4), all-day vs timed with start/end date
@@ -512,7 +524,17 @@ private fun EditorBody(
     onPickEndTime: () -> Unit,
 ) {
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(ScreenPadding),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(ScreenPadding)
+                // Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): caps the form at
+                // Dimens.ContentMaxWidth both full-screen (compact/medium and expanded's own
+                // EventEditorKey entry) and inside the expanded list-detail pane, so a wide detail
+                // pane never stretches a text field or a segmented row across its own full width.
+                .limitContentWidth()
+                .testTag(EventEditorScreenTestTags.CONTENT_COLUMN),
         verticalArrangement = Arrangement.spacedBy(SectionSpacing),
     ) {
         if (state.saveFailed) {
@@ -1564,6 +1586,23 @@ internal fun EventEditorLeapDayPreview() {
                             .colorArgb,
                     category = EventCategory.BIRTHDAY,
                     isLeapDayAnchor = true,
+                ),
+            callbacks = previewCallbacks,
+        )
+    }
+}
+
+/** Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): the capped, centred form column. */
+@Preview(name = "Tablet", device = "spec:width=1280dp,height=800dp", showBackground = true)
+@Composable
+internal fun EventEditorTabletPreview() {
+    IfcTheme(dynamicColor = false) {
+        EventEditorScreen(
+            state =
+                previewLoaded(
+                    isNew = true,
+                    recurrenceKind = RecurrenceKind.NONE,
+                    startDate = LocalDate.of(2026, 6, 30),
                 ),
             callbacks = previewCallbacks,
         )

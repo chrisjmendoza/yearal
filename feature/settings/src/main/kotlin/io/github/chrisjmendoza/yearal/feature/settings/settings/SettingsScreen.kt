@@ -65,6 +65,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.limitContentWidth
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.colorSchemes
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
@@ -258,7 +259,12 @@ private fun LoadedContent(
             modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = 24.dp),
+                .padding(bottom = 24.dp)
+                // Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): caps this single-column
+                // screen at Dimens.ContentMaxWidth on a wide window instead of stretching every row
+                // and segmented control edge to edge.
+                .limitContentWidth()
+                .testTag(SettingsTestTags.CONTENT_COLUMN),
     ) {
         WeekdaySection(state.settings.weekdayDisplay, onWeekdayDisplaySelected)
         HorizontalDivider()
@@ -704,6 +710,13 @@ internal object SettingsTestTags {
     /** The widget background opacity [Slider], which carries no text or content description of its own. */
     const val WIDGET_BACKGROUND_SLIDER: String = "settings:widgetBackgroundSlider"
 
+    /**
+     * The scrolling content [Column], capped at [io.github.chrisjmendoza.yearal.core.designsystem.theme
+     * .Dimens.ContentMaxWidth] on a wide window (tablet pass, docs/ARCHITECTURE.md §4 "Adaptive
+     * layouts") — what [SettingsScreenTest] measures against to prove the cap holds.
+     */
+    const val CONTENT_COLUMN: String = "settings:contentColumn"
+
     /** Prefix of each [ThemeModeGroup] row's tag; suffixed with the [ThemeMode]'s enum name. */
     const val THEME_MODE_PREFIX: String = "settings:themeMode:"
 
@@ -889,6 +902,13 @@ internal fun SettingsScreenLargeFontPreview() {
 @Composable
 internal fun SettingsScreenNoDynamicColorPreview() {
     SettingsPreview(darkTheme = false, dynamicColorSupported = false)
+}
+
+/** Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): the capped column centred on a wide window. */
+@Preview(name = "Tablet", device = "spec:width=1280dp,height=800dp", showBackground = true)
+@Composable
+internal fun SettingsScreenTabletPreview() {
+    SettingsPreview(darkTheme = false)
 }
 
 @Composable

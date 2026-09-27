@@ -40,12 +40,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.limitContentWidth
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
@@ -142,7 +144,12 @@ fun MoreScreen(
                 Modifier
                     .padding(padding)
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    // Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): caps this single-column
+                    // hub at Dimens.ContentMaxWidth on a wide window; each row's own .fillMaxWidth()
+                    // (navRowModifier) then spans this capped column, not the whole screen.
+                    .limitContentWidth()
+                    .testTag(MoreScreenTestTags.CONTENT_COLUMN),
         ) {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.more_holidays)) },
@@ -292,6 +299,22 @@ private fun FeedbackEmailUnavailableNotice(address: String) {
 
 /** The 48dp touch-target floor (docs/ARCHITECTURE.md §4 "Accessibility"). */
 private val MinTouchTarget = 48.dp
+
+/**
+ * Test tags [MoreScreenTest] needs to reach past the screen's own content, mirroring
+ * `io.github.chrisjmendoza.yearal.feature.settings.settings.SettingsTestTags`.
+ */
+internal object MoreScreenTestTags {
+    /**
+     * The scrolling content [Column], capped at
+     * [io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens.ContentMaxWidth] on a wide window
+     * (tablet pass, docs/ARCHITECTURE.md §4 "Adaptive layouts"). A11y audit finding #27 originally
+     * measured each row's width against the root window; once the column caps below the window's own
+     * width, that comparison must be against this tag instead — the row still spans its column exactly,
+     * it just no longer spans the whole screen on a tablet.
+     */
+    const val CONTENT_COLUMN: String = "more:contentColumn"
+}
 
 @Preview(name = "More hub", showBackground = true)
 @Composable

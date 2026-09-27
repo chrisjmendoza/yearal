@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.limitContentWidth
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
@@ -49,6 +51,16 @@ import io.github.chrisjmendoza.yearal.feature.settings.art.GridIllustrationVaria
 
 /** How many screens the intro has (`docs/FEATURES.md` L1: "at most three screens"). */
 private const val PAGE_COUNT = 3
+
+/** Test tags [IntroScreenTest] needs to reach past the screen's own content. */
+internal object IntroScreenTestTags {
+    /**
+     * The scrolling content [Column], capped at
+     * [io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens.ReadingMaxWidth] on a wide window
+     * (tablet pass, docs/ARCHITECTURE.md §4 "Adaptive layouts").
+     */
+    const val CONTENT_COLUMN: String = "intro:contentColumn"
+}
 
 /**
  * The first-run intro (`docs/FEATURES.md` L1; `docs/ARCHITECTURE.md` §4 "Screens and navigation"):
@@ -158,7 +170,12 @@ fun IntroScreen(
                     .padding(padding)
                     .fillMaxSize()
                     .verticalScroll(scrollState)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    // Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): a prose page, capped at
+                    // Dimens.ReadingMaxWidth; each page's GridIllustration is fillMaxWidth inside, so it
+                    // caps with this column too, rather than stretching across a wide window.
+                    .limitContentWidth(maxWidth = Dimens.ReadingMaxWidth)
+                    .testTag(IntroScreenTestTags.CONTENT_COLUMN),
         ) {
             // focusable() is what makes this Text a focus target at all (plain text is not); see the
             // page-change LaunchedEffect above for why focus lands here and not on the heading.

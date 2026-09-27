@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -39,6 +40,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.limitContentWidth
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
@@ -118,7 +120,12 @@ fun LearnScreen(
                     .padding(padding)
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(bottom = 24.dp),
+                    .padding(bottom = 24.dp)
+                    // Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): a prose page, so it caps
+                    // at the narrower Dimens.ReadingMaxWidth rather than ContentMaxWidth — the grid
+                    // illustrations below are fillMaxWidth inside, so they cap with this column too.
+                    .limitContentWidth(maxWidth = Dimens.ReadingMaxWidth)
+                    .testTag(LearnScreenTestTags.CONTENT_COLUMN),
         ) {
             ReplayIntroSection(onReplayIntro)
             HorizontalDivider()
@@ -367,6 +374,16 @@ private fun BodyParagraph(text: String) {
 /** Degrees the FAQ chevron rotates to when its answer is expanded (pointing up instead of down). */
 private const val FAQ_ICON_EXPANDED_ROTATION = 180f
 
+/** Test tags [LearnScreenTest] needs to reach past the screen's own content. */
+internal object LearnScreenTestTags {
+    /**
+     * The scrolling content [Column], capped at
+     * [io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens.ReadingMaxWidth] on a wide window
+     * (tablet pass, docs/ARCHITECTURE.md §4 "Adaptive layouts").
+     */
+    const val CONTENT_COLUMN: String = "learn:contentColumn"
+}
+
 @Preview(name = "Learn", showBackground = true, heightDp = 1200)
 @Composable
 internal fun LearnScreenPreview() {
@@ -386,6 +403,15 @@ internal fun LearnScreenDarkPreview() {
 @Preview(name = "Learn — font 2.0", showBackground = true, heightDp = 2400, fontScale = 2f)
 @Composable
 internal fun LearnScreenLargeFontPreview() {
+    IfcTheme(dynamicColor = false) {
+        LearnScreen(onBack = {})
+    }
+}
+
+/** Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): the capped, centred prose column. */
+@Preview(name = "Tablet", device = "spec:width=1280dp,height=800dp", showBackground = true)
+@Composable
+internal fun LearnScreenTabletPreview() {
     IfcTheme(dynamicColor = false) {
         LearnScreen(onBack = {})
     }

@@ -29,6 +29,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.domain.settings.ColorPalette
 import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
@@ -37,10 +38,12 @@ import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
 import io.github.chrisjmendoza.yearal.core.domain.settings.WidgetTheme
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
 /**
  * [SettingsScreen] under Robolectric: each control reflects the state it is given, has the semantics
@@ -467,6 +470,34 @@ class SettingsScreenTest {
 
         compose.onNodeWithText("Appearance").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Delete all data").performScrollTo().assertIsDisplayed()
+    }
+
+    // Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): on a wide window the content column
+    // caps at Dimens.ContentMaxWidth instead of stretching the palette row and segmented controls edge
+    // to edge; still lays out cleanly right at the 840dp expanded breakpoint. Measured on the "Both"
+    // weekday row rather than the capped Column's own tag: `limitContentWidth()`'s outer
+    // `fillMaxWidth()` reports the *window's* width up through its own `wrapContentWidth`/`widthIn`
+    // wrapping (that is how it re-centres the narrower content), so the column's own semantics bounds
+    // never shrink — the cap is only provable on a `fillMaxWidth()` child actually laid out *inside*
+    // the column's now-narrowed measurement, which every row here is.
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp")
+    fun `on a wide window the content column caps at ContentMaxWidth`() {
+        show()
+
+        val rowWidth =
+            compose
+                .onNodeWithText("Both")
+                .performScrollTo()
+                .fetchSemanticsNode()
+                .size.width
+        val maxWidthPx = with(compose.density) { Dimens.ContentMaxWidth.roundToPx() }
+
+        rowWidth shouldBeLessThanOrEqual maxWidthPx
+        // The palette swatches and the colour-source segmented row still lay out inside the capped
+        // column rather than overflowing or disappearing (scrolled to: a landscape tablet is short).
+        compose.onNodeWithText("Yearal palette").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Sol").performScrollTo().assertIsDisplayed()
     }
 
     @Test

@@ -60,6 +60,7 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.currentWindowWidthClass
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.limitContentWidth
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.MonthGrid
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.MonthGridTestTags
 import io.github.chrisjmendoza.yearal.core.designsystem.explainer.ExplainerInfoButton
@@ -96,6 +97,17 @@ private val JumpChooserMinTouchTarget = 48.dp
  * clips").
  */
 private val SummaryMinHeight = 220.dp
+
+/**
+ * The widest the single-pane page — grid and day card together — may grow (docs/ARCHITECTURE.md §4
+ * "Adaptive layouts", FEATURES C11): 600dp, the compact/medium breakpoint itself, so at medium widths
+ * (600–839dp: a small tablet, an unfolded small foldable, a tablet in split screen) the grid is never
+ * wider than on the widest phone and its cells stay near-square instead of stretching to 110dp-wide
+ * slivers, with the day card centred under it at the same width. A phone never reaches the cap, and the
+ * expanded-width list pane (`MonthListDetailScreen`) is narrower than it. Deliberately narrower than
+ * [Dimens.ContentMaxWidth], which is 840dp and so would never bind at medium widths at all.
+ */
+private val SinglePaneMaxWidth = 600.dp
 
 /**
  * The Calendar tab's Month pager and day card (docs/FEATURES.md C1, C3, C5, C7, E1;
@@ -214,7 +226,8 @@ fun MonthRoute(
  * docs/ROADMAP.md M3 T2) — and, when [showDayCard], [DayCard] filling the rest of the page below it, so
  * the grid never floats above dead space. [showDayCard] is `false` only for the expanded-width list
  * pane (`MonthListDetailScreen`), which shows the same card once, beside the grid, instead of once per
- * page. The app bar also carries the weekday-header [ExplainerInfoButton], a jump-to-date action
+ * page. At medium widths the page (grid and card together) is capped at 600dp and centred, so the grid
+ * keeps a phone's proportions rather than stretching across the window. The app bar also carries the weekday-header [ExplainerInfoButton], a jump-to-date action
  * (FEATURES C7) and the "Today" action, shown only while the pager is away from today's month, which
  * scrolls the pager to [MonthUiState.todayPage] — animated, unless [rememberReducedMotion] says the
  * user has asked to remove animations, in which case it jumps straight there (docs/ARCHITECTURE.md §4
@@ -344,7 +357,15 @@ fun MonthScreen(
             // Anchor the grid (docs/design-plan.md §4.2, owner note 2): the grid stays at the top of
             // the page, unweighted, and the day card fills the rest — only the card scrolls on its own,
             // so the grid's own fixed 4x7 shape never moves.
-            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            // Capped and centred at medium widths (SinglePaneMaxWidth); the scroll itself stays full-width
+            // so a drag in the side margins still scrolls the page.
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .limitContentWidth(SinglePaneMaxWidth),
+            ) {
                 MonthGrid(
                     month = month,
                     today = state.today,

@@ -31,8 +31,9 @@
 
     <!-- Heading above the conversion result. -->
     <string name="converter_result_heading">Result</string>
-    <!-- The result card's eyebrow caption over the IFC date, shown in small uppercase letters so a
-         newcomer sees which calendar the value below it is in (docs/design-plan.md §4.6). -->
+    <!-- The result card's eyebrow caption over the IFC block (the IFC weekday and the IFC date), shown in
+         small uppercase letters so a newcomer sees which calendar the values below it are in
+         (docs/design-plan.md §4.6). -->
     <string name="converter_eyebrow_ifc">IFC</string>
     <!-- The result card's eyebrow caption over the Gregorian date, the same treatment as
          converter_eyebrow_ifc. -->
@@ -45,6 +46,11 @@
     <!-- The Gregorian side of the result, spoken the same way as converter_result_ifc. %1$s = the full
          Gregorian date with its weekday. -->
     <string name="converter_result_gregorian">Gregorian: %1$s</string>
+    <!-- The result card's facts line under the two date blocks (docs/design-plan.md §4.6), the same shape
+         as the Today hero's: the numeric IFC date with its mandatory "IFC" prefix, day/week, quarter.
+         %1$s = "IFC 2026-10-08", %2$s = "Day 260 · Week 38 of 52", %3$s = "Q3";
+         e.g. "IFC 2026-10-08 · Day 260 · Week 38 of 52 · Q3". -->
+    <string name="converter_facts_line">%1$s · %2$s · %3$s</string>
     <!-- Shown instead of a result while the active input is not a date in the supported range
          (spec §7.1). %1$s = first year (1583), %2$s = last year (9999), already formatted: years are
          names, not quantities, so no plural form is involved. -->
@@ -58,7 +64,7 @@
     <string name="converter_copy">Copy</string>
     <!-- Button: share the conversion as text through the system share sheet. -->
     <string name="converter_share">Share</string>
-    <!-- Button: open the day-detail sheet of the converted day. -->
+    <!-- Button: open the converted day in the Calendar tab, selected, with its day card showing. -->
     <string name="converter_open_day">Open day</string>
     <!-- The text that is copied or shared. It must keep the word "IFC" so the date cannot be misread as
          Gregorian (spec §7.3), and it always includes the Gregorian date (spec §7.9).

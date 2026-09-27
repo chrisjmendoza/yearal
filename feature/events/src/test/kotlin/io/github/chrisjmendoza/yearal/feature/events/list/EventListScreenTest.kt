@@ -25,12 +25,14 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCalendar
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.Rule
@@ -290,6 +292,30 @@ class EventListScreenTest {
         for (line in listOf("Sol 13 picnic", "Sol 13 · Tue Jun 30", "All day")) {
             compose.onNodeWithText(line).textLayout().isCut() shouldBe false
         }
+    }
+
+    // Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): at compact/medium widths the list is
+    // this screen alone, so it caps at Dimens.ContentMaxWidth instead of stretching a search field and
+    // event rows edge to edge on a 600-839dp tablet. Measured on the "Sol 13 picnic" row rather than
+    // the capped Column's own tag: `limitContentWidth()`'s outer `fillMaxWidth()` reports the
+    // *window's* width up through its own `wrapContentWidth`/`widthIn` wrapping (that is how it
+    // re-centres the narrower content), so the column's own semantics bounds never shrink — the cap is
+    // only provable on a `fillMaxWidth()` row actually laid out *inside* the column's now-narrowed
+    // measurement.
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp")
+    fun `on a wide window the content column caps at ContentMaxWidth`() {
+        show(EventListUiState.Loaded(items = listOf(sol13), query = "", hasAnyEvents = true))
+
+        val rowWidthPx =
+            compose
+                .onNodeWithText("Sol 13 picnic")
+                .fetchSemanticsNode()
+                .size.width
+        val maxWidthPx = with(compose.density) { Dimens.ContentMaxWidth.roundToPx() }
+
+        rowWidthPx shouldBeLessThanOrEqual maxWidthPx
+        compose.onNodeWithText("Sol 13 picnic").assertIsDisplayed()
     }
 
     // See feature:converter's ConverterScreenTest: hasVisualOverflow is unusable on the semantics result.

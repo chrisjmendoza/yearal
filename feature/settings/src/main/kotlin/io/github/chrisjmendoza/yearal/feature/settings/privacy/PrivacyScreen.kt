@@ -18,11 +18,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.limitContentWidth
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.yearalTopAppBarColors
 import io.github.chrisjmendoza.yearal.core.navigation.Navigator
@@ -86,11 +89,18 @@ fun PrivacyScreen(
                     .padding(padding)
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(bottom = 24.dp),
+                    .padding(bottom = 24.dp)
+                    // Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): a prose page, so it caps
+                    // at the narrower Dimens.ReadingMaxWidth rather than ContentMaxWidth.
+                    .limitContentWidth(maxWidth = Dimens.ReadingMaxWidth)
+                    .testTag(PrivacyScreenTestTags.CONTENT_COLUMN),
         ) {
             SectionHeading(stringResource(R.string.privacy_section_summary))
             BodyParagraph(stringResource(R.string.privacy_summary_body))
-            HorizontalDivider()
+            // Tagged (only this one) so a test can measure a `fillMaxWidth()` element genuinely laid
+            // out inside the capped column — the column's own tag reports the *window's* width, since
+            // `limitContentWidth()`'s wrapContentWidth/widthIn re-centring happens above it, not below.
+            HorizontalDivider(modifier = Modifier.testTag(PrivacyScreenTestTags.WIDTH_PROBE))
 
             SectionHeading(stringResource(R.string.privacy_section_data))
             BodyParagraph(stringResource(R.string.privacy_data_body))
@@ -142,6 +152,23 @@ private fun BodyParagraph(text: String) {
         style = MaterialTheme.typography.bodyMedium,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
     )
+}
+
+/** Test tags [PrivacyScreenTest] needs to reach past the screen's own content. */
+internal object PrivacyScreenTestTags {
+    /**
+     * The scrolling content [Column], capped at [Dimens.ReadingMaxWidth] on a wide window (tablet
+     * pass, docs/ARCHITECTURE.md §4 "Adaptive layouts").
+     */
+    const val CONTENT_COLUMN: String = "privacy:contentColumn"
+
+    /**
+     * The first [HorizontalDivider], the one `fillMaxWidth()` element genuinely laid out *inside* the
+     * capped column, for a test to measure the real effect of the cap: [CONTENT_COLUMN]'s own bounds
+     * report the window's width regardless of the cap, since `limitContentWidth()`'s re-centring
+     * modifiers wrap around it, not inside it.
+     */
+    const val WIDTH_PROBE: String = "privacy:widthProbe"
 }
 
 @Preview(name = "Privacy", showBackground = true, heightDp = 1400)

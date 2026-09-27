@@ -538,6 +538,7 @@ class MonthViewModelTest {
                 detail.ifcLong shouldBe "September 8, 2026"
                 detail.numeric shouldBe "IFC 2026-10-08"
                 detail.gregorianLong shouldBe "Thursday, September 17, 2026"
+                detail.ifcWeekday shouldBe "Sunday"
                 detail.nominalWeekday shouldBe "IFC weekday: Sunday"
                 detail.actualWeekday shouldBe "Actual weekday: Thursday"
                 detail.weekdaysDescription shouldBe "IFC Sunday, actual Thursday"
@@ -561,6 +562,8 @@ class MonthViewModelTest {
                 val detail = awaitItem().dayDetail.shouldNotBeNull()
                 detail.ifcLong shouldBe "Leap Day, 2028"
                 detail.numeric shouldBe "IFC 2028-06-29"
+                // No bare IFC weekday on Leap Day: the card falls back to nominalWeekday's "no IFC weekday".
+                detail.ifcWeekday shouldBe null
                 detail.nominalWeekday shouldBe "no IFC weekday"
                 detail.dayAndWeek shouldBe "Day 169 · outside the weeks"
                 detail.holidays shouldContainExactly listOf("Leap Day")
@@ -580,6 +583,7 @@ class MonthViewModelTest {
                 val detail = awaitItem().dayDetail.shouldNotBeNull()
                 detail.ifcLong shouldBe "Year Day, 2026"
                 detail.numeric shouldBe "IFC 2026-13-29"
+                detail.ifcWeekday shouldBe null
                 detail.nominalWeekday shouldBe "no IFC weekday"
                 // Engine order: by set id (ifc before us), then holiday id (kwanzaa before new_years_eve).
                 detail.holidays shouldContainExactly listOf("Year Day", "Kwanzaa", "New Year's Eve")
@@ -609,6 +613,34 @@ class MonthViewModelTest {
                 after.dayDetail?.isToday shouldBe false
                 // The selected day itself never changes with the clock.
                 after.dayDetail?.ifcLong shouldBe "September 9, 2026"
+            }
+        }
+
+    // WORKFLOW §3 / the labelled-block rule (docs/design-plan.md §4.4): with nothing selected the card
+    // shows today, so its bare IFC weekday must roll over at midnight too — including into Year Day,
+    // which has none, and back out of it into the new year.
+    @Test
+    fun `the unselected card's IFC weekday rolls over at midnight, into and out of Year Day`() =
+        runTest(dispatcher) {
+            val ticker = FakeDateTicker(LocalDate.of(2026, 12, 30))
+            val viewModel = viewModel(december2026, ticker = ticker)
+            viewModel.uiState.test {
+                awaitItem()
+                // IFC December 28, 2026: a nominal Saturday (every IFC 28th is), a real Wednesday.
+                awaitItem().dayDetail.shouldNotBeNull().ifcWeekday shouldBe "Saturday"
+
+                ticker.set(LocalDate.of(2026, 12, 31))
+                val yearDay = awaitItem().dayDetail.shouldNotBeNull()
+                yearDay.ifcLong shouldBe "Year Day, 2026"
+                yearDay.ifcWeekday shouldBe null
+                yearDay.weekdaysDescription shouldBe "no IFC weekday, actual Thursday"
+
+                ticker.set(LocalDate.of(2027, 1, 1))
+                // IFC January 1, 2027: a nominal Sunday (every IFC 1st is), a real Friday.
+                val newYear = awaitItem().dayDetail.shouldNotBeNull()
+                newYear.ifcLong shouldBe "January 1, 2027"
+                newYear.ifcWeekday shouldBe "Sunday"
+                newYear.weekdaysDescription shouldBe "IFC Sunday, actual Friday"
             }
         }
 

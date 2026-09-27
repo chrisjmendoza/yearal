@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -49,7 +50,10 @@ import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.YearalTheme
 import io.github.chrisjmendoza.yearal.feature.calendar.R
 import io.github.chrisjmendoza.yearal.feature.calendar.agenda.AgendaItemUi
+import io.github.chrisjmendoza.yearal.feature.calendar.common.FactsLine
+import io.github.chrisjmendoza.yearal.feature.calendar.common.GregorianDateBlock
 import io.github.chrisjmendoza.yearal.feature.calendar.common.HolidayDiamondMark
+import io.github.chrisjmendoza.yearal.feature.calendar.common.IfcDateBlock
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -59,24 +63,33 @@ import io.github.chrisjmendoza.yearal.core.designsystem.R as DesignSystemR
 /** Test tag of [IntercalaryHeader]'s surface, present only on Year Day and Leap Day. */
 const val DAY_INTERCALARY_HEADER_TEST_TAG: String = "ifc:dayIntercalaryHeader"
 
+/** Test tag of the [DayCard] surface itself, so a layout test can measure where the card sits. */
+const val DAY_CARD_TEST_TAG: String = "ifc:dayCard"
+
 private val ChipHorizontalPadding = 12.dp
 private val ChipVerticalPadding = 4.dp
 private val ColorDotSize = 12.dp
 private val AgendaRowSpacing = 12.dp
-private val IntercalaryIconSize = 24.dp
+private val IntercalaryIconSize = 20.dp
 private val HolidayRowSpacing = 8.dp
-private val LineSpacing = 4.dp
 
 /**
  * The day card anchoring the Month grid (`docs/design-plan.md` §4.2, owner note 2; owner request "the
  * day card merge": the popup Day detail this superseded is gone, so this card is now the *whole* day
  * detail, not just a summary with a "Details" button onward). Shows [MonthUiState.dayDetail] — built
- * for [MonthUiState.summaryDate], the selected day or today when nothing is selected — in full: both
- * dates (IFC long and numeric, CLAUDE.md rule 5; Gregorian long), a "Today" badge, both labelled
- * weekdays (CLAUDE.md rule 3), day/week/quarter, holidays, events (each row tappable, long-press or its
+ * for [MonthUiState.summaryDate], the selected day or today when nothing is selected — in full.
+ *
+ * Its dates follow the Today hero's labelled-block rule (`docs/design-plan.md` §4.1, §4.4; owner,
+ * 2026-09-27: every fact once, an eyebrow labels its whole block), built from the same shared
+ * [IfcDateBlock], [GregorianDateBlock] and [FactsLine] so the two cannot drift: an "IFC" block — the
+ * bare IFC weekday ("no IFC weekday" on Year Day and Leap Day; spoken with both weekdays labelled, spec
+ * §4.1 item 7) over the IFC long date as the card's heading, with the "Today" badge at the end of its
+ * eyebrow row — then a "Gregorian" block with the real date and its real weekday (the only place the
+ * real weekday is drawn, CLAUDE.md rule 3), then one facts line with the `IFC`-prefixed numeric form
+ * (CLAUDE.md rule 5), day/week and quarter. Then holidays, events (each row tappable, long-press or its
  * TalkBack action requests delete, FEATURES E1) and the "Add event" / "Open in converter" actions
- * (FEATURES D1). Year Day and Leap Day get [IntercalaryHeader] instead of the plain heading (CLAUDE.md
- * rule 6).
+ * (FEATURES D1). On Year Day and Leap Day the IFC block sits inside [IntercalaryHeader]'s amber
+ * container (CLAUDE.md rule 6).
  *
  * A single card on [YearalTheme.colors]' `cardContainer`, so the space below the grid reads as one
  * cohesive block, at both compact/medium widths (below [MonthGrid][io.github.chrisjmendoza.yearal.core.designsystem.calendar.MonthGrid])
@@ -108,7 +121,7 @@ fun DayCard(
         color = YearalTheme.colors.cardContainer,
         contentColor = YearalTheme.colors.onCard,
         shape = MaterialTheme.shapes.medium,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().testTag(DAY_CARD_TEST_TAG),
     ) {
         Column(
             modifier = Modifier.padding(Dimens.SpaceM),
@@ -123,34 +136,17 @@ fun DayCard(
                 return@Column
             }
 
+            // The labelled-block rule (docs/design-plan.md §4.1, §4.4): "IFC" → weekday / date, then
+            // "Gregorian" → the real date with its real weekday, then one facts line — every fact once.
             if (detail.date is IfcDate.Regular) {
-                Text(
-                    text = detail.ifcLong,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.semantics { heading() },
-                )
-                Text(
-                    text = detail.numeric,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = stringResource(R.string.day_gregorian, detail.gregorianLong),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (detail.isToday) {
-                    TodayBadge()
-                }
-                WeekdayBlock(detail)
+                DayIfcBlock(detail)
             } else {
                 IntercalaryHeader(detail)
             }
 
-            Text(
-                text = stringResource(R.string.day_day_week_quarter, detail.dayAndWeek, detail.quarter),
-                style = MaterialTheme.typography.bodyLarge,
-            )
+            GregorianDateBlock(date = detail.gregorianLong)
+
+            FactsLine(numeric = detail.numeric, dayAndWeek = detail.dayAndWeek, quarter = detail.quarter)
 
             SummarySection(title = stringResource(R.string.day_holidays)) {
                 if (detail.holidays.isEmpty()) {
@@ -251,37 +247,37 @@ internal fun TodayBadge() {
 }
 
 /**
- * Both weekdays, each line labelled by the formatter (spec §4.1 item 4) and merged into one spoken
- * description, "IFC Sunday, actual Thursday" (§4.1 item 7), so neither can be mistaken for the other.
+ * The card's "IFC" block (`docs/design-plan.md` §4.4), the shared [IfcDateBlock] the Today hero also
+ * uses: the "IFC" eyebrow — with [eyebrowLeading] before it and the [TodayBadge] at its far end when
+ * the day is today — the bare IFC weekday ("no IFC weekday" on Year Day and Leap Day, spec §4.1 item 5;
+ * spoken as [DayDetailUi.weekdaysDescription], item 7) and the IFC long date as the card's heading.
  */
 @Composable
-internal fun WeekdayBlock(state: DayDetailUi) {
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        shape = MaterialTheme.shapes.medium,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .semantics(mergeDescendants = true) { contentDescription = state.weekdaysDescription },
-    ) {
-        Column(
-            modifier = Modifier.padding(Dimens.SpaceM),
-            verticalArrangement = Arrangement.spacedBy(LineSpacing),
-        ) {
-            Text(text = state.nominalWeekday, style = MaterialTheme.typography.bodyLarge)
-            Text(text = state.actualWeekday, style = MaterialTheme.typography.bodyLarge)
-        }
-    }
+private fun DayIfcBlock(
+    state: DayDetailUi,
+    modifier: Modifier = Modifier,
+    eyebrowLeading: (@Composable RowScope.() -> Unit)? = null,
+) {
+    IfcDateBlock(
+        modifier = modifier,
+        weekday = state.ifcWeekday ?: state.nominalWeekday,
+        weekdaysDescription = state.weekdaysDescription,
+        date = state.ifcLong,
+        weekdayStyle = MaterialTheme.typography.titleMedium,
+        dateStyle = MaterialTheme.typography.headlineSmall,
+        eyebrowLeading = eyebrowLeading,
+        eyebrowTrailing = if (state.isToday) ({ TodayBadge() }) else null,
+    )
 }
 
 /**
- * The header for Year Day and Leap Day (`docs/design-plan.md` §4.4): an `intercalaryContainer`
- * surface with the [io.github.chrisjmendoza.yearal.core.designsystem.R.drawable.ic_intercalary] icon
- * tinted [YearalTheme.colors]' `intercalary`, the date, and [WeekdayBlock]'s existing "no IFC weekday"
- * explanation nested inside it — the same content a regular day's header shows, just gathered under
- * one amber container instead of sitting on the bare card background, so the day reads as visibly
- * different the moment the card shows it.
+ * The header for Year Day and Leap Day (`docs/design-plan.md` §4.4): the card's "IFC" block
+ * ([DayIfcBlock], its weekday slot saying "no IFC weekday") wrapped in an `intercalaryContainer`
+ * surface, with the [io.github.chrisjmendoza.yearal.core.designsystem.R.drawable.ic_intercalary] icon
+ * tinted [YearalTheme.colors]' `intercalary` leading its eyebrow — the same content a regular day's IFC
+ * block shows, just gathered under one amber container so the day reads as visibly different the
+ * moment the card shows it. The Gregorian block and the facts line follow it on the card itself, as on
+ * any other day.
  */
 @Composable
 internal fun IntercalaryHeader(state: DayDetailUi) {
@@ -291,34 +287,18 @@ internal fun IntercalaryHeader(state: DayDetailUi) {
         shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth().testTag(DAY_INTERCALARY_HEADER_TEST_TAG),
     ) {
-        Column(
-            modifier = Modifier.padding(Dimens.SpaceM),
-            verticalArrangement = Arrangement.spacedBy(LineSpacing),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        DayIfcBlock(
+            state = state,
+            eyebrowLeading = {
                 Icon(
                     painter = painterResource(DesignSystemR.drawable.ic_intercalary),
                     contentDescription = null,
                     tint = YearalTheme.colors.intercalary,
                     modifier = Modifier.size(IntercalaryIconSize),
                 )
-                Spacer(modifier = Modifier.width(ChipHorizontalPadding))
-                Text(
-                    text = state.ifcLong,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f).semantics { heading() },
-                )
-            }
-            Text(text = state.numeric, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                text = stringResource(R.string.day_gregorian, state.gregorianLong),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            if (state.isToday) {
-                TodayBadge()
-            }
-            WeekdayBlock(state)
-        }
+            },
+            modifier = Modifier.padding(Dimens.SpaceM),
+        )
     }
 }
 

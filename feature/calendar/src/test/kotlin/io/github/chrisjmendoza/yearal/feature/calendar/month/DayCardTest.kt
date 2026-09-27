@@ -12,12 +12,15 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -40,11 +43,14 @@ import java.util.Locale
 
 /**
  * [DayCard] under Robolectric (the day-card merge — ported from the old `DayScreenTest`, which tested
- * the popup Day detail this card superseded): the card shows the IFC date as a heading, the numeric
- * form with its `IFC` marker, the Gregorian date, both labelled weekday lines (spec §4.1) with "no IFC
- * weekday" on intercalary days, day/week/quarter, the holiday names, the "Today" badge only on today,
- * and its agenda is interactive: tap opens the event, long-press or its TalkBack action requests
- * delete, with a confirmation dialog worded by whether the row recurs (FEATURES E1).
+ * the popup Day detail this card superseded). The card follows the Today hero's labelled-block rule
+ * (`docs/design-plan.md` §4.1, §4.4; owner, 2026-09-27): an "IFC" eyebrow over the bare IFC weekday
+ * ("no IFC weekday" on intercalary days, spec §4.1 item 5; spoken with both weekdays labelled, item 7)
+ * and the IFC date as a heading, a "Gregorian" eyebrow over the real date with its real weekday, then
+ * one facts line with the numeric form's `IFC` marker, day/week and quarter — each weekday drawn once.
+ * Then the holiday names, the "Today" badge only on today, and an interactive agenda: tap opens the
+ * event, long-press or its TalkBack action requests delete, with a confirmation dialog worded by
+ * whether the row recurs (FEATURES E1).
  */
 @RunWith(AndroidJUnit4::class)
 // A tall window so the whole card, holidays included, is on screen; the content scrolls otherwise.
@@ -92,20 +98,37 @@ class DayCardTest {
     }
 
     @Test
-    fun `a regular day shows both dates, both weekday lines and day-week-quarter`() {
+    fun `a regular day shows the labelled IFC and Gregorian blocks, each weekday once, and the facts line`() {
         show(LocalDate.of(2026, 9, 17))
 
-        compose
-            .onNode(hasText("September 8, 2026").and(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)))
-            .assertIsDisplayed()
-        compose.onNodeWithText("IFC 2026-10-08").assertIsDisplayed()
-        compose.onNodeWithText("Gregorian: Thursday, September 17, 2026").assertIsDisplayed()
-        compose.onNodeWithText("IFC weekday: Sunday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Actual weekday: Thursday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithContentDescription("IFC Sunday, actual Thursday").assertIsDisplayed()
-        compose.onNodeWithText("Day 260 · Week 38 of 52 · Q3").assertIsDisplayed()
+        // The "IFC" block: eyebrow, the bare IFC weekday — spoken with both weekdays labelled on that
+        // same line (spec §4.1 item 7) — and the IFC date as the card's heading.
+        val ifcEyebrow = compose.onNodeWithText("IFC").assertIsDisplayed()
+        val weekday =
+            compose
+                .onNode(hasText("Sunday").and(hasContentDescription("IFC Sunday, actual Thursday")))
+                .assertIsDisplayed()
+        val date =
+            compose
+                .onNode(hasText("September 8, 2026").and(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)))
+                .assertIsDisplayed()
+        // The "Gregorian" block carries the real weekday — the only place it is drawn.
+        val gregorianEyebrow = compose.onNodeWithText("GREGORIAN").assertIsDisplayed()
+        compose.onNodeWithText("Thursday, September 17, 2026").assertIsDisplayed()
+        compose.onAllNodesWithText("Thursday").assertCountEquals(0)
+        // No labelled second copy of either weekday (the former weekday bubble is gone), and no
+        // "Gregorian:" prefix — the eyebrow labels the whole block.
+        compose.onAllNodesWithText("IFC weekday: Sunday", useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Actual weekday: Thursday", useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Gregorian: ", substring = true).assertCountEquals(0)
+        // The facts line: the numeric form keeps its IFC prefix (CLAUDE.md rule 5).
+        compose.onNodeWithText("IFC 2026-10-08 · Day 260 · Week 38 of 52 · Q3").assertIsDisplayed()
         compose.onNodeWithText("Today").assertIsDisplayed()
         compose.onNodeWithText("No holidays on this day.").assertIsDisplayed()
+
+        // Top to bottom: IFC eyebrow, IFC weekday, IFC date, Gregorian eyebrow.
+        val tops = listOf(ifcEyebrow, weekday, date, gregorianEyebrow).map { it.getUnclippedBoundsInRoot().top }
+        tops shouldBe tops.sorted()
     }
 
     @Test
@@ -113,11 +136,15 @@ class DayCardTest {
         show(LocalDate.of(2026, 12, 31), holidays = listOf("Year Day", "New Year's Eve"))
 
         compose.onNodeWithText("Year Day, 2026").assertIsDisplayed()
-        compose.onNodeWithText("IFC 2026-13-29").assertIsDisplayed()
-        compose.onNodeWithText("no IFC weekday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Actual weekday: Thursday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithContentDescription("no IFC weekday, actual Thursday").assertIsDisplayed()
-        compose.onNodeWithText("Day 365 · outside the weeks · Q4").assertIsDisplayed()
+        // No IFC weekday: the weekday slot says so (spec §4.1 item 5) rather than showing the real one,
+        // and TalkBack still hears both labelled on that line (item 7).
+        compose
+            .onNode(hasText("no IFC weekday").and(hasContentDescription("no IFC weekday, actual Thursday")))
+            .assertIsDisplayed()
+        compose.onNodeWithText("Thursday, December 31, 2026").assertIsDisplayed()
+        compose.onAllNodesWithText("Thursday").assertCountEquals(0)
+        compose.onAllNodesWithText("Actual weekday: Thursday", useUnmergedTree = true).assertCountEquals(0)
+        compose.onNodeWithText("IFC 2026-13-29 · Day 365 · outside the weeks · Q4").assertIsDisplayed()
         // The section eyebrow heading is shown uppercased, matching every other card section.
         compose.onNodeWithText("HOLIDAYS").assertIsDisplayed()
         compose.onNodeWithText("Year Day").assertIsDisplayed()
@@ -135,16 +162,37 @@ class DayCardTest {
         compose.onNodeWithTag(DAY_INTERCALARY_HEADER_TEST_TAG).assertIsDisplayed()
     }
 
+    // The amber header wraps the IFC block only: the Gregorian block and the facts line sit on the card
+    // itself, exactly as on a regular day.
+    @Test
+    fun `the intercalary header wraps the IFC block and nothing else`() {
+        show(LocalDate.of(2026, 12, 31))
+
+        val inHeader = hasAnyAncestor(hasTestTag(DAY_INTERCALARY_HEADER_TEST_TAG))
+        compose.onNode(hasText("IFC").and(inHeader)).assertIsDisplayed()
+        compose.onNode(hasText("no IFC weekday").and(inHeader)).assertIsDisplayed()
+        compose.onNode(hasText("Year Day, 2026").and(inHeader)).assertIsDisplayed()
+        compose.onNode(hasText("GREGORIAN").and(!inHeader)).assertIsDisplayed()
+        compose.onNode(hasText("Thursday, December 31, 2026").and(!inHeader)).assertIsDisplayed()
+        compose.onNode(hasText("IFC 2026-13-29", substring = true).and(!inHeader)).assertIsDisplayed()
+    }
+
     @Test
     fun `Leap Day shows no IFC weekday and can be today`() {
         show(LocalDate.of(2028, 6, 17), today = LocalDate.of(2028, 6, 17), holidays = listOf("Leap Day"))
 
         compose.onNodeWithText("Leap Day, 2028").assertIsDisplayed()
-        compose.onNodeWithText("IFC 2028-06-29").assertIsDisplayed()
-        compose.onNodeWithText("no IFC weekday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Actual weekday: Saturday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Day 169 · outside the weeks · Q2").assertIsDisplayed()
-        compose.onNodeWithText("Today").assertIsDisplayed()
+        compose
+            .onNode(hasText("no IFC weekday").and(hasContentDescription("no IFC weekday, actual Saturday")))
+            .assertIsDisplayed()
+        compose.onNodeWithText("Saturday, June 17, 2028").assertIsDisplayed()
+        compose.onAllNodesWithText("Saturday").assertCountEquals(0)
+        compose.onAllNodesWithText("Actual weekday: Saturday", useUnmergedTree = true).assertCountEquals(0)
+        compose.onNodeWithText("IFC 2028-06-29 · Day 169 · outside the weeks · Q2").assertIsDisplayed()
+        // The Today badge sits at the end of the IFC eyebrow row, inside the amber header.
+        compose
+            .onNode(hasText("Today").and(hasAnyAncestor(hasTestTag(DAY_INTERCALARY_HEADER_TEST_TAG))))
+            .assertIsDisplayed()
         compose.onNodeWithText("Leap Day").assertIsDisplayed()
         compose.onNodeWithTag(DAY_INTERCALARY_HEADER_TEST_TAG).assertIsDisplayed()
     }
@@ -320,7 +368,8 @@ class DayCardTest {
         }
 
         compose.onNodeWithText("Loading…").assertIsDisplayed()
-        compose.onAllNodesWithText("Gregorian: ", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("GREGORIAN").assertCountEquals(0)
+        compose.onAllNodesWithText("IFC 20", substring = true).assertCountEquals(0)
     }
 
     // FEATURES E1: "delete this occurrence" and plain delete, with a TalkBack-reachable action.

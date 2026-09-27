@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -32,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -47,7 +49,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -55,6 +59,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.currentWindowWidthClass
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.limitContentWidth
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
@@ -79,6 +86,19 @@ internal object HolidaysTestTags {
 
     /** The intercalary icon on a Year Day or Leap Day row, replacing the diamond. */
     const val INTERCALARY_MARK: String = "holidays:intercalaryMark"
+
+    /**
+     * The single scrolling content column at compact/medium widths, capped at
+     * [io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens.ContentMaxWidth] (tablet pass,
+     * docs/ARCHITECTURE.md §4 "Adaptive layouts").
+     */
+    const val CONTENT_COLUMN: String = "holidays:contentColumn"
+
+    /** The "Holiday sets" pane at expanded widths, beside [YEAR_PANE]. */
+    const val SETS_PANE: String = "holidays:setsPane"
+
+    /** The "Holidays this year" pane at expanded widths, beside [SETS_PANE]. */
+    const val YEAR_PANE: String = "holidays:yearPane"
 }
 
 // 12dp pack colour dot, 8dp holiday diamond (docs/design-plan.md section 4.7) - sized locally, not from
@@ -187,10 +207,21 @@ private fun LoadingContent(modifier: Modifier) {
     }
 }
 
+/** [LoadedContent]'s share of the width given to the "Holiday sets" pane at expanded widths. */
+private const val SETS_PANE_WEIGHT = 0.4f
+
 // A plain scrollable Column, not a LazyColumn: a year's holidays from a handful of packs is at most a
 // few dozen rows (matching SettingsScreen, ConverterScreen and MoreScreen's own choice), and it composes
 // every row eagerly, so performScrollTo() in tests and TalkBack's linear traversal both see the whole
 // screen rather than only whatever a LazyColumn happened to have realized near the viewport.
+//
+// Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): at expanded widths the two sections sit
+// side by side in a Row instead of stacked in one capped column. A single ContentMaxWidth-capped column
+// left "Holiday sets" (a handful of rows) as a lonely strip above a much taller "Holidays this year"
+// list on a wide tablet, wasting the rest of the width; putting them beside each other, each with its
+// own scroll state, uses that width and lets both sections stay in view together. This is a real
+// two-pane split (like io.github.chrisjmendoza.yearal.core.designsystem.adaptive.TwoPaneLayout), so
+// neither pane is itself capped with limitContentWidth — only the single-column compact/medium case is.
 @Composable
 private fun LoadedContent(
     state: HolidaysUiState.Loaded,
@@ -200,28 +231,86 @@ private fun LoadedContent(
     modifier: Modifier,
 ) {
     val formatter = rememberIfcDateFormatter()
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 24.dp),
-    ) {
-        SectionHeading(stringResource(R.string.holidays_section_sets))
-        SectionInfo(stringResource(R.string.holidays_sets_info))
-        state.sets.forEach { set ->
-            HolidaySetItem(row = set, onCheckedChange = { enabled -> onHolidaySetEnabledChanged(set.id, enabled) })
-        }
-        HorizontalDivider()
-        SectionHeading(stringResource(R.string.holidays_section_year))
-        YearNav(state = state, onGoToYear = onGoToYear, formatter = formatter)
-        if (state.groups.isEmpty()) {
-            EmptyYearList()
-        } else {
-            state.groups.forEach { group ->
-                MonthEyebrow(group.monthLabel)
-                group.rows.forEach { row -> HolidayOccurrenceItem(row = row, onClick = onRowClick) }
+    if (currentWindowWidthClass() == WindowWidthClass.EXPANDED) {
+        Row(modifier = modifier.fillMaxSize()) {
+            Column(
+                modifier =
+                    Modifier
+                        .weight(SETS_PANE_WEIGHT)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = 24.dp)
+                        .testTag(HolidaysTestTags.SETS_PANE)
+                        .semantics {
+                            isTraversalGroup = true
+                            traversalIndex = 0f
+                        },
+            ) {
+                SetsSection(state = state, onHolidaySetEnabledChanged = onHolidaySetEnabledChanged)
             }
+            VerticalDivider()
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f - SETS_PANE_WEIGHT)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = 24.dp)
+                        .testTag(HolidaysTestTags.YEAR_PANE)
+                        .semantics {
+                            isTraversalGroup = true
+                            traversalIndex = 1f
+                        },
+            ) {
+                YearSection(state = state, onGoToYear = onGoToYear, onRowClick = onRowClick, formatter = formatter)
+            }
+        }
+    } else {
+        Column(
+            modifier =
+                modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 24.dp)
+                    .limitContentWidth()
+                    .testTag(HolidaysTestTags.CONTENT_COLUMN),
+        ) {
+            SetsSection(state = state, onHolidaySetEnabledChanged = onHolidaySetEnabledChanged)
+            HorizontalDivider()
+            YearSection(state = state, onGoToYear = onGoToYear, onRowClick = onRowClick, formatter = formatter)
+        }
+    }
+}
+
+/** "Holiday sets": every bundled pack with its switch (FEATURES H1, H2, H3, H5). */
+@Composable
+private fun SetsSection(
+    state: HolidaysUiState.Loaded,
+    onHolidaySetEnabledChanged: (id: String, enabled: Boolean) -> Unit,
+) {
+    SectionHeading(stringResource(R.string.holidays_section_sets))
+    SectionInfo(stringResource(R.string.holidays_sets_info))
+    state.sets.forEach { set ->
+        HolidaySetItem(row = set, onCheckedChange = { enabled -> onHolidaySetEnabledChanged(set.id, enabled) })
+    }
+}
+
+/** "Holidays this year": the year navigator, then the chosen year's occurrences grouped by IFC month. */
+@Composable
+private fun YearSection(
+    state: HolidaysUiState.Loaded,
+    onGoToYear: (Int) -> Unit,
+    onRowClick: (epochDay: Long) -> Unit,
+    formatter: IfcDateFormatter,
+) {
+    SectionHeading(stringResource(R.string.holidays_section_year))
+    YearNav(state = state, onGoToYear = onGoToYear, formatter = formatter)
+    if (state.groups.isEmpty()) {
+        EmptyYearList()
+    } else {
+        state.groups.forEach { group ->
+            MonthEyebrow(group.monthLabel)
+            group.rows.forEach { row -> HolidayOccurrenceItem(row = row, onClick = onRowClick) }
         }
     }
 }

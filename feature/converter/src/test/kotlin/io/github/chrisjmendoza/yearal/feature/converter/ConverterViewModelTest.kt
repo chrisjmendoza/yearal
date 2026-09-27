@@ -120,10 +120,12 @@ class ConverterViewModelTest {
                 result.ifcLong shouldBe "September 8, 2026"
                 result.numeric shouldBe "IFC 2026-10-08"
                 result.gregorianLong shouldBe "Thursday, September 17, 2026"
+                result.ifcWeekday shouldBe "Sunday"
                 result.nominalWeekday shouldBe "IFC weekday: Sunday"
                 result.actualWeekday shouldBe "Actual weekday: Thursday"
                 result.weekdaysDescription shouldBe "IFC Sunday, actual Thursday"
                 result.dayAndWeek shouldBe "Day 260 · Week 38 of 52"
+                result.quarter shouldBe "Q3"
                 result.showProlepticNote shouldBe false
             }
         }
@@ -140,10 +142,13 @@ class ConverterViewModelTest {
             result.date shouldBe IfcDate.YearDay(2026)
             result.ifcLong shouldBe "Year Day, 2026"
             result.numeric shouldBe "IFC 2026-13-29"
+            // No bare IFC weekday on Year Day: the card falls back to nominalWeekday's "no IFC weekday".
+            result.ifcWeekday shouldBe null
             result.nominalWeekday shouldBe "no IFC weekday"
             result.actualWeekday shouldBe "Actual weekday: Thursday"
             result.weekdaysDescription shouldBe "no IFC weekday, actual Thursday"
             result.dayAndWeek shouldBe "Day 365 · outside the weeks"
+            result.quarter shouldBe "Q4"
             state().followsToday shouldBe false
         }
 
@@ -159,14 +164,17 @@ class ConverterViewModelTest {
             leap.date shouldBe IfcDate.LeapDay(2024)
             leap.ifcLong shouldBe "Leap Day, 2024"
             leap.numeric shouldBe "IFC 2024-06-29"
+            leap.ifcWeekday shouldBe null
             leap.nominalWeekday shouldBe "no IFC weekday"
             leap.actualWeekday shouldBe "Actual weekday: Monday"
             leap.dayAndWeek shouldBe "Day 169 · outside the weeks"
+            leap.quarter shouldBe "Q2"
 
             viewModel.setGregorianDate(LocalDate.of(2025, 6, 17))
             val common = state().converted()
             common.date shouldBe IfcDate.Regular(2025, IfcMonth.JUNE, 28)
             common.numeric shouldBe "IFC 2025-06-28"
+            common.ifcWeekday shouldBe "Saturday"
             common.nominalWeekday shouldBe "IFC weekday: Saturday"
             common.actualWeekday shouldBe "Actual weekday: Tuesday"
             common.dayAndWeek shouldBe "Day 168 · Week 24 of 52"
@@ -191,6 +199,7 @@ class ConverterViewModelTest {
             back.gregorianDate shouldBe LocalDate.of(2026, 7, 4)
             back.gregorianLong shouldBe "Saturday, July 4, 2026"
             back.numeric shouldBe "IFC 2026-07-17"
+            back.ifcWeekday shouldBe "Tuesday"
             back.nominalWeekday shouldBe "IFC weekday: Tuesday"
             back.actualWeekday shouldBe "Actual weekday: Saturday"
             state().gregorianInput shouldBe LocalDate.of(2026, 7, 4)

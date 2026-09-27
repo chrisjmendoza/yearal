@@ -9,14 +9,19 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.width
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
@@ -25,7 +30,9 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.github.chrisjmendoza.yearal.feature.calendar.agenda.AgendaItemUi
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.floats.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import org.junit.Rule
 import org.junit.Test
@@ -34,6 +41,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
 import java.util.Locale
+import kotlin.math.absoluteValue
 
 private val MinTouchTarget = 48.dp
 
@@ -67,6 +75,30 @@ class CalendarScreenTest {
         selected = selected,
         dayDetail = dayDetail,
     )
+
+    /** The day card's facts line (docs/design-plan.md §4.4): the numeric form, day/week, quarter. */
+    private fun factsLine(detail: DayDetailUi) = "${detail.numeric} · ${detail.dayAndWeek} · ${detail.quarter}"
+
+    private fun showCalendar(
+        widthClass: WindowWidthClass,
+        state: MonthUiState = monthState(),
+    ) {
+        compose.setContent {
+            IfcTheme(dynamicColor = false) {
+                CalendarScreen(
+                    widthClass = widthClass,
+                    monthState = state,
+                    onPageChanged = {},
+                    onTitleClick = {},
+                    onJumpToDate = {},
+                    onSelectDay = {},
+                    dayCallbacks = emptyDayCallbacks(),
+                )
+            }
+        }
+    }
+
+    private fun cell(description: String) = compose.onNode(hasContentDescription(description, substring = true))
 
     private fun emptyDayCallbacks() =
         DayDetailCallbacks(
@@ -148,7 +180,7 @@ class CalendarScreenTest {
         // The list pane's month heading is still visible…
         compose.onNode(hasText("October 2026").and(hasClickAction())).assertIsDisplayed()
         // …at the same time as the detail pane's content.
-        compose.onNodeWithText(dayDetail.numeric).assertIsDisplayed()
+        compose.onNodeWithText(factsLine(dayDetail)).assertIsDisplayed()
         compose.onNode(hasContentDescription("October 5, IFC", substring = true)).assertIsSelected()
     }
 
@@ -227,6 +259,72 @@ class CalendarScreenTest {
         // content test, proven again here because the same content renders in this pane too).
         compose.onNode(hasContentDescription("October 5, IFC", substring = true)).assertHeightIsAtLeast(MinTouchTarget)
         compose.onNodeWithText("Add event").assertHeightIsAtLeast(MinTouchTarget)
-        compose.onNodeWithText(dayDetail.numeric).assertIsDisplayed()
+        compose.onNodeWithText(factsLine(dayDetail)).assertIsDisplayed()
+    }
+
+    // FEATURES C11 (tablet layouts): at medium widths (600–839dp) the single-pane page — grid and day
+    // card together — is capped at 600dp and centred, so the grid keeps a phone's proportions instead
+    // of stretching its cells across the window.
+
+    @Test
+    @Config(qualifiers = "w800dp-h1200dp")
+    fun `medium width caps the grid and the day card at 600dp and centres them`() {
+        showCalendar(WindowWidthClass.MEDIUM)
+
+        val firstCell = cell("October 1, IFC").getUnclippedBoundsInRoot()
+        val lastCell = cell("October 7, IFC").getUnclippedBoundsInRoot()
+        (lastCell.right - firstCell.left <= 600.dp) shouldBe true
+        val card = compose.onNodeWithTag(DAY_CARD_TEST_TAG).assertIsDisplayed().getUnclippedBoundsInRoot()
+        (card.width <= 600.dp) shouldBe true
+        // Centred in the 800dp window, and below the grid (one column, not a split).
+        ((card.left + card.right) / 2 - 400.dp).value.absoluteValue shouldBeLessThan 1f
+        ((firstCell.left + lastCell.right) / 2 - 400.dp).value.absoluteValue shouldBeLessThan 1f
+        (card.top >= lastCell.bottom) shouldBe true
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp")
+    fun `compact width is never capped - the grid spans the phone`() {
+        showCalendar(WindowWidthClass.COMPACT)
+
+        val firstCell = cell("October 1, IFC").getUnclippedBoundsInRoot()
+        val lastCell = cell("October 7, IFC").getUnclippedBoundsInRoot()
+        // 360dp less the page's 16dp side padding on each side.
+        (lastCell.right - firstCell.left >= 320.dp) shouldBe true
+    }
+
+    @Test
+    @Config(qualifiers = "w840dp-h1200dp")
+    fun `expanded width at 840dp puts the day card beside the grid, not below it`() {
+        showCalendar(WindowWidthClass.EXPANDED)
+
+        val lastCell = cell("October 7, IFC").getUnclippedBoundsInRoot()
+        val card = compose.onNodeWithTag(DAY_CARD_TEST_TAG).assertIsDisplayed().getUnclippedBoundsInRoot()
+        (card.left >= lastCell.right) shouldBe true
+        (card.top < lastCell.bottom) shouldBe true
+        // The grid pane is wide enough for seven 48dp cells even at the narrowest expanded width.
+        cell("October 1, IFC").assertWidthIsAtLeast(MinTouchTarget)
+    }
+
+    // The expanded detail pane scrolls on its own, so a long day is never clipped at the bottom of a
+    // landscape tablet: the card's last action can always be scrolled into view.
+    @Test
+    @Config(qualifiers = "w1000dp-h600dp")
+    fun `the expanded detail pane scrolls a long day's card into view`() {
+        val agenda =
+            List(12) { index ->
+                AgendaItemUi(
+                    eventId = index.toLong(),
+                    title = "Event $index",
+                    isAllDay = true,
+                    startTime = null,
+                    endTime = null,
+                    colorArgb = 0xFF123F3D.toInt(),
+                )
+            }
+        val detail = buildDayDetailUi(today, today, formatter, holidays = emptyList(), agenda = agenda)
+        showCalendar(WindowWidthClass.EXPANDED, monthState(dayDetail = detail))
+
+        compose.onNodeWithText("Open in converter").performScrollTo().assertIsDisplayed()
     }
 }

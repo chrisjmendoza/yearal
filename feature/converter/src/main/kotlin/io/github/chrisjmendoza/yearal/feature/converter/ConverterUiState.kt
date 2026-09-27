@@ -68,12 +68,18 @@ sealed interface ConversionResult {
      * @property numeric the canonical numeric style with its mandatory prefix (`IFC 2026-10-08`);
      * [IfcDate.toPrefixedString], never a locale-style numeric date (CLAUDE.md rule 5).
      * @property gregorianLong the Gregorian date with its real weekday (`Thursday, September 17, 2026`).
+     * @property ifcWeekday the **IFC (nominal)** weekday, unlabelled (`Sunday`), shown bare under the
+     * result card's "IFC" eyebrow (the labelled-block rule, docs/design-plan.md §4.6). `null` on Leap Day
+     * and Year Day, which have no IFC weekday; the card shows [nominalWeekday]'s "no IFC weekday" in that
+     * slot instead. The real weekday is in [gregorianLong]; TalkBack hears both through
+     * [weekdaysDescription].
      * @property nominalWeekday the labelled IFC weekday (`IFC weekday: Sunday`), or `no IFC weekday` on
      * Leap Day and Year Day. **Not the real weekday** — spec §4.1.
      * @property actualWeekday the labelled real weekday (`Actual weekday: Thursday`), from
      * [IfcDate.actualDayOfWeek]; never derived from [nominalWeekday].
      * @property weekdaysDescription both weekdays in spoken form (`IFC Sunday, actual Thursday`).
      * @property dayAndWeek `Day 260 · Week 38 of 52`, or `Day 169 · outside the weeks` (spec §7.4).
+     * @property quarter `Q3` (spec §7.5), the last item of the result card's facts line.
      * @property showProlepticNote whether to show the proleptic-calendar note (FEATURES D2): the year is
      * not after [PROLEPTIC_NOTE_LAST_YEAR].
      */
@@ -83,10 +89,12 @@ sealed interface ConversionResult {
         val ifcLong: String,
         val numeric: String,
         val gregorianLong: String,
+        val ifcWeekday: String?,
         val nominalWeekday: String,
         val actualWeekday: String,
         val weekdaysDescription: String,
         val dayAndWeek: String,
+        val quarter: String,
         val showProlepticNote: Boolean,
     ) : ConversionResult
 }
@@ -140,9 +148,11 @@ private fun converted(
         ifcLong = formatter.formatLong(date),
         numeric = formatter.formatNumeric(date),
         gregorianLong = formatter.formatGregorianLong(gregorianDate),
+        ifcWeekday = date.nominalDayOfWeek?.let { formatter.weekdayName(it) },
         nominalWeekday = formatter.nominalWeekday(date),
         actualWeekday = formatter.actualWeekday(date),
         weekdaysDescription = formatter.weekdaysDescription(date),
         dayAndWeek = formatter.dayAndWeek(date),
+        quarter = formatter.quarter(date),
         showProlepticNote = gregorianDate.year <= PROLEPTIC_NOTE_LAST_YEAR,
     )

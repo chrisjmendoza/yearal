@@ -18,6 +18,10 @@ import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -36,6 +40,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.DatePickerRange
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.IfcDatePickerValue
@@ -44,6 +49,7 @@ import io.github.chrisjmendoza.yearal.core.navigation.ConverterKey
 import io.github.chrisjmendoza.yearal.core.testing.FakeDateTicker
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.floats.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.Rule
@@ -53,15 +59,18 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
 import java.util.Locale
+import kotlin.math.absoluteValue
 import kotlin.random.Random
 
 /**
- * [ConverterScreen] under Robolectric (docs/FEATURES.md D1, D2, D4): both dates in full with the
- * numeric `IFC` form, the two weekdays on separately labelled lines and "no IFC weekday" on the
- * intercalary days (spec §4.1), the direction switch and its two inputs, the invalid state, the
- * proleptic note, and copy/share text that always says "IFC". The last tests drive the real
- * [ConverterViewModel] through the screen and round-trip generated dates (docs/ROADMAP.md M3 exit),
- * with `:core:calendar` as the oracle.
+ * [ConverterScreen] under Robolectric (docs/FEATURES.md D1, D2, D4): the result card's two labelled
+ * blocks (docs/design-plan.md §4.6; the labelled-block rule, owner, 2026-09-27) — "IFC" over the bare
+ * IFC weekday ("no IFC weekday" on the intercalary days, spec §4.1 item 5; spoken with both weekdays
+ * labelled, item 7) and the IFC date, "Gregorian" over the real date with its real weekday — then the
+ * facts line with the numeric `IFC` form, each weekday drawn once; the direction switch and its two
+ * inputs, the invalid state, the proleptic note, copy/share text that always says "IFC", and the
+ * width-class layouts (FEATURES C11). The last tests drive the real [ConverterViewModel] through the
+ * screen and round-trip generated dates (docs/ROADMAP.md M3 exit), with `:core:calendar` as the oracle.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -85,6 +94,7 @@ class ConverterScreenTest {
     private fun show(
         state: ConverterUiState,
         fontScale: Float = 1f,
+        widthClass: WindowWidthClass = WindowWidthClass.COMPACT,
     ) {
         compose.setContent {
             val density = LocalDensity.current
@@ -99,11 +109,18 @@ class ConverterScreenTest {
                         onCopy = { copied += it },
                         onShare = { shared += it },
                         onOpenDay = { openedDays += it },
+                        widthClass = widthClass,
                     )
                 }
             }
         }
     }
+
+    /** The IFC weekday line: its visible bare weekday and its spoken, labelled pair (spec §4.1 item 7). */
+    private fun weekdayLine(
+        visible: String,
+        spoken: String,
+    ) = compose.onNode(hasText(visible).and(hasContentDescription(spoken)))
 
     private fun loaded(
         day: LocalDate,
@@ -118,16 +135,19 @@ class ConverterScreenTest {
 
     // §4.1 worked example / §6.4 row 1.
     @Test
-    fun `Gregorian to IFC shows both dates, the numeric form and both labelled weekdays`() {
+    fun `Gregorian to IFC shows both labelled blocks, each weekday once, and the facts line`() {
         show(loaded(specToday, chosen = false))
 
         compose.onNodeWithContentDescription("IFC: September 8, 2026").assertIsDisplayed()
         compose.onNodeWithContentDescription("Gregorian: Thursday, September 17, 2026").assertIsDisplayed()
-        compose.onNodeWithText("IFC 2026-10-08").assertIsDisplayed()
-        compose.onNodeWithText("IFC weekday: Sunday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Actual weekday: Thursday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithContentDescription("IFC Sunday, actual Thursday").assertIsDisplayed()
-        compose.onNodeWithText("Day 260 · Week 38 of 52").assertIsDisplayed()
+        // The IFC weekday bare under its eyebrow, spoken with both weekdays labelled on the same line.
+        weekdayLine("Sunday", "IFC Sunday, actual Thursday").assertIsDisplayed()
+        // The real weekday only inside the Gregorian date; no labelled second copy of either weekday.
+        compose.onAllNodesWithText("Thursday").assertCountEquals(0)
+        compose.onAllNodesWithText("IFC weekday: Sunday", useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Actual weekday: Thursday", useUnmergedTree = true).assertCountEquals(0)
+        // The facts line: the numeric form keeps its IFC prefix (CLAUDE.md rule 5).
+        compose.onNodeWithText("IFC 2026-10-08 · Day 260 · Week 38 of 52 · Q3").assertIsDisplayed()
         compose.onAllNodesWithText("proleptic", substring = true).assertCountEquals(0)
         // Rule 5: never a locale-style numeric IFC date.
         compose.onAllNodesWithText("10/08/2026", substring = true).assertCountEquals(0)
@@ -143,11 +163,11 @@ class ConverterScreenTest {
 
         compose.onNodeWithContentDescription("IFC: Year Day, 2026").assertIsDisplayed()
         compose.onNodeWithContentDescription("Gregorian: Thursday, December 31, 2026").assertIsDisplayed()
-        compose.onNodeWithText("IFC 2026-13-29").assertIsDisplayed()
-        compose.onNodeWithText("no IFC weekday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Actual weekday: Thursday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithContentDescription("no IFC weekday, actual Thursday").assertIsDisplayed()
-        compose.onNodeWithText("Day 365 · outside the weeks").assertIsDisplayed()
+        // No IFC weekday: the slot says so (spec §4.1 item 5) rather than showing the real one.
+        weekdayLine("no IFC weekday", "no IFC weekday, actual Thursday").assertIsDisplayed()
+        compose.onAllNodesWithText("Thursday").assertCountEquals(0)
+        compose.onAllNodesWithText("Actual weekday", substring = true, useUnmergedTree = true).assertCountEquals(0)
+        compose.onNodeWithText("IFC 2026-13-29 · Day 365 · outside the weeks · Q4").assertIsDisplayed()
         compose.onAllNodesWithText("IFC weekday:", substring = true, useUnmergedTree = true).assertCountEquals(0)
     }
 
@@ -164,10 +184,12 @@ class ConverterScreenTest {
 
         compose.onNodeWithContentDescription("Gregorian: Monday, June 17, 2024").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("IFC: Leap Day, 2024").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("IFC 2024-06-29").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithContentDescription("no IFC weekday, actual Monday").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("no IFC weekday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Actual weekday: Monday", useUnmergedTree = true).assertIsDisplayed()
+        compose
+            .onNodeWithText("IFC 2024-06-29 · Day 169 · outside the weeks · Q2")
+            .performScrollTo()
+            .assertIsDisplayed()
+        weekdayLine("no IFC weekday", "no IFC weekday, actual Monday").performScrollTo().assertIsDisplayed()
+        compose.onAllNodesWithText("Monday").assertCountEquals(0)
         val answerTop =
             compose
                 .onNodeWithContentDescription("Gregorian: Monday, June 17, 2024")
@@ -217,19 +239,24 @@ class ConverterScreenTest {
         directions shouldContainExactly listOf(ConversionDirection.IFC_TO_GREGORIAN)
     }
 
-    // docs/design-plan.md §4.6: eyebrow captions "IFC" / "Gregorian" over their values, so a newcomer
-    // sees which calendar each date belongs to. The eyebrows are their own exact-text nodes (unique on
-    // screen); the values are checked through the merged content description instead of plain text,
-    // since the Gregorian date button legitimately shows the same date text as the result's restated
-    // Gregorian value.
+    // docs/design-plan.md §4.6: eyebrow captions "IFC" / "Gregorian" over their blocks, so a newcomer
+    // sees which calendar each date belongs to — "IFC" over the IFC weekday and then the IFC date. The
+    // eyebrows are their own exact-text nodes (unique on screen); the values are checked through their
+    // content descriptions instead of plain text, since the Gregorian date button legitimately shows the
+    // same date text as the result's restated Gregorian value.
     @Test
-    fun `the result card shows the IFC and Gregorian eyebrows over their values`() {
+    fun `the result card shows the IFC and Gregorian eyebrows over their blocks`() {
         show(loaded(specToday, chosen = false))
 
-        compose.onNodeWithText("IFC", useUnmergedTree = true).assertIsDisplayed()
+        val ifcEyebrow = compose.onNodeWithText("IFC", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("GREGORIAN", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithContentDescription("IFC: September 8, 2026").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Gregorian: Thursday, September 17, 2026").assertIsDisplayed()
+        val weekday = weekdayLine("Sunday", "IFC Sunday, actual Thursday").assertIsDisplayed()
+        val date = compose.onNodeWithContentDescription("IFC: September 8, 2026").assertIsDisplayed()
+        val gregorian =
+            compose.onNodeWithContentDescription("Gregorian: Thursday, September 17, 2026").assertIsDisplayed()
+        // Gregorian → IFC: the IFC block (the answer) first — eyebrow, weekday, date — then the Gregorian.
+        val tops = listOf(ifcEyebrow, weekday, date, gregorian).map { it.getUnclippedBoundsInRoot().top }
+        tops shouldBe tops.sorted()
     }
 
     // a11y audit (docs/ARCHITECTURE.md §4 "Accessibility") finding #13: the result card is a polite
@@ -278,7 +305,8 @@ class ConverterScreenTest {
         compose.onNode(hasText("IFC year")).assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Error))
         for (absent in listOf("Copy", "Share", "Open day")) compose.onAllNodesWithText(absent).assertCountEquals(0)
         compose.onAllNodesWithContentDescription("Gregorian:", substring = true).assertCountEquals(0)
-        compose.onAllNodesWithText("Actual weekday", substring = true, useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodesWithContentDescription("actual", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("GREGORIAN", useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test
@@ -394,7 +422,13 @@ class ConverterScreenTest {
             control.performScrollTo().assertHeightIsAtLeast(48.dp)
             control.textLayout().isCut() shouldBe false
         }
-        for (line in listOf("IFC", "GREGORIAN", "Year Day, 1900", "IFC 1900-13-29")) {
+        for (line in listOf(
+            "IFC",
+            "no IFC weekday",
+            "GREGORIAN",
+            "Year Day, 1900",
+            "IFC 1900-13-29 · Day 365 · outside the weeks · Q4",
+        )) {
             compose
                 .onNodeWithText(line, useUnmergedTree = true)
                 .performScrollTo()
@@ -409,6 +443,65 @@ class ConverterScreenTest {
                 get(index).performScrollTo().textLayout().isCut() shouldBe false
             }
         }
+    }
+
+    // ----- Width classes (FEATURES C11; docs/ARCHITECTURE.md §4 "Adaptive layouts") -----
+
+    private val inputPane = hasTestTag(CONVERTER_INPUT_PANE_TEST_TAG)
+    private val resultPane = hasTestTag(CONVERTER_RESULT_PANE_TEST_TAG)
+
+    @Test
+    @Config(qualifiers = "w840dp-h1200dp")
+    fun `expanded width puts the input on the left and the result on the right`() {
+        show(
+            loaded(LocalDate.of(2026, 12, 31), direction = ConversionDirection.IFC_TO_GREGORIAN),
+            widthClass = WindowWidthClass.EXPANDED,
+        )
+
+        val input = compose.onNode(inputPane).assertIsDisplayed().getUnclippedBoundsInRoot()
+        val result = compose.onNode(resultPane).assertIsDisplayed().getUnclippedBoundsInRoot()
+        (result.left >= input.right) shouldBe true
+        input.top shouldBe result.top
+        // The IFC picker and the answer are both on screen at once, no scrolling.
+        compose.onNode(hasText("Year Day").and(hasAnyAncestor(inputPane))).assertIsDisplayed()
+        compose
+            .onNode(hasContentDescription("Gregorian: Thursday, December 31, 2026").and(hasAnyAncestor(resultPane)))
+            .assertIsDisplayed()
+        weekdayLine("no IFC weekday", "no IFC weekday, actual Thursday").assertIsDisplayed()
+        // TalkBack reads the whole input, then the whole result.
+        compose
+            .onNode(inputPane)
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.IsTraversalGroup, true))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.TraversalIndex, 0f))
+        compose
+            .onNode(resultPane)
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.IsTraversalGroup, true))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.TraversalIndex, 1f))
+    }
+
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp")
+    fun `on a landscape tablet the two columns are capped at 840dp and centred`() {
+        show(loaded(specToday), widthClass = WindowWidthClass.EXPANDED)
+
+        val input = compose.onNode(inputPane).getUnclippedBoundsInRoot()
+        val result = compose.onNode(resultPane).getUnclippedBoundsInRoot()
+        (result.right - input.left <= 840.dp) shouldBe true
+        ((input.left + result.right) / 2 - 640.dp).value.absoluteValue shouldBeLessThan 1f
+        compose.onNode(hasText("Copy").and(hasAnyAncestor(resultPane))).assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "w600dp-h1200dp")
+    fun `medium width stays one column, the result under the input`() {
+        show(loaded(specToday), widthClass = WindowWidthClass.MEDIUM)
+
+        compose.onAllNodes(inputPane).assertCountEquals(0)
+        compose.onAllNodes(resultPane).assertCountEquals(0)
+        val direction = compose.onNodeWithText("Direction").getUnclippedBoundsInRoot()
+        val result = compose.onNodeWithText("Result").getUnclippedBoundsInRoot()
+        (result.top > direction.bottom) shouldBe true
+        result.left shouldBe direction.left
     }
 
     // ----- The real ViewModel behind the screen -----
@@ -509,7 +602,7 @@ class ConverterScreenTest {
                 .onNodeWithContentDescription("IFC: ${formatter.formatLong(expected)}")
                 .performScrollTo()
                 .assertIsDisplayed()
-            compose.onNodeWithText(expected.toPrefixedString()).performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText(factsLine(expected)).performScrollTo().assertIsDisplayed()
 
             // Move the IFC input somewhere else, then type the converted date back in by hand.
             compose.onNodeWithText("IFC to Gregorian").performScrollTo().performClick()
@@ -525,7 +618,7 @@ class ConverterScreenTest {
                 .onNodeWithContentDescription("Gregorian: ${formatter.formatGregorianLong(gregorian)}")
                 .performScrollTo()
                 .assertIsDisplayed()
-            compose.onNodeWithText(expected.toPrefixedString()).performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText(factsLine(expected)).performScrollTo().assertIsDisplayed()
             compose.runOnIdle {
                 val state = viewModel.uiState.value as ConverterUiState.Loaded
                 state.gregorianInput shouldBe gregorian
@@ -533,6 +626,10 @@ class ConverterScreenTest {
             }
         }
     }
+
+    /** The result card's facts line for [date], every part from `:core:calendar` through the formatter. */
+    private fun factsLine(date: IfcDate) =
+        "${date.toPrefixedString()} · ${formatter.dayAndWeek(date)} · ${formatter.quarter(date)}"
 
     // See IfcDatePickerTest: hasVisualOverflow is unusable on the result the semantics action builds.
     private fun TextLayoutResult.isCut(): Boolean =

@@ -1,5 +1,6 @@
 package io.github.chrisjmendoza.yearal
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Color
@@ -77,8 +78,12 @@ class MainActivity : ComponentActivity() {
      * screen width rather than with a manifest `screenOrientation`, because a manifest lock applies to
      * large screens too, where it is exactly what Play's large-screen guidelines flag and what Android
      * 16 and later ignore for windows 600dp and wider. [ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT]
-     * still honours the user's own auto-rotate setting for upside-down portrait.
+     * still honours the user's own auto-rotate setting for upside-down portrait. Lint's
+     * `SourceLockedOrientationActivity` warns because an orientation lock breaks large screens and
+     * multi-window; the smallest-width guard is precisely the exclusion that lint wants, hence the
+     * suppression.
      */
+    @SuppressLint("SourceLockedOrientationActivity")
     private fun lockPhonesToPortrait() {
         if (resources.configuration.smallestScreenWidthDp < LARGE_SCREEN_MIN_WIDTH_DP) {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT

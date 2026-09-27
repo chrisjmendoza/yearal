@@ -30,12 +30,14 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.domain.event.EventCategory
 import io.github.chrisjmendoza.yearal.core.domain.event.LeapDayPolicy
 import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.floats.shouldBeGreaterThan
+import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import org.junit.Rule
 import org.junit.Test
@@ -661,5 +663,30 @@ class EventEditorScreenTest {
 
         compose.onNodeWithText("Number of times").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("5").assertIsDisplayed()
+    }
+
+    // Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): the form column caps at
+    // Dimens.ContentMaxWidth on a wide window, whether this is the full-screen editor or composed
+    // inline in the expanded list-detail pane — a 1,280dp tablet must not stretch a text field or a
+    // segmented row to its own full width.
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp")
+    fun `on a wide window the form column caps at ContentMaxWidth`() {
+        show(baseState())
+
+        // Measured on the Title field rather than the capped Column's own tag:
+        // `limitContentWidth()`'s outer `fillMaxWidth()` reports the *window's* width up through its
+        // own `wrapContentWidth`/`widthIn` wrapping (that is how it re-centres the narrower content), so
+        // the column's own semantics bounds never shrink — the cap is only provable on a
+        // `fillMaxWidth()` field actually laid out *inside* the column's now-narrowed measurement.
+        val titleFieldWidthPx =
+            compose
+                .onNode(hasText("Title"))
+                .fetchSemanticsNode()
+                .size.width
+        val maxWidthPx = with(compose.density) { Dimens.ContentMaxWidth.roundToPx() }
+
+        titleFieldWidthPx shouldBeLessThanOrEqual maxWidthPx
+        compose.onNodeWithText("Save").assertIsDisplayed()
     }
 }

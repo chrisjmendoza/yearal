@@ -10,19 +10,21 @@ import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.core.domain.settings.ColorSource
 import io.github.chrisjmendoza.yearal.core.domain.settings.ThemeMode
 import io.github.chrisjmendoza.yearal.core.domain.settings.UserSettings
 import io.github.chrisjmendoza.yearal.core.domain.settings.WeekdayDisplay
+import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -30,6 +32,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
 
 /**
  * [MoreScreen] under Robolectric: the Holidays, Settings, Learn, Privacy and Send feedback rows are
@@ -171,13 +174,17 @@ class MoreScreenTest {
         }
     }
 
+    // A11y audit finding #27, updated for the tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"):
+    // this used to measure each row against the root window's width. Now that the hub's content column
+    // caps at Dimens.ContentMaxWidth on a wide window, a row spans that capped column exactly, not the
+    // whole screen — still proving every row's tap target is full-width, just full-width *of its column*.
     @Test
-    fun `every nav row and Send feedback span the full screen width`() {
+    fun `every nav row and Send feedback span the full width of the content column`() {
         show()
 
-        val rootWidthPx =
+        val columnWidthPx =
             compose
-                .onRoot()
+                .onNodeWithTag(MoreScreenTestTags.CONTENT_COLUMN)
                 .fetchSemanticsNode()
                 .size.width
 
@@ -186,8 +193,30 @@ class MoreScreenTest {
                 .onNodeWithText(label)
                 .performScrollTo()
                 .fetchSemanticsNode()
-                .size.width shouldBe rootWidthPx
+                .size.width shouldBe columnWidthPx
         }
+    }
+
+    // Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): on a wide window the content column
+    // itself caps at Dimens.ContentMaxWidth rather than stretching every row edge to edge. Measured on
+    // the "Holidays" row rather than the capped Column's own tag: `limitContentWidth()`'s outer
+    // `fillMaxWidth()` reports the *window's* width up through its own `wrapContentWidth`/`widthIn`
+    // wrapping (that is how it re-centres the narrower content), so the column's own semantics bounds
+    // never shrink — the cap is only provable on a `fillMaxWidth()` row actually laid out *inside* the
+    // column's now-narrowed measurement, which every nav row here is (see `navRowModifier`).
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp")
+    fun `on a wide window the content column caps at ContentMaxWidth`() {
+        show()
+
+        val rowWidthPx =
+            compose
+                .onNodeWithText("Holidays")
+                .fetchSemanticsNode()
+                .size.width
+        val maxWidthPx = with(compose.density) { Dimens.ContentMaxWidth.roundToPx() }
+
+        rowWidthPx shouldBeLessThanOrEqual maxWidthPx
     }
 
     // docs/ARCHITECTURE.md §4 "Accessibility": 200% font scale never clips.

@@ -16,11 +16,14 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
+import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
 /**
  * [LearnScreen] under Robolectric: every section heading renders and is exposed as a TalkBack heading,
@@ -216,5 +219,29 @@ class LearnScreenTest {
             .onNodeWithText("Is the IFC based on the phases of the moon?")
             .performScrollTo()
             .assertIsDisplayed()
+    }
+
+    // Tablet pass (docs/ARCHITECTURE.md §4 "Adaptive layouts"): a prose page, so it caps at the
+    // narrower Dimens.ReadingMaxWidth rather than ContentMaxWidth.
+    @Test
+    @Config(qualifiers = "w840dp-h1200dp")
+    fun `on a wide window the content column caps at ReadingMaxWidth`() {
+        show()
+
+        // Measured on the "What is the IFC" illustration rather than the capped Column's own tag:
+        // `limitContentWidth()`'s outer `fillMaxWidth()` reports the *window's* width up through its
+        // own `wrapContentWidth`/`widthIn` wrapping (that is how it re-centres the narrower content), so
+        // the column's own semantics bounds never shrink — the cap is only provable on a
+        // `fillMaxWidth()` element actually laid out *inside* the column's now-narrowed measurement,
+        // which GridIllustration is (docs/ARCHITECTURE.md §4 "Adaptive layouts").
+        val illustrationWidthPx =
+            compose
+                .onNodeWithContentDescription("A row of 13 month blocks", substring = true)
+                .fetchSemanticsNode()
+                .size.width
+        val maxWidthPx = with(compose.density) { Dimens.ReadingMaxWidth.roundToPx() }
+
+        illustrationWidthPx shouldBeLessThanOrEqual maxWidthPx
+        heading("Frequently asked questions").performScrollTo().assertIsDisplayed()
     }
 }

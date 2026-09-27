@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -46,19 +48,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.currentWindowWidthClass
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.limitContentWidth
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.DatePickerRange
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.GregorianDatePickerDialog
@@ -80,10 +88,16 @@ private val ScreenHorizontalPadding = 12.dp
 private val ScreenBottomPadding = 24.dp
 private val SectionSpacing = 16.dp
 private val LineSpacing = 4.dp
-private val BlockPadding = 16.dp
 private val ActionSpacing = 8.dp
 private val MinTouchTarget = 48.dp
 private val IntercalaryIconSpacing = 4.dp
+private val IntercalaryIconSize = 18.dp
+
+/** Test tag of the input column (direction and date input), present only in the expanded-width layout. */
+const val CONVERTER_INPUT_PANE_TEST_TAG: String = "ifc:converterInputPane"
+
+/** Test tag of the result column, present only in the expanded-width layout. */
+const val CONVERTER_RESULT_PANE_TEST_TAG: String = "ifc:converterResultPane"
 
 /**
  * The converter (docs/FEATURES.md D1, D2, D4): collects [ConverterViewModel.uiState] with the lifecycle
@@ -91,7 +105,8 @@ private val IntercalaryIconSpacing = 4.dp
  * [ConverterKey]. Copy and share happen here, where a `Context` is at hand; "Open day" pushes the
  * converted day's month, selected, through [navigator] (CLAUDE.md rule 10) — the Month pager opens with
  * its day card already showing that day (the popup Day detail this used to open has been merged into
- * the day card, docs/ROADMAP.md).
+ * the day card, docs/ROADMAP.md). The window's [WindowWidthClass] ([currentWindowWidthClass]) picks the
+ * layout.
  *
  * @param key the entry's key; its `prefillEpochDay` is the initial date when present and in range.
  * @param navigator receives the [MonthKey] of "Open day"'s month, with that day selected.
@@ -134,6 +149,7 @@ fun ConverterRoute(
             navigator.navigate(MonthKey(month.year, month.month.number, selectedEpochDay = day.toEpochDay()))
         },
         modifier = modifier,
+        widthClass = currentWindowWidthClass(),
         snackbarHostState = snackbarHostState,
     )
 }
@@ -142,10 +158,18 @@ fun ConverterRoute(
  * The stateless converter — the unit for previews, screenshot and Compose tests (docs/ARCHITECTURE.md
  * §4 "State management"). From the top: the direction switch, the active input (a button that opens
  * the Material date picker limited to 1583..9999, or the [IfcDatePicker] with Year Day always and Leap
- * Day only in leap years), and the result: both dates in full, the numeric `IFC YYYY-MM-DD` form, the
- * IFC weekday and the actual weekday on separately labelled lines (spec §4.1; `no IFC weekday` on
- * intercalary days), day and week, the proleptic note for early years, and Copy / Share / Open day.
- * An input that is not a convertible date shows a message instead of a result, and no actions.
+ * Day only in leap years), and the result card: two labelled blocks — "IFC" over the IFC weekday
+ * (`no IFC weekday` on intercalary days, spec §4.1 item 5) and the IFC date, "Gregorian" over the real
+ * date with its real weekday — then one facts line (the numeric `IFC YYYY-MM-DD` form, day and week,
+ * quarter), the proleptic note for early years, and Copy / Share / Open day. An input that is not a
+ * convertible date shows a message instead of a result, and no actions.
+ *
+ * The layout follows [widthClass] (docs/ARCHITECTURE.md §4 "Adaptive layouts", FEATURES C11): one
+ * scrolling column at compact and medium widths, capped with [limitContentWidth]; at expanded widths the
+ * input on the left and the result on the right, the pair capped at [Dimens.ContentMaxWidth] and centred,
+ * each column scrolling on its own and each its own TalkBack traversal group (input first). Side by side,
+ * a change to the input and its answer are both on screen at once — on a landscape tablet the IFC
+ * picker alone is taller than the window, so a single column would push the answer out of view.
  *
  * Only whether the date dialog is open is kept here (saved across recreation); everything else is
  * [state]. Opts in to the Material 3 experimental marker only because `TopAppBar`'s default arguments
@@ -157,6 +181,7 @@ fun ConverterRoute(
  * @param onCopy receives the conversion as text; it always contains "IFC" and the Gregorian date.
  * @param onShare receives the same text as [onCopy].
  * @param onOpenDay receives the converted day as a Gregorian date.
+ * @param widthClass the window's width bucket; [ConverterRoute] reads it, tests and previews pass it.
  * @param snackbarHostState shows the caller's confirmations.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -171,6 +196,7 @@ fun ConverterScreen(
     onShare: (String) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
+    widthClass: WindowWidthClass = WindowWidthClass.COMPACT,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     Scaffold(
@@ -196,6 +222,7 @@ fun ConverterScreen(
             is ConverterUiState.Loaded -> {
                 LoadedContent(
                     state = state,
+                    widthClass = widthClass,
                     onDirectionChange = onDirectionChange,
                     onGregorianDateChange = onGregorianDateChange,
                     onIfcInputChange = onIfcInputChange,
@@ -220,6 +247,7 @@ private fun LoadingContent(modifier: Modifier) {
 @Composable
 private fun LoadedContent(
     state: ConverterUiState.Loaded,
+    widthClass: WindowWidthClass,
     onDirectionChange: (ConversionDirection) -> Unit,
     onGregorianDateChange: (LocalDate) -> Unit,
     onIfcInputChange: (IfcDatePickerValue) -> Unit,
@@ -228,24 +256,81 @@ private fun LoadedContent(
     onOpenDay: (LocalDate) -> Unit,
     modifier: Modifier,
 ) {
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(start = ScreenHorizontalPadding, end = ScreenHorizontalPadding, bottom = ScreenBottomPadding),
-        verticalArrangement = Arrangement.spacedBy(SectionSpacing),
-    ) {
+    val input: @Composable () -> Unit = {
         DirectionSwitch(direction = state.direction, onDirectionChange = onDirectionChange)
         when (state.direction) {
             ConversionDirection.GREGORIAN_TO_IFC -> GregorianInput(state, onGregorianDateChange)
             ConversionDirection.IFC_TO_GREGORIAN -> IfcInput(state.ifcInput, onIfcInputChange)
         }
+    }
+    val result: @Composable () -> Unit = {
         SectionHeading(stringResource(R.string.converter_result_heading))
-        when (val result = state.result) {
+        when (val converted = state.result) {
             ConversionResult.Invalid -> InvalidResult()
-            is ConversionResult.Converted -> ConvertedResult(state.direction, result, onCopy, onShare, onOpenDay)
+            is ConversionResult.Converted -> ConvertedResult(state.direction, converted, onCopy, onShare, onOpenDay)
         }
+    }
+    when (widthClass) {
+        WindowWidthClass.COMPACT, WindowWidthClass.MEDIUM -> {
+            Column(
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(
+                            start = ScreenHorizontalPadding,
+                            end = ScreenHorizontalPadding,
+                            bottom = ScreenBottomPadding,
+                        ).limitContentWidth(),
+                verticalArrangement = Arrangement.spacedBy(SectionSpacing),
+            ) {
+                input()
+                result()
+            }
+        }
+
+        WindowWidthClass.EXPANDED -> {
+            Row(
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .padding(horizontal = ScreenHorizontalPadding)
+                        .limitContentWidth(),
+                horizontalArrangement = Arrangement.spacedBy(SectionSpacing),
+            ) {
+                ConverterPane(traversalIndex = 0f, testTag = CONVERTER_INPUT_PANE_TEST_TAG, content = input)
+                ConverterPane(traversalIndex = 1f, testTag = CONVERTER_RESULT_PANE_TEST_TAG, content = result)
+            }
+        }
+    }
+}
+
+/**
+ * One half of the expanded-width layout: its own vertical scroll and its own TalkBack traversal group
+ * ([isTraversalGroup], ordered by [traversalIndex]), so TalkBack reads the whole input before the result
+ * rather than interleaving the two — the same ordering `TwoPaneLayout` gives the Month and Events
+ * list-detail screens.
+ */
+@Composable
+private fun RowScope.ConverterPane(
+    traversalIndex: Float,
+    testTag: String,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .testTag(testTag)
+                .semantics {
+                    isTraversalGroup = true
+                    this.traversalIndex = traversalIndex
+                }.verticalScroll(rememberScrollState())
+                .padding(bottom = ScreenBottomPadding),
+        verticalArrangement = Arrangement.spacedBy(SectionSpacing),
+    ) {
+        content()
     }
 }
 
@@ -366,10 +451,14 @@ private fun InvalidResult() {
 
 /**
  * The result card (docs/design-plan.md §4.6): a `YearalTheme.colors.heroContainer` card, the same
- * component as the Today hero, "so the answer looks like an answer". Inside it: the intercalary icon on Year Day
- * and Leap Day, both dates as eyebrow-labelled ("IFC" / "Gregorian") pairs with the converted one shown
- * larger, the numeric form with its `IFC` prefix, the weekday block (its sage container kept) and day
- * and week. The proleptic note and the actions sit below the card. **Copy and Share send the identical
+ * component as the Today hero, "so the answer looks like an answer", laid out by the same
+ * labelled-block rule (owner, 2026-09-27: every fact once, an eyebrow labels its whole block). Inside
+ * it: an "IFC" block — the intercalary icon on Year Day and Leap Day, the eyebrow, the bare IFC weekday
+ * and the IFC date — and a "Gregorian" block — the eyebrow over the real date with its real weekday —
+ * with the converted one shown larger and first, then one facts line: the numeric form with its `IFC`
+ * prefix, day and week, and quarter. The former weekday block is gone: the IFC weekday sits in the IFC
+ * block and the real weekday in the Gregorian date. The proleptic note and the actions sit below the
+ * card. **Copy and Share send the identical
  * text**, built from `R.string.converter_share_text` as
  * `IFC {ifcLong} ({numeric}) = Gregorian {gregorianLong}` — e.g. `IFC September 8, 2026
  * (IFC 2026-10-08) = Gregorian Thursday, September 17, 2026` — so the shared text always carries the
@@ -414,8 +503,12 @@ private fun ConvertedResult(
                     IfcField(result, emphasized = false)
                 }
             }
-            WeekdayBlock(result)
-            Text(text = result.dayAndWeek, style = MaterialTheme.typography.bodyLarge)
+            // The facts line: the numeric form keeps its `IFC` prefix (CLAUDE.md rule 5) — a fact among
+            // facts, not a second copy of the IFC date above it.
+            Text(
+                text = stringResource(R.string.converter_facts_line, result.numeric, result.dayAndWeek, result.quarter),
+                style = MaterialTheme.typography.bodyLarge,
+            )
         }
     }
     if (result.showProlepticNote) {
@@ -463,17 +556,24 @@ private fun ConvertedResult(
 }
 
 /**
- * The IFC side of the result card: the intercalary icon on Year Day and Leap Day, the "IFC" eyebrow and
- * [ConversionResult.Converted.ifcLong], then the numeric `IFC` form — the numeric line travels with this
- * field, not with the card as a whole, so it stays adjacent to the value it restates when [IfcField] and
- * [GregorianField] swap order by direction.
+ * The IFC block of the result card (docs/design-plan.md §4.6): the intercalary icon on Year Day and Leap
+ * Day beside the "IFC" eyebrow, then the IFC weekday bare under it, then
+ * [ConversionResult.Converted.ifcLong] — larger when [emphasized] (the direction's answer).
+ *
+ * **The weekday line is the IFC (nominal) weekday, never the real one** (CLAUDE.md rule 3): on Year Day
+ * and Leap Day it says "no IFC weekday" (spec §4.1 item 5), and it is spoken as
+ * [ConversionResult.Converted.weekdaysDescription] ("IFC Sunday, actual Thursday", item 7) so TalkBack
+ * hears both weekdays labelled on it. The date is spoken with its calendar ("IFC: September 8, 2026",
+ * spec §7.3), the same wording as before this block existed.
  */
 @Composable
 private fun IfcField(
     result: ConversionResult.Converted,
     emphasized: Boolean,
 ) {
-    Column {
+    val locale = LocalLocale.current.platformLocale
+    val description = stringResource(R.string.converter_result_ifc, result.ifcLong)
+    Column(verticalArrangement = Arrangement.spacedBy(LineSpacing)) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(IntercalaryIconSpacing),
             verticalAlignment = Alignment.CenterVertically,
@@ -483,16 +583,24 @@ private fun IfcField(
                     painter = painterResource(DesignSystemR.drawable.ic_intercalary),
                     contentDescription = null,
                     tint = YearalTheme.colors.intercalary,
+                    modifier = Modifier.size(IntercalaryIconSize),
                 )
             }
-            ResultField(
-                eyebrow = stringResource(R.string.converter_eyebrow_ifc),
-                value = result.ifcLong,
-                description = stringResource(R.string.converter_result_ifc, result.ifcLong),
-                emphasized = emphasized,
+            Text(
+                text = stringResource(R.string.converter_eyebrow_ifc).uppercase(locale),
+                style = MaterialTheme.typography.labelSmall,
             )
         }
-        Text(text = result.numeric, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            text = result.ifcWeekday ?: result.nominalWeekday,
+            style = if (emphasized) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.semantics { contentDescription = result.weekdaysDescription },
+        )
+        Text(
+            text = result.ifcLong,
+            style = if (emphasized) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium,
+            modifier = Modifier.semantics { contentDescription = description },
+        )
     }
 }
 
@@ -511,11 +619,11 @@ private fun GregorianField(
 }
 
 /**
- * One eyebrow-labelled value in the result card (docs/design-plan.md §3.1 "Typography", §4.6): a small
- * uppercase caption ("IFC", "Gregorian") naming the calendar, then the date — larger
+ * The Gregorian block's eyebrow-labelled value in the result card (docs/design-plan.md §3.1
+ * "Typography", §4.6): a small uppercase caption ("Gregorian") naming the calendar, then the date — larger
  * ([MaterialTheme.typography.headlineSmall]) when [emphasized] (the direction's answer), smaller
  * ([MaterialTheme.typography.titleMedium]) otherwise (the input restated). The pair merges into one
- * semantics node carrying [description] ("IFC: September 8, 2026"), the same wording the plain text
+ * semantics node carrying [description] ("Gregorian: Thursday, September 17, 2026"), the same wording the plain text
  * line used before this card existed, so a screen reader still hears the eyebrow and the value as one
  * fact rather than two.
  */
@@ -535,38 +643,6 @@ private fun ResultField(
             text = value,
             style = if (emphasized) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium,
         )
-    }
-}
-
-/**
- * Both weekdays, each line labelled by the formatter (spec §4.1 item 4) and merged into one spoken
- * description, "IFC Sunday, actual Thursday" (§4.1 item 7), so neither can be mistaken for the other.
- * The sage container is [YearalTheme]'s weekday-nominal token pair rather than a raw Material role, so
- * it stays in step with the rest of the app's "IFC weekday" surfaces (docs/design-plan.md §4.6); the
- * actual-weekday line keeps its own, still-legible token instead of a plain grey (design-plan §4.8).
- */
-@Composable
-private fun WeekdayBlock(result: ConversionResult.Converted) {
-    Surface(
-        color = YearalTheme.colors.weekdayNominalContainer,
-        contentColor = YearalTheme.colors.onWeekdayNominalContainer,
-        shape = MaterialTheme.shapes.medium,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .semantics(mergeDescendants = true) { contentDescription = result.weekdaysDescription },
-    ) {
-        Column(
-            modifier = Modifier.padding(BlockPadding),
-            verticalArrangement = Arrangement.spacedBy(LineSpacing),
-        ) {
-            Text(text = result.nominalWeekday, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                text = result.actualWeekday,
-                style = MaterialTheme.typography.bodyLarge,
-                color = YearalTheme.colors.weekdayActualText,
-            )
-        }
     }
 }
 
@@ -620,11 +696,26 @@ internal fun ConverterInvalidPreview() {
     )
 }
 
+/**
+ * The expanded-width layout on a 10-inch landscape tablet (FEATURES C11): the IFC picker on the left,
+ * the answer on the right, both on screen at once. Year Day 2026 → Gregorian Thursday, December 31, 2026.
+ */
+@Preview(name = "IFC to Gregorian, tablet", showBackground = true, device = "spec:width=1280dp,height=800dp")
+@Composable
+internal fun ConverterTabletPreview() {
+    ConverterPreview(
+        direction = ConversionDirection.IFC_TO_GREGORIAN,
+        day = LocalDate.of(2026, 12, 31),
+        widthClass = WindowWidthClass.EXPANDED,
+    )
+}
+
 @Composable
 private fun ConverterPreview(
     direction: ConversionDirection,
     day: LocalDate,
     draft: IfcDatePickerValue? = null,
+    widthClass: WindowWidthClass = WindowWidthClass.COMPACT,
 ) {
     IfcTheme(dynamicColor = false) {
         ConverterScreen(
@@ -641,6 +732,7 @@ private fun ConverterPreview(
             onCopy = {},
             onShare = {},
             onOpenDay = {},
+            widthClass = widthClass,
         )
     }
 }

@@ -3,10 +3,16 @@ package io.github.chrisjmendoza.yearal.feature.calendar.today
 import android.content.Context
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -15,8 +21,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.width
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.chrisjmendoza.yearal.core.designsystem.adaptive.WindowWidthClass
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.github.chrisjmendoza.yearal.feature.calendar.agenda.AgendaItemUi
@@ -30,9 +38,11 @@ import java.time.LocalTime
 import java.util.Locale
 
 /**
- * [TodayScreen] under Robolectric: the hero date, the numeric form with its `IFC` marker, the two
- * labelled weekday lines (spec §4.1) and the intercalary "no IFC weekday" text are on screen, and the
- * weekday block speaks both weekdays in one description (§4.1 item 7).
+ * [TodayScreen] under Robolectric: the hero's two labelled blocks (the IFC weekday and date under
+ * "IFC", the real date with its real weekday under "Gregorian"), the facts line with the numeric form's
+ * `IFC` marker, and the intercalary "no IFC weekday" text are on screen; the IFC weekday line speaks both
+ * weekdays in one description (spec §4.1 item 7). The last tests cover the width classes (FEATURES
+ * C11): two columns at expanded widths, one column below.
  */
 @RunWith(AndroidJUnit4::class)
 // A tall window so the whole screen, agenda and holidays included, is on screen without scrolling.
@@ -51,6 +61,7 @@ class TodayScreenTest {
         agenda: List<AgendaItemUi> = emptyList(),
         onAgendaItemClick: (Long) -> Unit = {},
         fontScale: Float = 1f,
+        widthClass: WindowWidthClass = WindowWidthClass.COMPACT,
     ) {
         compose.setContent {
             val density = LocalDensity.current
@@ -58,6 +69,7 @@ class TodayScreenTest {
                 IfcTheme(dynamicColor = false) {
                     TodayScreen(
                         state = buildTodayUiState(today, formatter, holidays, nextHoliday, agenda),
+                        widthClass = widthClass,
                         onAgendaItemClick = onAgendaItemClick,
                     )
                 }
@@ -225,5 +237,68 @@ class TodayScreenTest {
         compose.onNodeWithText("September 8, 2026").assertIsDisplayed()
         compose.onNodeWithContentDescription("71% of the year").assertIsDisplayed()
         compose.onNodeWithText("Standup").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+    }
+
+    // FEATURES C11 (tablet layouts, docs/ARCHITECTURE.md §4 "Adaptive layouts"): at expanded widths the
+    // hero (with the countdown chip) and the Holidays/Events cards sit side by side, each column its own
+    // TalkBack traversal group, hero first; below that, one column.
+
+    private val heroColumn = hasTestTag(TODAY_HERO_COLUMN_TEST_TAG)
+    private val cardsColumn = hasTestTag(TODAY_CARDS_COLUMN_TEST_TAG)
+
+    @Test
+    @Config(qualifiers = "w840dp-h1200dp")
+    fun `expanded width puts the hero on the left and the cards on the right`() {
+        show(LocalDate.of(2026, 9, 17), widthClass = WindowWidthClass.EXPANDED)
+
+        val hero = compose.onNode(heroColumn).assertIsDisplayed().getUnclippedBoundsInRoot()
+        val cards = compose.onNode(cardsColumn).assertIsDisplayed().getUnclippedBoundsInRoot()
+        (cards.left >= hero.right) shouldBe true
+        (hero.width > cards.width) shouldBe true
+        // Side by side, not stacked: both columns start at the same height.
+        hero.top shouldBe cards.top
+
+        // The hero and its countdown chip in the left column; both cards in the right one.
+        compose.onNode(hasText("September 8, 2026").and(hasAnyAncestor(heroColumn))).assertIsDisplayed()
+        compose.onNode(hasText("105 days until Year Day").and(hasAnyAncestor(heroColumn))).assertIsDisplayed()
+        compose
+            .onNode(hasText("HOLIDAYS").and(hasAnyAncestor(cardsColumn)), useUnmergedTree = true)
+            .assertIsDisplayed()
+        compose
+            .onNode(hasText("TODAY’S EVENTS").and(hasAnyAncestor(cardsColumn)), useUnmergedTree = true)
+            .assertIsDisplayed()
+
+        // TalkBack reads the whole hero column, then the whole cards column.
+        compose
+            .onNode(heroColumn)
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.IsTraversalGroup, true))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.TraversalIndex, 0f))
+        compose
+            .onNode(cardsColumn)
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.IsTraversalGroup, true))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.TraversalIndex, 1f))
+    }
+
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp")
+    fun `expanded width on a landscape tablet keeps Year Day's hero and both cards on screen`() {
+        show(LocalDate.of(2026, 12, 31), widthClass = WindowWidthClass.EXPANDED)
+
+        compose.onNode(hasText("no IFC weekday").and(hasAnyAncestor(heroColumn))).assertIsDisplayed()
+        compose.onNode(hasText("Thursday, December 31, 2026").and(hasAnyAncestor(heroColumn))).assertIsDisplayed()
+        compose.onNodeWithText("No holidays today.").assertIsDisplayed()
+        compose.onNodeWithText("Nothing on your agenda today.").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "w600dp-h1200dp")
+    fun `medium width stays one column, the cards under the hero`() {
+        show(LocalDate.of(2026, 9, 17), widthClass = WindowWidthClass.MEDIUM)
+
+        compose.onAllNodes(heroColumn).assertCountEquals(0)
+        compose.onAllNodes(cardsColumn).assertCountEquals(0)
+        val chip = compose.onNodeWithText("105 days until Year Day").getUnclippedBoundsInRoot()
+        val holidays = compose.onNodeWithText("HOLIDAYS", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        (holidays.top >= chip.bottom) shouldBe true
     }
 }
