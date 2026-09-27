@@ -57,4 +57,18 @@ public object Dimens {
 
     /** Minimum touch target of a day cell (docs/ARCHITECTURE.md §4 "Accessibility"). */
     public val DayCellMinSize = 48.dp
+
+    /**
+     * The widest a single-column, card-based screen's content may grow on a tablet or an unfolded
+     * foldable before it is centred instead of stretched (`Modifier.limitContentWidth`,
+     * docs/ARCHITECTURE.md §4 "Adaptive layouts"): 840dp, the Material expanded-width breakpoint, so a
+     * phone or a medium window is never capped.
+     */
+    public val ContentMaxWidth = 840.dp
+
+    /**
+     * The widest a page of prose (Learn, Privacy, the intro) may grow: 640dp, roughly 70 characters of
+     * `bodyLarge`, the line length reading comfort tops out at.
+     */
+    public val ReadingMaxWidth = 640.dp
 }

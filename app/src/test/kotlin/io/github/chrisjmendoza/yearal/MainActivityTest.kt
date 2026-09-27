@@ -1,6 +1,7 @@
 package io.github.chrisjmendoza.yearal
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.chrisjmendoza.yearal.core.scheduling.reminder.ReminderIntent
 import io.github.chrisjmendoza.yearal.intent.AppRoute
@@ -11,6 +12,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.android.controller.ActivityController
+import org.robolectric.annotation.Config
 
 /**
  * [MainActivity]'s `onCreate`/`onNewIntent` hand-off to [MainViewModel] (ROADMAP M3 T5, M4 T10;
@@ -72,5 +74,24 @@ class MainActivityTest {
         controller
             .get()
             .viewModel.pendingRoute.value shouldBe null
+    }
+
+    // Owner, 2026-09-27: phones stay portrait; tablets and unfolded foldables (smallest width >= 600dp)
+    // keep every orientation. A runtime decision, not a manifest lock (see MainActivity's KDoc).
+
+    @Test
+    @Config(qualifiers = "sw360dp")
+    fun `a phone is locked to portrait`() {
+        val activity = controllerWith(Intent(Intent.ACTION_MAIN)).setup().get()
+
+        activity.requestedOrientation shouldBe ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+    }
+
+    @Test
+    @Config(qualifiers = "sw600dp")
+    fun `a tablet keeps every orientation`() {
+        val activity = controllerWith(Intent(Intent.ACTION_MAIN)).setup().get()
+
+        activity.requestedOrientation shouldBe ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 }

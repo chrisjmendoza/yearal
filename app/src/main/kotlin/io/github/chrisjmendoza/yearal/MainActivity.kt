@@ -1,6 +1,7 @@
 package io.github.chrisjmendoza.yearal
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -47,6 +48,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        lockPhonesToPortrait()
         viewModel.routeFromCreate(intent)
         setContent {
             val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -69,10 +71,29 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Phones stay portrait (owner, 2026-09-27: "landscape just serves no real purpose on a phone");
+     * tablets and unfolded foldables keep every orientation. Decided at runtime from the smallest
+     * screen width rather than with a manifest `screenOrientation`, because a manifest lock applies to
+     * large screens too, where it is exactly what Play's large-screen guidelines flag and what Android
+     * 16 and later ignore for windows 600dp and wider. [ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT]
+     * still honours the user's own auto-rotate setting for upside-down portrait.
+     */
+    private fun lockPhonesToPortrait() {
+        if (resources.configuration.smallestScreenWidthDp < LARGE_SCREEN_MIN_WIDTH_DP) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         viewModel.routeFromNewIntent(intent)
+    }
+
+    private companion object {
+        /** The Material medium-width breakpoint: at or above it a window is a tablet's, never a phone's. */
+        const val LARGE_SCREEN_MIN_WIDTH_DP = 600
     }
 }
 
