@@ -1,7 +1,7 @@
 # Release builds
 
-Status: **current as of M2 T11** (2026-09-19). Owning doc for how a release build is produced and signed
-day to day. The policy behind these choices — why the upload key stays offline, why CI never holds it —
+Status: **current as of M8 T2** (2026-09-26: R8 on, git-derived build numbers). Owning doc for how a
+release build is produced, numbered, shrunk and signed day to day. The policy behind these choices — why the upload key stays offline, why CI never holds it —
 is [security-and-privacy.md](security-and-privacy.md) §8.2 and [ARCHITECTURE.md](ARCHITECTURE.md) §7
 ("Signing"); this doc is the runbook.
 
@@ -9,14 +9,15 @@ is [security-and-privacy.md](security-and-privacy.md) §8.2 and [ARCHITECTURE.md
 
 A debug APK (`:app:assembleDebug`) is `debuggable=true` and carries Compose's debug instrumentation
 (extra recomposition tracking, no R8). ART runs unoptimized code paths for a debuggable app, so a debug
-build's frame timing is not representative of what a user gets. A release build removes both, so it's the
-build to judge real UI performance on — install it on a phone, not the debug build.
+build's frame timing is not representative of what a user gets. A release build removes both and is
+shrunk and optimized by R8, so it's the build to judge real UI performance on — install it on a phone, not
+the debug build.
 
-**What a release build does and does not tell you about performance:** `debuggable` is off and Compose's
-debug instrumentation is gone, which is most of what makes debug builds feel slower than they need to.
-It does **not** yet include R8 shrinking/optimization or a baseline profile — both are
-[ROADMAP.md](ROADMAP.md) M8 T2, deliberately deferred (see "Why isMinifyEnabled is untouched" below) — so
-startup time and first-scroll jank can still improve further once those land.
+**What a release build does and does not tell you about performance:** `debuggable` is off, Compose's
+debug instrumentation is gone and R8 has shrunk and optimized the code (see "R8 and resource shrinking"
+below). It does **not** yet include a baseline profile — the other half of [ROADMAP.md](ROADMAP.md) M8 T2,
+which needs a managed device to generate — so startup time and first-scroll jank can still improve once
+that lands.
 
 ## Building and installing a release APK
 
@@ -31,7 +32,37 @@ The debug and release APKs share the same `applicationId`
 your upload key, or the fallback debug key — see below). Android refuses to install an APK over an
 existing install with a different signing certificate. If `adb install -r` fails with
 `INSTALL_FAILED_UPDATE_INCOMPATIBLE` or a signature-mismatch error, uninstall the existing app first
-(`adb uninstall io.github.chrisjmendoza.yearal`) and install again.
+(`adb uninstall io.github.chrisjmendoza.yearal`) and install again. `INSTALL_FAILED_VERSION_DOWNGRADE`
+means the installed build has a higher `versionCode` — see "Version numbers" below.
+
+## Version numbers
+
+Every build is stamped from git by `build-logic/convention/src/main/kotlin/GitBuildVersion.kt`
+([ARCHITECTURE.md](ARCHITECTURE.md) §7 "Versioning" owns the rule):
+
+| | Value | Example |
+|---|---|---|
+| `versionCode` | `git rev-list --count HEAD` | `45` |
+| `versionName` | `VERSION_NAME` (from `gradle.properties`) `+` count `.` 7-character commit hash, plus `.dirty` if the worktree had uncommitted changes | `0.1.0+45.72dbfa1`, `0.1.0+45.72dbfa1.dirty` |
+
+The More screen's About row and the feedback email's subject and body show the `versionName`, so a bug
+report names the exact commit it was built from. Only builds of `main` are ever uploaded; `main` moves
+only by fast-forward ([WORKFLOW.md](WORKFLOW.md) §1), so its commit count only goes up and is a valid
+Play `versionCode`. A `local/*` branch build carries its own count, which can equal a different `main`
+commit's — the hash in the name tells them apart. The build fails if the count ever passes 2,000,000,000
+(Play's hard cap is 2,100,000,000).
+
+**When git can't answer** — a source archive with no `.git`, no `git` on `PATH`, or a shallow clone (whose
+count would be wrong) — the build still succeeds with a warning: the `versionCode` is the `VERSION_BUILD`
+Gradle property if one is passed (`-PVERSION_BUILD=123`), else `1`, and the name ends in `.unknown`
+(`0.1.0+0.unknown`). CI checks out with `fetch-depth: 0` so its builds are numbered properly.
+
+**One-time downgrade (2026-09-26).** Builds made before this scheme were `0.1.0` with `versionCode`
+`10000` (the old `major*1_000_000 + minor*10_000 + …` formula). The commit count is far lower, so Android
+refuses to install a new build over an old one (`INSTALL_FAILED_VERSION_DOWNGRADE`; Android Studio offers to
+uninstall). Uninstall the old build once — this loses that install's events and settings — or, while the
+installed build is a debug build, `adb install -r -d` keeps the data. Nothing was ever uploaded to Play under
+the old numbers, so no store listing is affected.
 
 ### Confirming which key signed an APK
 
@@ -140,12 +171,63 @@ build and never written to a Gradle log.
 The certificate DN should now be the one you gave `keytool` (your name/org for the `-dname`, or the
 default `CN=<your name>` prompt answers), not `CN=Android Debug`.
 
-## Why `isMinifyEnabled` is untouched
+## R8 and resource shrinking
 
-The `release` build type does **not** turn on R8 (`isMinifyEnabled`) here. R8 needs its own keep rules
-for Hilt, Room 3, and kotlinx.serialization before it's safe to enable — that work, plus the baseline
-profile, is [ROADMAP.md](ROADMAP.md) M8 T2. Enabling R8 without those keep rules risks a release-only
-crash (reflection-based code Hilt/Room/serialization rely on gets stripped), which is exactly the kind of
-surprise the owner must not hit while judging whether the app feels fast. `isProfileable = true` is on
-instead (not `isDebuggable`), so Android Studio's CPU/memory profiler can attach to the exact APK being
-judged.
+**What is on.** The `release` build type (`ifc.android.application`) enables AGP 9's
+`optimization { enable = true }`, which runs R8 in full mode for code shrinking, optimization and
+obfuscation, and also shrinks unused resources — the new-DSL replacement for `isMinifyEnabled` +
+`isShrinkResources`. The default `proguard-android-optimize.txt` rules are included
+(`keepRules.includeDefault`, on by default). Debug builds are untouched. The release APK went from
+16.9 MB to 8.2 MB when R8 was turned on (2026-09-26).
+
+**Where the rules live.** Almost all of them come from the libraries themselves: every AAR/JAR ships its
+own consumer rules (Hilt and Dagger, Room 3, kotlinx.serialization, Navigation 3, Glance, Compose,
+DataStore, AndroidX Startup), Hilt generates keep rules for every `@HiltViewModel`, and R8 merges them all.
+The app adds only verified gaps, in [`app/src/main/keepRules/yearal.keep`](../app/src/main/keepRules/yearal.keep)
+— AGP 9's `keepRules` source directory (`src/<sourceSet>/keepRules/*.keep`), which replaces
+`proguardFiles(...)`. Each rule there names the symbol it protects and how the gap was found. Today it
+has two, both for WorkManager 2.7.1, which Glance pulls in transitively along with an old Room 2.2.5:
+without them the release build crashed at launch (WorkManager's database) and the widgets would never
+have rendered (WorkManager's input merger). **No `-dontwarn` rules:** R8 reports zero warnings and no
+`missing_rules.txt` is produced. If a dependency bump brings a warning or a missing class, fix it with a
+targeted keep rule or a dependency change, never a blanket `-dontwarn`.
+
+**What was checked, and how** (2026-09-26). Statically: `app/build/outputs/mapping/release/mapping.txt`
+and `usage.txt` show the Hilt components, `YearalDatabase_Impl` (kept by name with its constructor), every
+`@Serializable` Navigation 3 key with its `Companion`/`INSTANCE` and `serializer()`, and the settings DTO
+all surviving. Navigation 3 restores the back stack with `Class.forName(<saved class name>)` plus the
+key's `serializer()`, and the settings file stores enums by name; both rely on the kotlinx.serialization
+library rules, which cover them. lib-recur uses no reflection. At runtime: the release APK was installed on
+an API 36 emulator and driven through every tab, the intro, the day card, the Year view, creating an IFC
+monthly event with a reminder, the settings (changed, then read back after a force-stop), Holidays, Learn
+and Privacy; the activity was recreated (night mode) and the process killed and restored from the back
+stack (Month over Year came back); both widgets were placed and tapped; then 7,000 `monkey` events —
+with no crash, `ClassNotFoundException`, `NoSuchMethodError` or `SerializationException`. A physical-device
+pass is still the owner's step ([device-test-matrix.md](device-test-matrix.md) RB1).
+
+**CI** builds `:app:assembleRelease` on every push ([ci.yml](../.github/workflows/ci.yml)), so an R8
+error — a missing class, a malformed rule — fails the push that caused it. R8 warnings do not fail a build,
+so read the `minifyReleaseWithR8` output after a dependency bump. Neither can see a class that is reached
+only by reflection (both WorkManager gaps built cleanly and failed at runtime): after a dependency or R8
+change, repeat the smoke test ([device-test-matrix.md](device-test-matrix.md) RB1). CI needs no secret:
+with no keystore the release build is debug-signed (above).
+
+**Diagnosing a release-only crash.** A release stack trace has obfuscated names (`qd.q`, `ms3.<init>`)
+and an `r8-map-id-…` source-file marker. Decode it with the mapping file of **that exact build**, using
+Android Studio's *Code → Analyze Stack Trace* (point it at the mapping file) or the `retrace` tool from the
+SDK's command-line tools:
+
+```powershell
+retrace app\build\outputs\mapping\release\mapping.txt stacktrace.txt
+```
+
+Then look the symbol up in `usage.txt` (what R8 removed) and `seeds.txt` (what the rules kept); a
+reflective lookup of something listed in `usage.txt` is the classic cause. `configuration.txt` shows every
+merged rule and which library it came from. The mapping changes with every build, so **archive
+`mapping.txt` with every build that leaves your machine** — an AAB uploaded to Play carries it
+automatically ([security-and-privacy.md](security-and-privacy.md) "Crash visibility"), and
+[ARCHITECTURE.md](ARCHITECTURE.md) §7's `release.yml` attaches it to the GitHub Release. To rule R8 in or
+out quickly, compare with a debug build of the same commit.
+
+`isProfileable = true` stays on (not `isDebuggable`), so Android Studio's CPU/memory profiler can attach to
+the exact APK being judged.

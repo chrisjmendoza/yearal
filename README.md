@@ -35,8 +35,9 @@ what's listed in [Privacy](#privacy).
   1583–9999, with copy/share.
 - **Events** — a list and editor with recurrence on IFC dates ("every Sol 13", "every Year Day", "every
   Leap Day"), Gregorian weekly/RRULE recurrence, all-day or timed events, and a device or fixed time zone.
-  Reminder notifications fire even in Doze and hide the event's title on the lock screen. A single
-  occurrence of a repeating event can be deleted (with undo).
+  Reminder notifications fire even in Doze and hide the event's title on the lock screen, with Snooze
+  (10 min) and Done actions on the notification itself. A single occurrence of a repeating event can be
+  deleted (with undo).
 - **Built-in holidays** — the IFC observances (Year Day, Leap Day, Sol 1) and a US federal + observances
   pack, shown on the grid, in the day card below it and in the Today agenda. The Holidays screen (More → Holidays)
   lists any year's holidays in both calendars and switches packs on or off.
@@ -59,13 +60,14 @@ what's listed in [Privacy](#privacy).
 
 ## What's not here yet
 
-- **Snooze and notification actions** — tapping a reminder opens its event, but there is no snooze or
-  dismiss button on the notification yet.
+- **Multiple reminders per event, and editing a single occurrence of a recurring one** — a reminder
+  notification has Snooze (10 min) and Done actions, but you cannot yet add a second reminder to the
+  same event or change just one occurrence of a recurring series.
 - **An agenda widget** — 1.1 (M7a), together with a widget privacy mode. Widgets are styled through
   Settings (per widget type), not through a per-widget configuration screen.
 - **Device-calendar overlay, `.ics` import/export, and URL subscriptions** — releases 1.1–1.3
   ([docs/ROADMAP.md](docs/ROADMAP.md) release map).
-- **A Play Store listing.** Release builds are signed and installable
+- **A Play Store listing.** Release builds are signed, shrunk with R8 and installable
   ([docs/release-builds.md](docs/release-builds.md)), but no upload key has been generated and nothing has
   been submitted; `main` is built feature by feature and a build is cut for testers when one is wanted.
 
@@ -81,6 +83,7 @@ what's listed in [Privacy](#privacy).
 | [docs/holidays-and-import.md](docs/holidays-and-import.md) | Holiday rule engine, data licensing, device-calendar overlay, `.ics` import/export |
 | [docs/security-and-privacy.md](docs/security-and-privacy.md) | Threat model, permissions, backups, Play policy, repo hygiene |
 | [docs/privacy-policy.md](docs/privacy-policy.md) | The end-user privacy policy text (to be published on GitHub Pages); [play-data-safety.md](docs/play-data-safety.md) holds the Play Data safety answers |
+| [docs/store-listing.md](docs/store-listing.md) | Play Store listing text, screenshot plan, feature-graphic brief and the pre-submission checklist |
 | [docs/competitive-analysis.md](docs/competitive-analysis.md) | Existing IFC apps, what their users say, and the gaps |
 | [docs/WORKFLOW.md](docs/WORKFLOW.md) | How work is done here: the gate, Definition of Done, documentation and anti-drift rules |
 | [docs/adr/](docs/adr/README.md) | Architecture decision records — choices made after the planning baseline |

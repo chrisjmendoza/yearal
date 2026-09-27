@@ -58,7 +58,52 @@ class PrivacyScreenTest {
         heading("What is stored, and where").performScrollTo().assertIsDisplayed()
         heading("Permissions, and what they're for").performScrollTo().assertIsDisplayed()
         heading("Backups").performScrollTo().assertIsDisplayed()
+        heading("Home-screen widgets").performScrollTo().assertIsDisplayed()
+        heading("Sending feedback").performScrollTo().assertIsDisplayed()
         heading("The full policy").performScrollTo().assertIsDisplayed()
+    }
+
+    // docs/security-and-privacy.md §3.2 "Widget privacy mode": the Month widget's per-day marks are
+    // presence-only (a dot, a diamond), never a title, count or calendar name; the Today widget shows
+    // only the date. Kept in step with docs/privacy-policy.md's "Home-screen widgets" section.
+    @Test
+    fun `the widgets section states presence marks only, never event content`() {
+        show()
+
+        compose
+            .onNodeWithText(
+                "Yearal's home-screen widgets show only calendar dates and simple presence marks",
+                substring = true,
+            ).performScrollTo()
+            .assertIsDisplayed()
+        compose
+            .onNodeWithText("never an event's title, notes or location", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    // docs/security-and-privacy.md §6.3 "Send feedback" email: the body is built entirely from
+    // buildFeedbackBody's allow-listed diagnostics, never event or holiday-pack content. Kept in step
+    // with docs/privacy-policy.md's "Sending feedback" section.
+    @Test
+    fun `the feedback section states what the prefilled email contains, and what it never does`() {
+        show()
+
+        compose
+            .onNodeWithText(
+                "prefilled with your app version, Android version, device model, language and " +
+                    "Yearal display settings",
+                substring = true,
+            ).performScrollTo()
+            .assertIsDisplayed()
+        compose
+            .onNodeWithText("never your events, reminders or holiday choices", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+        compose
+            .onNodeWithText("nothing is sent unless you do", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test

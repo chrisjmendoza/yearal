@@ -1,6 +1,9 @@
 package io.github.chrisjmendoza.yearal.feature.calendar.month
 
 import android.content.Context
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -32,9 +35,11 @@ import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.MonthGridTestTags
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
+import io.github.chrisjmendoza.yearal.core.designsystem.motion.LocalReducedMotion
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -226,6 +231,51 @@ class MonthScreenTest {
         heading("September 2026").assertIsDisplayed()
         pages.last() shouldBe todayPage
         compose.onAllNodes(todayAction).assertCountEquals(0)
+    }
+
+    // Reduced motion (docs/ARCHITECTURE.md §4 "Accessibility", a11y audit finding #22): the pager
+    // scroll behind the "Today" action is purely decorative, so it must jump rather than animate once
+    // rememberReducedMotion() says the user asked to remove animations. Pausing the compose frame clock
+    // (autoAdvance = false) before the click is what makes the two paths observably different:
+    // waitForIdle() still flushes the click's launched coroutine to its first suspension point, but
+    // without a frame ever being delivered, `animateScrollToPage` cannot progress past its starting
+    // page, while `scrollToPage`'s immediate jump needs no frame at all.
+    @OptIn(ExperimentalFoundationApi::class)
+    @Test
+    fun `the Today action under reduced motion jumps to today's page without a frame ever advancing`() {
+        val pagerState = PagerState(currentPage = MonthPages.pageOf(june2028)) { MonthPages.COUNT }
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            IfcTheme(dynamicColor = false) {
+                CompositionLocalProvider(LocalReducedMotion provides true) {
+                    MonthScreen(state = state(june2028), onPageChanged = {}, onDayClick = {}, pagerState = pagerState)
+                }
+            }
+        }
+
+        compose.onNode(todayAction).performClick()
+        compose.waitForIdle()
+
+        pagerState.currentPage shouldBe todayPage
+    }
+
+    @OptIn(ExperimentalFoundationApi::class)
+    @Test
+    fun `the Today action without reduced motion has not reached today's page while no frame has advanced`() {
+        val pagerState = PagerState(currentPage = MonthPages.pageOf(june2028)) { MonthPages.COUNT }
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            IfcTheme(dynamicColor = false) {
+                CompositionLocalProvider(LocalReducedMotion provides false) {
+                    MonthScreen(state = state(june2028), onPageChanged = {}, onDayClick = {}, pagerState = pagerState)
+                }
+            }
+        }
+
+        compose.onNode(todayAction).performClick()
+        compose.waitForIdle()
+
+        pagerState.currentPage shouldNotBe todayPage
     }
 
     @Test

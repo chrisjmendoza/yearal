@@ -374,11 +374,31 @@
     <!-- Backup behaviour (docs/security-and-privacy.md §4.1: encrypted-only Auto Backup). -->
     <string name="privacy_backup_body">If you have Android device backup turned on with a screen lock set, your settings and events may be included in an encrypted backup to your Google account — encrypted with your own screen lock, so Google cannot read it either. You can turn this off at any time in your device\'s system settings; the app has no separate control over it.</string>
 
+    <!-- Section heading: widgets. -->
+    <string name="privacy_section_widgets">Home-screen widgets</string>
+
+    <!-- Widget content (docs/security-and-privacy.md §3.2 "Widget privacy mode": the Month widget's
+         event dot and holiday diamond are per-day presence marks, never a title, count or calendar
+         name; the Today widget shows only the date). Keep in step with docs/privacy-policy.md's own
+         "Home-screen widgets" section. -->
+    <string name="privacy_widgets_body">Yearal\'s home-screen widgets show only calendar dates and simple presence marks — a dot for a day with an event, a diamond for a holiday — never an event\'s title, notes or location.</string>
+
+    <!-- Section heading: sending feedback. -->
+    <string name="privacy_section_feedback">Sending feedback</string>
+
+    <!-- "Send feedback" in the More screen (docs/security-and-privacy.md §6.3 "Send feedback" email;
+         FeedbackBody.kt's buildFeedbackBody, whose parameter list is the allow-list). Keep in step with
+         docs/privacy-policy.md's own "Sending feedback" section. -->
+    <string name="privacy_feedback_body">\"Send feedback\" in the More screen opens your own email app with a message addressed to the developer, prefilled with your app version, Android version, device model, language and Yearal display settings — never your events, reminders or holiday choices. You see the whole message before you send it, and nothing is sent unless you do.</string>
+
     <!-- Section heading: the policy itself. -->
     <string name="privacy_section_policy">The full policy</string>
 
     <!-- Notes that this screen is the whole policy today and a web copy will follow, without inventing a
-         URL that does not exist yet (docs/security-and-privacy.md §5.2). -->
+         URL that does not exist yet (docs/security-and-privacy.md §5.2). Once docs/privacy-policy.md is
+         published, its URL goes here as a second sentence (or a linked "Read it on the web" row) —
+         this string's own wording should not change until that URL actually exists; do not add a
+         placeholder link in the meantime. -->
     <string name="privacy_policy_body">This screen is the complete privacy policy for the app as it stands today. The same text will also be published on the web once the app is available to install, with a link added here.</string>
 
     <!-- ===== Learn screen: link back into the first-run intro (docs/FEATURES.md L1) ===== -->

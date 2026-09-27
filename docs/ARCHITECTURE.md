@@ -14,6 +14,7 @@ is the authority for versions and §1 explains the choices. Progress per task is
 | [holidays-and-import.md](holidays-and-import.md) | Holiday rule engine and data format, holiday data licensing, device-calendar overlay, `.ics` import/export |
 | [security-and-privacy.md](security-and-privacy.md) | Threat model, permissions, backup rules, Play policy, repo hygiene |
 | [privacy-policy.md](privacy-policy.md), [play-data-safety.md](play-data-safety.md) | The published end-user policy text and the Play Data safety / content-rating answers, both derived from security-and-privacy.md |
+| [store-listing.md](store-listing.md) | Play Store listing copy, screenshot plan, feature graphic brief, first release notes (ROADMAP M8 T4) |
 | [competitive-analysis.md](competitive-analysis.md) | Evidence behind priorities; naming collisions |
 | [ROADMAP.md](ROADMAP.md) | Milestones, task breakdown for parallel agents, open questions |
 | [WORKFLOW.md](WORKFLOW.md) | How work is done: the gate, Definition of Done, KDoc standard, anti-drift rules, rules for LLM agents |
@@ -273,7 +274,8 @@ Yes, add it, but keep it minimal. With about 17 modules, copy-pasted `android {}
   - `ifc.android.feature`: library, compose and hilt, plus the standard `:core:*` dependencies and
     Turbine. The dependency rule check is `ifc.android.library`'s own (below), inherited because this
     plugin applies it.
-  - `ifc.android.application`: target SDK and the SemVer `versionCode`.
+  - `ifc.android.application`: target SDK, the git-derived `versionCode`/`versionName` (`GitBuildVersion.kt`,
+    §7 "Versioning"), release signing, and R8 on the release build (§7 "R8").
   - `ifc.hilt`: Hilt + KSP.
   - `ifc.kotlin.serialization` and `ifc.room`: the compiler plugins must be applied from `build-logic`'s classpath (ADR 0001, decision 3).
 - Spotless is configured per module by the convention plugins (ktlint from the catalog).
@@ -462,7 +464,35 @@ either `1.json` on its own.
 - **Around it:** the in-context `POST_NOTIFICATIONS` request is the event editor's (`:feature:events`), and
   `IfcApplication.onCreate` calls `reschedule()` off the main thread through `AppStartup` on every process
   start, so a reminder alarm lost to a force-stop or an OEM task killer is back as soon as anything starts
-  the app. **Not built:** snooze.
+  the app.
+
+**Snooze and Done (M6 T4, `:core:scheduling`, package `core.scheduling.reminder`).** Every reminder
+notification carries two actions, added in [contracts/Events.md](contracts/Events.md)'s spirit but not
+its letter — the events contract only promises the reminder alarm and the notification, not what is on
+it — so this is documented here rather than there.
+
+- **Done** dismisses the notification (`NotificationManagerCompat.cancel`) and changes nothing else.
+- **Snooze** cancels the current notification and, from the injected `Clock` (never the original fire
+  time), arms a **second**, independent `AlarmManager` alarm exactly `SNOOZE_DURATION` (10 minutes)
+  later — the same `armWakeup` exact/windowed policy the single next-alarm uses, targeting a new
+  receiver, `ReminderActionReceiver`, so it can never collide with the single next-alarm's own
+  `PendingIntent` (different component; different, deterministically derived request codes for
+  Snooze, Done and the snooze-fire alarm — `ReminderActionIntent`). When that alarm fires, the
+  occurrence is re-described from the repository (event title, occurrence reference and all-day
+  flag) and the same notification id is re-posted with both actions again.
+- **Persistence.** `:core:scheduling` has no persistence today and, by the module boundary rule above,
+  may never depend on `:core:data` (Room, the settings `DataStore`) — both are off limits. A snooze is
+  therefore persisted in its own tiny `SharedPreferences` file (`SnoozeStore`; ids, an epoch day and an
+  epoch-milli instant only, CLAUDE.md rule 8) — the least invasive option that still survives a reboot,
+  costing no new Gradle dependency and no cross-module edge. `AlarmReminderScheduler.reschedule()`
+  re-arms (or, if overdue by no more than `LATE_GRACE`, immediately re-fires) every persisted snooze on
+  every call, which already runs at `BOOT_COMPLETED` (via the `DayRolloverListener` chain) exactly like
+  the single next-alarm — so a snooze surviving a reboot needs no separate wiring, only this one store.
+  One overdue by more than `LATE_GRACE` is dropped silently, the same rule the single next-alarm uses
+  for a late reminder.
+- **Not built:** a setting to change the snooze length (fixed at 10 minutes, per FEATURES E11), and
+  snoozing an already-snoozed notification a second time before it re-fires (Done, then Snooze the
+  re-post, works; there is no "snooze again" from the still-showing original).
 
 ### 3.3 Holidays
 
@@ -840,7 +870,16 @@ directly rather than re-wrapped, since `WindowWidthClass` already hides it from 
 - Each cell has a merged description, for example "Sol 13, IFC Friday. Gregorian Tuesday, June 30, 2026. 2 events. Holiday: …", with "Today." appended on the current date; `mergeDescendants = true` on `DayCell`, `IntercalaryBand` and the Year overview's tiles enforces that the inner numbers, labels and marks never surface as separately focusable nodes, pinned by a zero-children assertion in `MonthGridTest`/`YearOverviewTilesTest`.
 - Use `selected` and `Role.Button` semantics, a heading on the month title, and traversal groups on the grid.
 - Today, holidays and intercalary days are never encoded by color alone. Each also has a shape or icon.
-- Screenshot tests run at font scale 2.0. Respect the reduced-motion setting.
+- Screenshot tests run at font scale 2.0.
+- **Reduced motion** (a11y audit finding #22, done): `:core:designsystem`'s `rememberReducedMotion()`
+  (package `motion`) reads `Settings.Global.ANIMATOR_DURATION_SCALE` through `LocalContext`'s
+  `contentResolver` — `0f` means the system's "Remove animations" is on — and re-reads on every change
+  via a `ContentObserver` registered and unregistered by a `DisposableEffect`, so a screen already open
+  when the user flips the setting picks it up without being recreated. `LocalReducedMotion` overrides it
+  for tests and previews. `MonthScreen`'s "Today" action (the only purely decorative animation found in
+  `:core:designsystem`, `:feature:calendar` and `:feature:settings`) calls `PagerState.scrollToPage`
+  instead of `animateScrollToPage` when this is `true`; every other transition in those modules carries
+  meaning (a value appearing, an error being announced, a selection changing) and is left animated.
 
 ### Localization
 
@@ -1269,7 +1308,7 @@ Runbook, with the exact commands: [screenshots.md](screenshots.md).
 ### CI gate per push
 
 `check` (per module: `spotlessCheck`, `lint` on Android modules, `test` — JVM and Robolectric —, the Dokka KDoc
-gate on JVM modules) and `:app:assembleDebug`; `verifyRoborazziDebug` runs whenever at least one golden PNG
+gate on JVM modules), `:app:assembleDebug` and `:app:assembleRelease` (R8); `verifyRoborazziDebug` runs whenever at least one golden PNG
 is tracked in git (guarded, not unconditional — see "Goldens" above).
 
 ## 7. CI/CD (GitHub Actions)
@@ -1277,8 +1316,12 @@ is tracked in git (guarded, not unconditional — see "Goldens" above).
 - **`ci.yml`**
   - Triggers: pushes to `main`, and pull requests (cloud agents and Dependabot; see WORKFLOW.md §1).
   - Setup: ubuntu-latest, `actions/setup-java` (temurin 21), and `gradle/actions/setup-gradle` with caching.
-  - Steps: `./gradlew check :app:assembleDebug`, then `verifyRoborazziDebug` guarded behind a
-    `git ls-files` check for tracked goldens (§6 "Goldens").
+  - Checkout with `fetch-depth: 0`: the `versionCode` is the commit count ("Versioning" below), which a
+    shallow clone cannot give.
+  - Steps: `./gradlew check :app:assembleDebug :app:assembleRelease` — the release build runs R8, so an R8
+    error (a missing class, a broken rule) fails the push that caused it; a gap only reflection would hit
+    still needs the device smoke test ("R8" below) — then `verifyRoborazziDebug` guarded
+    behind a `git ls-files` check for tracked goldens (§6 "Goldens").
   - Artifacts: the debug APK on every run; test, lint and Roborazzi diff reports (`build/reports/roborazzi/`,
     `build/outputs/roborazzi/`) on failure.
   - Add concurrency cancellation.
@@ -1311,16 +1354,37 @@ is tracked in git (guarded, not unconditional — see "Goldens" above).
     machine, a fork, CI) — see security-and-privacy.md §8.2 for why an unsigned release APK was rejected
     in favour of this fallback. The `release` build type also sets `isProfileable = true` (not
     `isDebuggable`) so the owner can attach Android Studio's profiler to the exact build they judge for
-    performance; `isMinifyEnabled` is untouched (R8 is ROADMAP M8 T2, once Hilt/Room3/kotlinx-serialization
-    keep rules exist).
+    performance.
+- **R8** (ROADMAP M8 T2, done 2026-09-26): the `release` build type sets AGP 9's
+  `optimization { enable = true }` — R8 full mode plus resource shrinking, with
+  `proguard-android-optimize.txt` — instead of the legacy `isMinifyEnabled`/`isShrinkResources`. Keep rules
+  come from the libraries' own consumer rules; the app adds only verified gaps in
+  `app/src/main/keepRules/yearal.keep` (AGP 9's `keepRules` source directory, replacing `proguardFiles`),
+  each commented with the symbol it protects. No `-dontwarn`. The runbook — what is covered, how it was
+  verified, and how to decode a release-only crash with `mapping.txt` — is
+  [release-builds.md](release-builds.md) "R8 and resource shrinking". Baseline profile and startup
+  benchmark: not yet (they need a managed device).
 - **Dependencies and repo hygiene** (details in security-and-privacy.md):
   - Dependabot for the `gradle` and `github-actions` ecosystems with grouped PRs and a cooldown. Review AGP, Kotlin and KSP bumps manually.
   - GitHub Actions pinned by full commit SHA, read-only `GITHUB_TOKEN` by default, secret scanning with push protection, branch protection on `main`, private vulnerability reporting, and a `SECURITY.md`.
   - Repositories restricted with content filtering (`google()`, `mavenCentral()`, Gradle Plugin Portal only); no JitPack, no dynamic versions; Gradle wrapper checksum validated.
   - A CI check compares the merged manifest's permissions against an allow-list, so a dependency cannot silently add `INTERNET` or anything else.
 - **Versioning:**
-  - Use SemVer in `gradle.properties` (`VERSION_NAME=0.1.0`).
-  - `versionCode = major*1_000_000 + minor*10_000 + patch*100 + build`.
+  - Use SemVer in `gradle.properties` (`VERSION_NAME=0.1.0`); that is the release number people talk about.
+  - `versionCode` = `git rev-list --count HEAD`. `main` is only ever fast-forwarded (WORKFLOW.md §1), so its
+    commit count never decreases, which is what Play requires of a `versionCode`. The build fails above
+    2,000,000,000 (Play's cap is 2,100,000,000).
+  - `versionName` = `VERSION_NAME+<count>.<7-char sha>`, plus `.dirty` for a worktree with uncommitted
+    changes (SemVer build metadata), e.g. `0.1.0+45.72dbfa1`. The More screen and the feedback email show
+    it, so every install and every report identifies its exact commit. **It is not plain SemVer** — cut at
+    the first `+` for the release number.
+  - Computed at configuration time by `build-logic/convention/src/main/kotlin/GitBuildVersion.kt` through
+    a Gradle `ValueSource` (configuration-cache safe: re-evaluated every build, cache invalidated only when
+    the commit or the clean/dirty state changes). Without usable git (source archive, no `git`, shallow
+    clone) it warns and falls back to the `VERSION_BUILD` Gradle property, else `versionCode` 1, with the
+    name `VERSION_NAME+<n>.unknown`. Details and the one-time downgrade from the old
+    `major*1_000_000 + minor*10_000 + patch*100 + build` numbers (`10000` for 0.1.0):
+    [release-builds.md](release-builds.md) "Version numbers".
   - Tags are `vX.Y.Z`, with a `CHANGELOG.md` in Keep a Changelog style.
 - **Play path:** internal track from M2, then closed testing, then production.
   - **Schedule risk:** personal Play developer accounts created after November 2023 must run a closed test with at least 12 testers for 14 continuous days before production access. Start recruiting testers at M5.

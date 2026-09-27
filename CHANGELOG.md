@@ -184,7 +184,7 @@ Architecture, tooling and CI:
   `keystore.properties` or `YEARAL_RELEASE_*` environment variables and falls back to the debug key with a
   warning when neither is set, so the build is always installable and no secret is ever needed to compile.
   It is also `profileable`, so Android Studio's profiler can attach to the exact build being judged.
-  R8 stays off until its keep rules land (M8 T2). See [docs/release-builds.md](docs/release-builds.md).
+  R8 was turned on later, in M8 T2 (see Changed). See [docs/release-builds.md](docs/release-builds.md).
 - A skippable three-screen first-run intro (FEATURES L1): what the IFC is, why the nominal and the actual
   weekday differ, and where Year Day and Leap Day live, ending with a "find my IFC birthday" jump into the
   converter. Re-openable from Learn. Every example date is computed by the conversion core, so the text
@@ -234,9 +234,30 @@ Architecture, tooling and CI:
   `ifc.jvm.library` (pure-JVM modules depend only on each other; `:core:calendar` depends on nothing at
   all) — replace the feature-only dependency rule check and complete it against the module boundaries in
   `docs/ARCHITECTURE.md` §2 and CLAUDE.md rules 1, 10 and 11.
+- Reminder notifications now carry two actions (ROADMAP M6 T4; FEATURES E11a): **"Snooze 10 min"**
+  cancels the current notification and re-posts it, with the same redacted lock-screen form and both
+  actions again, 10 minutes later from the device clock; **"Done"** just dismisses it. Both are explicit
+  broadcasts to a new non-exported receiver, `reminder/ReminderActionReceiver`, carrying ids only (the
+  event id, the occurrence's epoch day, the notification id — never a title). A snooze survives a
+  reboot: it is persisted in a small new `SharedPreferences`-backed store (`SnoozeStore`) since
+  `:core:scheduling` cannot depend on `:core:data`, and re-armed the same way the single next-alarm
+  already is.
 
 ### Changed
 
+- **The version shown in More and in feedback emails now identifies the exact build**, e.g.
+  `0.1.0+45.72dbfa1`: the release number, the build number and the commit it was built from (`.dirty` if it
+  had uncommitted changes). The build number (`versionCode`) is now the commit count of `main`, which only
+  goes up; it replaces the fixed `0.1.0 (10000)` every build used to carry. Installing a new build over one
+  from before this change needs a one-time uninstall. See
+  [docs/release-builds.md](docs/release-builds.md) "Version numbers".
+- **Smaller, faster release build** (M8 T2): R8 now shrinks and optimizes the release APK (16.9 MB → 8.2 MB)
+  through AGP 9's `optimization {}` DSL, with resource shrinking. The libraries' own keep rules cover Hilt,
+  Room 3, kotlinx.serialization and Glance; the app adds two verified rules for the WorkManager that Glance
+  pulls in, without which the release build crashed at launch and the widgets would never have rendered.
+  Zero R8 warnings, no `-dontwarn`; CI builds the release APK on every push. Tested on an emulator; the
+  phone pass is [device-test-matrix.md](docs/device-test-matrix.md) RB1. See
+  [docs/release-builds.md](docs/release-builds.md) "R8 and resource shrinking".
 - **No more day popup.** Tapping a day on the Month grid now just selects it: the card below the grid is
   the whole day detail. It gained what only the popup had — the `IFC`-prefixed numeric date, both labelled
   weekdays, the day / week / quarter line, tappable events (long-press to delete, with undo), "Add event"
@@ -313,6 +334,11 @@ Architecture, tooling and CI:
   v1 columns still opens and reads back through the real production builder, and `SchemaExportGuardTest`
   guards the exported schema directory itself.
 
+- The Privacy screen now also covers what the app's home-screen widgets show (dates and presence marks
+  only, never an event's title, notes or location) and what "Send feedback" sends (device/app/version
+  diagnostics only, never events, and only once the user actually sends it), closing two gaps found while
+  drafting `docs/privacy-policy.md`.
+
 ### Fixed
 
 - Accessibility audit fixes in `:core:designsystem` (ROADMAP M8 T1): `DayCell`, `IntercalaryBand` and the
@@ -374,3 +400,7 @@ Architecture, tooling and CI:
   resets its scroll position and moves focus to each page's heading on Back/Next instead of landing
   scrolled past it; and every More hub row, including Send feedback, now shares one full-width, ≥48dp
   touch target.
+- Reduced motion (M8 T1 a11y audit finding #22): the Month screen's "Today" action — the only purely
+  decorative animation in `:core:designsystem`, `:feature:calendar` and `:feature:settings` — now jumps
+  straight to today's page instead of scrolling when the system's "Remove animations" setting is on,
+  through the new `rememberReducedMotion()` in `:core:designsystem`.

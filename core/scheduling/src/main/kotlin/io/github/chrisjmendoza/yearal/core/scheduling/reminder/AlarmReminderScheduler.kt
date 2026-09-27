@@ -18,6 +18,8 @@ import kotlinx.coroutines.sync.withLock
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
@@ -55,6 +57,17 @@ import javax.inject.Singleton
  * process starts with an empty mark and may re-post a reminder from the last [LATE_GRACE] once; a
  * notification id is stable, so that replaces the same notification rather than adding one.
  *
+ * ## Snooze and Done (ROADMAP M6 T4; FEATURES E11)
+ *
+ * [snooze] and [dismiss] are what [ReminderActionReceiver] calls for the notification's two action
+ * buttons; [fireSnooze] is what it calls when the delayed alarm a snooze armed goes off. A snooze
+ * reuses this class's own alarm path — [armWakeup] and its `canScheduleExactAlarms()` fallback — as a
+ * **second**, independent `PendingIntent` per active snooze (component [ReminderActionReceiver],
+ * request codes from [ReminderActionIntent]), never a second alarm mechanism. It is persisted in
+ * [snoozeStore] so it survives a reboot the same way the single next-alarm does: [refresh] re-arms (or,
+ * if the device was off past the snoozed instant, immediately re-fires within [LATE_GRACE]) every
+ * stored snooze on every call, which includes `BOOT_COMPLETED` exactly like the rest of this class.
+ *
  * ## What is *not* done here
  *
  * Asking for `POST_NOTIFICATIONS` (the event editor does that, in context) and routing a tap to the
@@ -73,6 +86,7 @@ internal class AlarmReminderScheduler
         private val clock: Clock,
         private val zoneProvider: ZoneProvider,
         private val notifier: ReminderNotifier,
+        private val snoozeStore: SnoozeStore,
     ) : ReminderScheduler,
         DayRolloverListener {
         /** Serialises recomputations, so two triggers at once cannot both post the same reminder. */
@@ -104,10 +118,141 @@ internal class AlarmReminderScheduler
             reschedule()
         }
 
+        /**
+         * The Snooze button: cancels [notificationId], then arms a **second** alarm — distinct from
+         * the single next-alarm this class already keeps — for [SNOOZE_DURATION] from [clock], and
+         * persists it in [snoozeStore] so [refresh] can re-arm it after a reboot. See the class KDoc.
+         */
+        fun snooze(
+            eventId: Long,
+            occurrenceEpochDay: Long,
+            notificationId: Int,
+        ) {
+            notifier.cancel(notificationId)
+            val entry =
+                SnoozeStore.Entry(
+                    notificationId,
+                    eventId,
+                    occurrenceEpochDay,
+                    clock.instant().plus(SNOOZE_DURATION),
+                )
+            snoozeStore.put(entry)
+            armSnoozeAlarm(entry)
+        }
+
+        /** The Done button: dismiss only. Also drops any snooze that was pending on this notification. */
+        fun dismiss(notificationId: Int) {
+            notifier.cancel(notificationId)
+            snoozeStore.remove(notificationId)
+            cancelSnoozeAlarm(notificationId)
+        }
+
+        /**
+         * The snooze-fire alarm: re-describes the occurrence from the repository and, if it still
+         * exists as it did, re-posts the notification under the same [notificationId] with the same
+         * Snooze/Done actions. A deleted event, a deleted calendar, or an occurrence that this exact
+         * date no longer produces (an edit, or a newly added exdate) all resolve to posting nothing —
+         * there is nothing left to describe, and this is a re-post, not a fresh reminder that deserves
+         * [ReminderPlanner]'s full recomputation.
+         */
+        suspend fun fireSnooze(
+            eventId: Long,
+            occurrenceEpochDay: Long,
+            notificationId: Int,
+        ) {
+            mutex.withLock { fireSnoozeNow(eventId, occurrenceEpochDay, notificationId, zoneProvider.currentZone()) }
+        }
+
+        /** The body of [fireSnooze], and of [refresh]'s own overdue-snooze handling; always under [mutex]. */
+        private suspend fun fireSnoozeNow(
+            eventId: Long,
+            occurrenceEpochDay: Long,
+            notificationId: Int,
+            deviceZone: ZoneId,
+        ) {
+            snoozeStore.remove(notificationId)
+            cancelSnoozeAlarm(notificationId)
+            val event = repository.get().getEvent(eventId) ?: return
+            val date = LocalDate.ofEpochDay(occurrenceEpochDay)
+            val occurrence = expander.nextOccurrence(event, date)?.takeIf { it.occurrenceDate == date } ?: return
+            val reference =
+                if (occurrence.allDay) {
+                    date.atTime(ReminderPlanner.ALL_DAY_REMINDER_TIME).atZone(deviceZone)
+                } else {
+                    occurrence.start(deviceZone)
+                }
+            // minutesBefore is a placeholder: the button that started the snooze carries no lead time
+            // (ids only, CLAUDE.md rule 8), and ReminderNotifier.build never reads it — only the
+            // occurrence's own reference and allDay flag decide the text this re-post shows.
+            val reminder =
+                PendingReminder(
+                    eventId,
+                    date,
+                    minutesBefore = 0,
+                    triggerAt = clock.instant(),
+                    reference = reference,
+                    allDay = occurrence.allDay,
+                )
+            notifier.repost(notificationId, reminder, event, deviceZone)
+        }
+
+        /**
+         * Re-arms every persisted snooze that is still ahead, and fires the ones that were missed —
+         * within [LATE_GRACE], exactly like a regular reminder — because the device was off or the
+         * process did not exist when they should have gone off. One older than that is dropped
+         * silently. Called from every [refresh], which is what makes a snooze survive `BOOT_COMPLETED`
+         * the same way the single next-alarm does (see the class KDoc).
+         */
+        private suspend fun rearmOrFireSnoozes(
+            now: Instant,
+            deviceZone: ZoneId,
+        ) {
+            for (entry in snoozeStore.all()) {
+                when {
+                    entry.fireAt.isAfter(now) -> {
+                        armSnoozeAlarm(entry)
+                    }
+
+                    !entry.fireAt.isBefore(now.minus(LATE_GRACE)) -> {
+                        fireSnoozeNow(entry.eventId, entry.occurrenceEpochDay, entry.notificationId, deviceZone)
+                    }
+
+                    else -> {
+                        snoozeStore.remove(entry.notificationId)
+                        cancelSnoozeAlarm(entry.notificationId)
+                    }
+                }
+            }
+        }
+
+        /** Arms (or replaces) the snooze-fire alarm for [SnoozeStore.Entry.notificationId]. */
+        private fun armSnoozeAlarm(entry: SnoozeStore.Entry) {
+            val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
+            alarmManager.armWakeup(entry.fireAt, snoozeFireOperation(context, entry), WINDOW)
+        }
+
+        /** Cancels the snooze-fire alarm for [notificationId], if one is armed. A no-op otherwise. */
+        private fun cancelSnoozeAlarm(notificationId: Int) {
+            val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
+            // Cancellation matches on request code, action and component, never on extras, so the
+            // three ids the real alarm carries are not needed to find and cancel it.
+            val intent =
+                Intent(context, ReminderActionReceiver::class.java).setAction(ReminderActionIntent.ACTION_SNOOZE_FIRE)
+            alarmManager.cancel(
+                PendingIntent.getBroadcast(
+                    context,
+                    ReminderActionIntent.snoozeFireRequestCode(notificationId),
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+        }
+
         /** The body of [reschedule]; always called under [mutex]. */
         private suspend fun refresh() {
             val now = clock.instant()
             val deviceZone = zoneProvider.currentZone()
+            rearmOrFireSnoozes(now, deviceZone)
             val today = now.atZone(deviceZone).toLocalDate()
             val candidates = repository.get().getReminderCandidates(today)
             val pending =
@@ -179,6 +324,33 @@ internal class AlarmReminderScheduler
                     context,
                     REQUEST_CODE,
                     Intent(context, ReminderAlarmReceiver::class.java).setAction(ACTION_REMINDER),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+
+            /** How long a snooze delays the re-post (ROADMAP M6 T4; FEATURES E11's "Snooze 10 min"). */
+            val SNOOZE_DURATION: Duration = Duration.ofMinutes(10)
+
+            /**
+             * The `PendingIntent` of one snooze's delayed alarm: explicit, immutable, targeting
+             * [ReminderActionReceiver] with [ReminderActionIntent.ACTION_SNOOZE_FIRE] and the three id
+             * extras [ReminderActionIntent] defines (CLAUDE.md rule 8). Its request code
+             * ([ReminderActionIntent.snoozeFireRequestCode]) is distinct per notification and from the
+             * Snooze/Done buttons on the same notification, and no reminder alarm or the rollover's own
+             * needs to avoid it: they target different receiver classes, and `PendingIntent` matching
+             * compares the component too.
+             */
+            fun snoozeFireOperation(
+                context: Context,
+                entry: SnoozeStore.Entry,
+            ): PendingIntent =
+                PendingIntent.getBroadcast(
+                    context,
+                    ReminderActionIntent.snoozeFireRequestCode(entry.notificationId),
+                    Intent(context, ReminderActionReceiver::class.java)
+                        .setAction(ReminderActionIntent.ACTION_SNOOZE_FIRE)
+                        .putExtra(ReminderActionIntent.EXTRA_EVENT_ID, entry.eventId)
+                        .putExtra(ReminderActionIntent.EXTRA_OCCURRENCE_EPOCH_DAY, entry.occurrenceEpochDay)
+                        .putExtra(ReminderActionIntent.EXTRA_NOTIFICATION_ID, entry.notificationId),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
         }

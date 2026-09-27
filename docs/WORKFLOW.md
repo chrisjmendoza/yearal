@@ -62,8 +62,9 @@ python scripts\check_docs.py # doc link and reference check
 | `lint` | Android modules: Android Lint with `warningsAsErrors` **[gate]** |
 | `testDebugUnitTest` | Android modules: JUnit4 + Robolectric (+ Roborazzi `compare`, never `verify`, locally) **[gate]** |
 
-CI (`.github/workflows/ci.yml`) runs the same gate on every branch plus `:app:assembleDebug`, and uploads
-the debug APK as an artifact. It also runs `verifyRoborazziDebug`, but only when at least one golden PNG
+CI (`.github/workflows/ci.yml`) runs the same gate on every branch plus `:app:assembleDebug` and
+`:app:assembleRelease` (the R8 build — an R8 error fails the push; see
+[release-builds.md](release-builds.md)), and uploads the debug APK as an artifact. It also runs `verifyRoborazziDebug`, but only when at least one golden PNG
 is tracked in git (a `git ls-files '**/src/test/screenshots/*.png'` check gates the step) — see
 [screenshots.md](screenshots.md) for how the owner records that first baseline (ROADMAP R6 / M2 T10).
 A Kotest `checkAll` inside an expression-bodied test (`fun x() = runBlocking { checkAll(...) }`) returns a

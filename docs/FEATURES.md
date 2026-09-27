@@ -127,7 +127,8 @@ Counts are from the 51 incumbent reviews retrieved, plus the iOS app's review fe
 | 🟡 | E8 | Categories / colours | **Delivered by ROADMAP M2 T13** (see W9): a seven-swatch-plus-"Calendar colour" row and an Event/Observance/Birthday segmented control in the editor. |
 | 🟡 | E9 | Search events | |
 | 🟡 | E10 | Birthdays and anniversaries as a first-class type (age, "celebrate on my IFC date") | |
-| 🔵 | E11 | Multiple reminders per event, snooze; edit a single occurrence | |
+| 🔵 | E11a | Notification-level Snooze (10 min) and Done actions | **Delivered by ROADMAP M6 T4.** Every reminder notification carries both; a snooze survives a reboot (`SnoozeStore`, `docs/ARCHITECTURE.md` §3.2). |
+| 🔵 | E11 | Multiple reminders per event; edit a single occurrence | Snooze/Done is E11a, above. |
 | ⚪ | E12 | Attendees, invitations, sync server | Needs accounts and a backend. The device-calendar overlay (I1) covers "see my real calendar". |
 
 ### 5. Holidays

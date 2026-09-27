@@ -79,6 +79,7 @@ class AlarmReminderSchedulerTest {
             clock = clock,
             zoneProvider = zones,
             notifier = ReminderNotifier(context),
+            snoozeStore = SnoozeStore(context),
         )
 
     @After

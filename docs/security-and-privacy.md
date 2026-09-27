@@ -354,6 +354,7 @@ Target exported surface (everything else `android:exported="false"`):
 | Widget configuration activity | **No** (*launchers start it via the app-widget service; verify on Pixel + Samsung launchers*) | Behind app lock. Validates the `appWidgetId` belongs to us. |
 | Boot / time-change / package-replaced / exact-alarm-permission receiver (`SystemEventReceiver` in `:core:scheduling`, done M5 T2, sixth action added M6 T3) | **No** — `TIME_SET`, `TIMEZONE_CHANGED`, `LOCALE_CHANGED`, `BOOT_COMPLETED`, `MY_PACKAGE_REPLACED` and `SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED` are protected broadcasts that only the system can send, and the system reaches non-exported receivers (*verify on a device in the M5 T8 test matrix*) | Checks `intent.action` against exactly that set and reads nothing else from the intent; any other action is ignored. The first four are on the implicit-broadcast exemption list, and `MY_PACKAGE_REPLACED` and the exact-alarm one are addressed to the package, so a manifest receiver is allowed; `DATE_CHANGED` is not exempt and is not registered. The exact-alarm action re-arms both alarms under the new capability and notifies no day-rollover listener — it is not a date change. |
 | Alarm receivers (`DayRolloverAlarmReceiver`, done M5 T2; `reminder/ReminderAlarmReceiver`, done M6 T1) | No | Reached only through our own explicit `PendingIntent`s; no intent filter. Both `PendingIntent`s are `FLAG_IMMUTABLE`, name the receiver class, carry **no extras** and use distinct fixed request codes, so neither replaces the other. Each receiver still checks the action. Which reminder fired is recomputed from the store and the clock, never carried in the intent (CLAUDE.md rule 8), which is why a late or duplicated delivery is harmless. |
+| `reminder/ReminderActionReceiver` (done M6 T4: the Snooze/Done notification actions and the snooze-fire alarm) | No | Reached only through our own explicit `PendingIntent`s; no intent filter. Unlike the row above, its three `PendingIntent`s **do** carry extras — ids only (§6.4 below) — because which notification to cancel or re-post cannot be recomputed from the clock alone the way the single next-alarm can. The receiver reads only `intent.action` (exact match against `ReminderActionIntent`'s three actions; anything else is ignored) and the three typed extras, each through `Intent.getLongExtra`/`getIntExtra` with a sentinel default that means "absent" (`ReminderActionIntent.NO_ID`, `NO_NOTIFICATION_ID`); a missing or sentinel-valued extra is treated as absent and the broadcast is dropped. |
 | Providers merged by libraries (androidx.startup, WorkManager) | No | Review the merged manifest once per dependency bump (covered by the CI manifest diff if extended to components). |
 
 Also:
@@ -396,6 +397,21 @@ Also:
   `WidgetIntents.ACTION_OPEN_MONTH` (no extra) and each of its 28 day cells plus its intercalary band
   carries `WidgetIntents.ACTION_OPEN_DAY` and that day's epoch day under `WidgetIntents.EXTRA_EPOCH_DAY`
   — ids and epoch days only, `IntentRouter` in `:app` is what validates them (§6.3's launcher row).
+- **As built (M6 T4):** the reminder notification's two actions and the alarm a snooze arms are three
+  more `PendingIntent`s, all `PendingIntent.getBroadcast` to `reminder/ReminderActionReceiver`,
+  explicit, `FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE`. Each carries exactly three extras and nothing else
+  — `ReminderActionIntent.EXTRA_EVENT_ID` (`Long`), `EXTRA_OCCURRENCE_EPOCH_DAY` (`Long`,
+  `LocalDate.toEpochDay()`) and `EXTRA_NOTIFICATION_ID` (`Int`) — never the event title or the
+  notification's own text. **Request-code derivation:** `ReminderActionIntent.snoozeRequestCode`,
+  `.doneRequestCode` and `.snoozeFireRequestCode` each combine a small, fixed per-action discriminant
+  (`1`, `2`, `3`) with the notification id through the same polynomial hash `ReminderNotifier`'s own
+  `notificationId(reminder)` uses (`31 * discriminant + notificationId`). Because
+  `ReminderNotifier.notificationId` already mixes the event id, the occurrence date and the reminder's
+  lead time, two different notifications — on the same event or on different ones — never share a
+  Snooze, Done, or snooze-fire `PendingIntent`, and the three actions on one notification never share
+  one with each other. None of the three needs to avoid `AlarmReminderScheduler.REQUEST_CODE` (the
+  single next-alarm) or `DayRolloverScheduler`'s own constant: `PendingIntent` matching also compares
+  the target component, and every alarm this module arms targets a different receiver class.
 
 ### 6.5 `FileProvider` / content providers
 
@@ -495,7 +511,7 @@ The highest-value control in this whole document: **2FA with passkeys/hardware k
 | Gradle dependency verification (`verification-metadata.xml`) | **LATER / optional (M + ongoing)** | Real protection against a tampered artifact, but every AGP/Kotlin/Compose bump touches hundreds of checksums and Dependabot PRs fail until metadata is regenerated by hand (*Dependabot support for updating it not verified*). For a solo project with no network permission in the app, the cost outweighs the benefit today. If adopted: SHA-256 checksums only, no PGP trust configuration. |
 | Gradle dependency locking (lockfiles) | **NOT NEEDED** | Only useful with dynamic/ranged versions, which are banned above. Dependabot's lockfile handling with version catalogs is also unreliable ([issue](https://github.com/dependabot/dependabot-core/issues/12557)). |
 | CodeQL code scanning | **v1.x, low priority (S)** | Free for public repos and supports Kotlin, but Kotlin needs a real build (build-mode `none` skips Kotlin — [docs](https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/codeql-code-scanning-for-compiled-languages), *current status not re-verified*), so it is slow. Run weekly + on PRs to `main`; drop it if it yields only noise — Android Lint carries most of the weight. |
-| R8 minification + resource shrinking on release | **NEEDED, before Play release (S–M)** | Size and performance, **not** a security control: the source is public, so obfuscation hides nothing. Either keep obfuscation with mapping files retained per release, or use `-dontobfuscate` for readable vitals traces. Test the release build, especially Room, kotlinx.serialization, Glance, and the `.ics` library (reflection). |
+| R8 minification + resource shrinking on release | **NEEDED, before Play release (S–M)** | Size and performance, **not** a security control: the source is public, so obfuscation hides nothing. Either keep obfuscation with mapping files retained per release, or use `-dontobfuscate` for readable vitals traces. Test the release build, especially Room, kotlinx.serialization, Glance, and the `.ics` library (reflection). **On since 2026-09-26 (ROADMAP M8 T2):** obfuscation kept, `mapping.txt` produced per build and to be archived with every build that leaves the machine; release APK tested on an emulator, phone pass pending — [release-builds.md](release-builds.md) "R8 and resource shrinking". The `.ics` library does not exist yet (1.2) and must be re-checked when it lands. |
 | Release build flags | **NEEDED, MVP (S)** | `debuggable false`, no cleartext flag, no test-only components or debug menus in release; `applicationIdSuffix ".debug"` for debug builds so debug and release data never mix. |
 | Reproducible builds / F-Droid listing | **LATER** | The no-proprietary-dependency stance keeps this open; nothing to do now. |
 | SBOM, SLSA provenance, artifact attestation | **NOT NEEDED** | Enterprise theatre at this scale. |
@@ -569,7 +585,7 @@ Effort: S ≤ half a day, M = 1–3 days, L = a week or more.
 | 53 | Renovate | NOT NEEDED (Dependabot suffices) | — | — |
 | 54 | CodeQL | Nice-to-have | v1.x | S |
 | 55 | `SECURITY.md` | NEEDED | MVP | S |
-| 56 | R8 shrinking on release, mapping files retained, release build tested | NEEDED | Before Play release | S–M |
+| 56 | R8 shrinking on release, mapping files retained, release build tested | NEEDED — R8 on and emulator-tested 2026-09-26; phone test pending | Before Play release | S–M |
 | 57 | Root detection, tamper detection, Play Integrity, obfuscation-as-security, SBOM/SLSA | NOT NEEDED | — | — |
 
 ### 9.2 Security acceptance criteria before Play production release

@@ -64,6 +64,7 @@ import io.github.chrisjmendoza.yearal.core.designsystem.calendar.MonthGrid
 import io.github.chrisjmendoza.yearal.core.designsystem.calendar.MonthGridTestTags
 import io.github.chrisjmendoza.yearal.core.designsystem.explainer.ExplainerInfoButton
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
+import io.github.chrisjmendoza.yearal.core.designsystem.motion.rememberReducedMotion
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.DatePickerRange
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.GregorianDatePickerDialog
 import io.github.chrisjmendoza.yearal.core.designsystem.picker.IfcDatePicker
@@ -215,7 +216,9 @@ fun MonthRoute(
  * pane (`MonthListDetailScreen`), which shows the same card once, beside the grid, instead of once per
  * page. The app bar also carries the weekday-header [ExplainerInfoButton], a jump-to-date action
  * (FEATURES C7) and the "Today" action, shown only while the pager is away from today's month, which
- * animates the pager to [MonthUiState.todayPage]. Leap Day and Year Day are the grid's band and reach
+ * scrolls the pager to [MonthUiState.todayPage] — animated, unless [rememberReducedMotion] says the
+ * user has asked to remove animations, in which case it jumps straight there (docs/ARCHITECTURE.md §4
+ * "Accessibility", a11y audit finding #22). Leap Day and Year Day are the grid's band and reach
  * [onDayClick] like any cell (spec §7.2) — a tap only ever selects the day, never navigates.
  *
  * Opts in to the Material 3 experimental marker only because `TopAppBar`'s default arguments still
@@ -259,6 +262,7 @@ fun MonthScreen(
     val scope = rememberCoroutineScope()
     val todayPage = state.todayPage
     val formatter = rememberIfcDateFormatter()
+    val reducedMotion = rememberReducedMotion()
     var jumpChooserVisible by rememberSaveable { mutableStateOf(false) }
     var jumpGregorianVisible by rememberSaveable { mutableStateOf(false) }
     var jumpIfcVisible by rememberSaveable { mutableStateOf(false) }
@@ -300,8 +304,21 @@ fun MonthScreen(
                     if (todayPage != null && todayPage != pagerState.currentPage) {
                         // heightIn alone: Material3's own TextButton defaults to ~40dp and is not
                         // boosted by minimumInteractiveComponentSize() (a11y audit finding #7).
+                        //
+                        // Reduced motion (docs/ARCHITECTURE.md §4 "Accessibility", a11y audit finding
+                        // #22): the pager scroll itself carries no information the page arriving
+                        // instantly wouldn't also convey, so it is purely decorative and jumps with
+                        // scrollToPage rather than animating when rememberReducedMotion() is true.
                         TextButton(
-                            onClick = { scope.launch { pagerState.animateScrollToPage(todayPage) } },
+                            onClick = {
+                                scope.launch {
+                                    if (reducedMotion) {
+                                        pagerState.scrollToPage(todayPage)
+                                    } else {
+                                        pagerState.animateScrollToPage(todayPage)
+                                    }
+                                }
+                            },
                             modifier = Modifier.heightIn(min = Dimens.DayCellMinSize),
                         ) {
                             Text(stringResource(R.string.month_today))

@@ -4,6 +4,7 @@ import android.app.Application
 import dagger.hilt.internal.GeneratedComponent
 import dagger.hilt.internal.GeneratedComponentManager
 import io.github.chrisjmendoza.yearal.core.scheduling.di.SchedulingEntryPoint
+import io.github.chrisjmendoza.yearal.core.scheduling.reminder.ReminderActionHandler
 import io.github.chrisjmendoza.yearal.core.scheduling.reminder.ReminderBroadcastHandler
 
 /**
@@ -27,14 +28,20 @@ class FakeSchedulingApplication :
  *
  * @param reminderHandler `null` for a test that only exercises the rollover receivers; asking for it
  *   then fails loudly rather than silently doing nothing.
+ * @param reminderActionHandler `null` for a test that does not exercise the Snooze/Done receiver;
+ *   asking for it then fails loudly rather than silently doing nothing.
  */
 internal class FakeSchedulingComponent(
     private val handler: RolloverBroadcastHandler,
     private val reminderHandler: ReminderBroadcastHandler? = null,
+    private val reminderActionHandler: ReminderActionHandler? = null,
 ) : SchedulingEntryPoint,
     GeneratedComponent {
     override fun rolloverBroadcastHandler(): RolloverBroadcastHandler = handler
 
     override fun reminderBroadcastHandler(): ReminderBroadcastHandler =
         checkNotNull(reminderHandler) { "This test did not install a ReminderBroadcastHandler" }
+
+    override fun reminderActionHandler(): ReminderActionHandler =
+        checkNotNull(reminderActionHandler) { "This test did not install a ReminderActionHandler" }
 }

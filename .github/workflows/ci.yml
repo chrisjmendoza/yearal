@@ -21,6 +21,10 @@ jobs:
     steps:
       # Actions are pinned by commit SHA (docs/security-and-privacy.md); Dependabot keeps them current.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: :app's versionCode is `git rev-list --count HEAD` (docs/ARCHITECTURE.md §7
+          # "Versioning"). A shallow clone would make every CI build 0.1.0+0.unknown with versionCode 1.
+          fetch-depth: 0
 
       - name: Doc link check
         run: python3 scripts/check_docs.py
@@ -35,8 +39,12 @@ jobs:
           validate-wrappers: true
 
       # The ubuntu runner ships the Android SDK with licences accepted; AGP installs any missing platform.
+      # :app:assembleRelease runs R8 (docs/release-builds.md "R8 and resource shrinking"), so an R8 error
+      # (a missing class, a broken rule) fails the push that caused it, not the release. It cannot see a
+      # class that only reflection needs — that is what the device smoke test is for. It needs no secret:
+      # with no keystore configured the release build is signed with the debug key.
       - name: Gate
-        run: ./gradlew check :app:assembleDebug --console=plain
+        run: ./gradlew check :app:assembleDebug :app:assembleRelease --console=plain
 
       # ROADMAP R6 / M2 T10: `check` never runs verifyRoborazziDebug itself (the Roborazzi Gradle
       # plugin does not hook it into `check`), and goldens only exist in the tracked

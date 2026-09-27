@@ -20,4 +20,11 @@
     <!-- Shown in place of the title of an event saved without one. -->
     <string name="reminder_untitled_event">(No title)</string>
 
+    <!-- Label of the notification action that re-posts this reminder 10 minutes later
+         (ROADMAP M6 T4; FEATURES E11). -->
+    <string name="reminder_action_snooze">Snooze 10 min</string>
+
+    <!-- Label of the notification action that dismisses this reminder and changes nothing else. -->
+    <string name="reminder_action_done">Done</string>
+
 </resources>

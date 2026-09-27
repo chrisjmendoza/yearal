@@ -1,0 +1,36 @@
+# R8 keep rules for :app's release build (ROADMAP M8 T2; docs/release-builds.md "R8 and resource shrinking").
+#
+# This file is read through AGP 9's `keepRules` source directory (src/<sourceSet>/keepRules/*.keep), the
+# replacement for `proguardFiles(...)`. It holds ONLY the gaps left by the libraries' own consumer rules:
+# every library in the release runtime classpath ships its rules inside its AAR/JAR, and R8 merges them
+# (see app/build/outputs/mapping/release/configuration.txt for the merged set). Hilt, Room 3,
+# kotlinx.serialization (including the Navigation 3 keys and the settings DTO), Glance, Compose, DataStore
+# and lib-recur were each checked and need nothing here. Every rule below names the symbol it protects and
+# how the gap was found. No -dontwarn: R8 reports zero warnings without one.
+
+# androidx.work:work-runtime:2.7.1 is on the classpath only transitively (androidx.glance:glance:1.2.0
+# depends on it) and carries androidx.room:room-runtime:2.2.5 with it. Room 2.2.5 builds
+# androidx.work.impl.WorkDatabase_Impl reflectively (Class.forName(...).newInstance()), but its consumer rule
+# `-keep class * extends androidx.room.RoomDatabase` keeps the class without its no-arg constructor, and
+# R8 full mode (AGP's default) then removes that constructor. Found on an API 36 emulator: the release APK
+# crashed at launch in androidx.startup.InitializationProvider with "Failed to create an instance of
+# androidx.work.impl.WorkDatabase"; usage.txt listed `WorkDatabase_Impl: public void <init>()` as removed.
+# Same shape as the rule Room 3 ships for its own databases (`-keep class * extends
+# androidx.room3.RoomDatabase { void <init>(); }`, visible in configuration.txt), which is why
+# YearalDatabase_Impl was never at risk.
+-keep class * extends androidx.room.RoomDatabase {
+    void <init>();
+}
+
+# The same WorkManager 2.7.1 instantiates the input merger of every OneTimeWorkRequest by class name
+# (InputMerger.fromClassName: Class.forName(name).newInstance(), read from the 2.7.1 bytecode) before
+# running the worker. Its consumer rule `-keep class * extends androidx.work.InputMerger` keeps the classes
+# without their constructors, so R8 full mode removed androidx.work.OverwritingInputMerger.<init>() and
+# ArrayCreatingInputMerger.<init>() (both listed in usage.txt). WorkerWrapper then logs "Could not create
+# Input Merger" and fails the work — and a OneTimeWorkRequest is how Glance runs every widget session
+# (androidx.glance.session.SessionWorker), so the Today and Month widgets would never render in a release
+# build, without any crash to notice. With this rule, both widgets render on the emulator and every
+# SessionWorker reports SUCCESS.
+-keep class * extends androidx.work.InputMerger {
+    public <init>();
+}

@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.chrisjmendoza.yearal.core.domain.event.Event
 import io.github.chrisjmendoza.yearal.core.scheduling.R
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -29,6 +30,13 @@ import javax.inject.Singleton
  * that carries only the event id (§6.4; CLAUDE.md rule 8) — `:app`'s `IntentRouter` (ROADMAP M4 T10)
  * reads [ReminderIntent.ACTION_OPEN_EVENT] and [ReminderIntent.EXTRA_EVENT_ID] to open that event's
  * own editor instead of the normal start destination.
+ *
+ * **Snooze and Done** (ROADMAP M6 T4; FEATURES E11) are two more explicit, immutable broadcasts to
+ * [ReminderActionReceiver], added to both the private and the public copy — the security doc's own
+ * table says an action button "reveal[s] nothing" and is allowed without unlocking, unlike the "Open
+ * event" content tap. Each carries only [ReminderActionIntent.EXTRA_EVENT_ID],
+ * [ReminderActionIntent.EXTRA_OCCURRENCE_EPOCH_DAY] and [ReminderActionIntent.EXTRA_NOTIFICATION_ID];
+ * [AlarmReminderScheduler] is what turns a Snooze tap into a delayed re-post of this same notification.
  *
  * **Notifications are optional, not required.** On API 33 and later, posting without
  * `POST_NOTIFICATIONS` is a no-op: nothing is posted, nothing is logged and nothing throws, and the
@@ -70,8 +78,39 @@ internal class ReminderNotifier
             manager.createNotificationChannel(channel())
             for (reminder in due) {
                 val event = events[reminder.eventId] ?: continue
-                manager.notify(notificationId(reminder), build(reminder, event, deviceZone))
+                manager.notify(notificationId(reminder), build(notificationId(reminder), reminder, event, deviceZone))
             }
+        }
+
+        /**
+         * Re-posts one reminder's notification under an explicit [notificationId] — the same id it
+         * had before — rather than one recomputed from [reminder] (ROADMAP M6 T4). Used only when a
+         * snoozed reminder's delayed alarm fires: [AlarmReminderScheduler] rebuilds a [PendingReminder]
+         * whose `minutesBefore` is a placeholder, because the button that started the snooze carries
+         * no lead time (ids only, CLAUDE.md rule 8) — harmless, since [build] never reads it. Same
+         * permission guard, same channel, same redaction and the same Snooze/Done actions as [post].
+         */
+        fun repost(
+            notificationId: Int,
+            reminder: PendingReminder,
+            event: Event,
+            deviceZone: ZoneId,
+        ) {
+            // Inline for the same Lint reason as the check in post().
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                return
+            }
+            val manager = NotificationManagerCompat.from(context)
+            manager.createNotificationChannel(channel())
+            manager.notify(notificationId, build(notificationId, reminder, event, deviceZone))
+        }
+
+        /** Cancels the notification [notificationId], if one is showing. A no-op otherwise. */
+        fun cancel(notificationId: Int) {
+            NotificationManagerCompat.from(context).cancel(notificationId)
         }
 
         /**
@@ -93,18 +132,19 @@ internal class ReminderNotifier
 
         /** The notification for one reminder: title and time only, never the description (§3.3). */
         private fun build(
+            notificationId: Int,
             reminder: PendingReminder,
             event: Event,
             deviceZone: ZoneId,
         ): Notification {
             val time = timeText(reminder, deviceZone)
-            return baseBuilder(event.id)
+            return baseBuilder(event.id, reminder.occurrenceDate, notificationId)
                 .setContentTitle(event.title.ifBlank { context.getString(R.string.reminder_untitled_event) })
                 .setContentText(time)
                 .setCategory(NotificationCompat.CATEGORY_REMINDER)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-                .setPublicVersion(publicVersion(time, event.id))
+                .setPublicVersion(publicVersion(time, event.id, reminder.occurrenceDate, notificationId))
                 .setAutoCancel(true)
                 .build()
         }
@@ -112,24 +152,37 @@ internal class ReminderNotifier
         /**
          * The redacted copy the system shows instead of the real one when the lock screen hides
          * sensitive content: a fixed localized label and the time, and **no title, notes or
-         * location** (FEATURES P3; `docs/security-and-privacy.md` §3.3).
+         * location** (FEATURES P3; `docs/security-and-privacy.md` §3.3). Carries the same Snooze/Done
+         * actions as the private copy — `docs/security-and-privacy.md` §3.3's own table: an action
+         * button "reveal[s] nothing", unlike the content tap.
          */
         private fun publicVersion(
             time: String,
             eventId: Long,
+            occurrenceDate: LocalDate,
+            notificationId: Int,
         ): Notification =
-            baseBuilder(eventId)
+            baseBuilder(eventId, occurrenceDate, notificationId)
                 .setContentTitle(context.getString(R.string.reminder_public_title))
                 .setContentText(time)
                 .build()
 
-        /** What both copies share: the icon and the tap target for [eventId]. */
-        private fun baseBuilder(eventId: Long): NotificationCompat.Builder =
+        /**
+         * What both copies share: the icon, the tap target for [eventId], and the Snooze/Done actions
+         * for [notificationId] and [occurrenceDate] (ROADMAP M6 T4).
+         */
+        private fun baseBuilder(
+            eventId: Long,
+            occurrenceDate: LocalDate,
+            notificationId: Int,
+        ): NotificationCompat.Builder =
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_reminder_notification)
                 .setShowWhen(false)
                 .apply { contentIntent(eventId)?.let(::setContentIntent) }
+                .addAction(snoozeAction(eventId, occurrenceDate, notificationId))
+                .addAction(doneAction(eventId, occurrenceDate, notificationId))
 
         /**
          * When the occurrence starts, as the user reads it: a localized short time, or "All day".
@@ -183,6 +236,78 @@ internal class ReminderNotifier
                 context,
                 eventId.hashCode(),
                 launch,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+
+        /**
+         * The "Snooze 10 min" action (ROADMAP M6 T4): an explicit, immutable broadcast to
+         * [ReminderActionReceiver] carrying only [eventId], [occurrenceDate]'s epoch day and
+         * [notificationId] under [ReminderActionIntent]'s extras (CLAUDE.md rule 8). No icon is set
+         * (`0`): action icons are not shown on modern Android, so there is nothing to reuse or invent.
+         * [ReminderActionIntent.snoozeRequestCode] keeps this from ever sharing a `PendingIntent` with
+         * the Done action or with another notification's Snooze action.
+         */
+        private fun snoozeAction(
+            eventId: Long,
+            occurrenceDate: LocalDate,
+            notificationId: Int,
+        ): NotificationCompat.Action =
+            NotificationCompat.Action
+                .Builder(
+                    0,
+                    context.getString(R.string.reminder_action_snooze),
+                    actionIntent(
+                        ReminderActionIntent.ACTION_SNOOZE,
+                        eventId,
+                        occurrenceDate,
+                        notificationId,
+                        ReminderActionIntent.snoozeRequestCode(notificationId),
+                    ),
+                ).build()
+
+        /**
+         * The "Done" action (ROADMAP M6 T4): dismisses [notificationId] and changes nothing else — the
+         * same extras as [snoozeAction] for a uniform receiver, even though only [notificationId] is
+         * read for this action. [ReminderActionIntent.doneRequestCode] keeps it from sharing a
+         * `PendingIntent` with the Snooze action on the same notification.
+         */
+        private fun doneAction(
+            eventId: Long,
+            occurrenceDate: LocalDate,
+            notificationId: Int,
+        ): NotificationCompat.Action =
+            NotificationCompat.Action
+                .Builder(
+                    0,
+                    context.getString(R.string.reminder_action_done),
+                    actionIntent(
+                        ReminderActionIntent.ACTION_DONE,
+                        eventId,
+                        occurrenceDate,
+                        notificationId,
+                        ReminderActionIntent.doneRequestCode(notificationId),
+                    ),
+                ).build()
+
+        /** What [snoozeAction] and [doneAction] share, parameterised only by [action] and [requestCode]. */
+        private fun actionIntent(
+            action: String,
+            eventId: Long,
+            occurrenceDate: LocalDate,
+            notificationId: Int,
+            requestCode: Int,
+        ): PendingIntent {
+            val intent =
+                Intent(context, ReminderActionReceiver::class.java)
+                    .setAction(action)
+                    .putExtra(ReminderActionIntent.EXTRA_EVENT_ID, eventId)
+                    .putExtra(ReminderActionIntent.EXTRA_OCCURRENCE_EPOCH_DAY, occurrenceDate.toEpochDay())
+                    .putExtra(ReminderActionIntent.EXTRA_NOTIFICATION_ID, notificationId)
+            return PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         }

@@ -31,9 +31,11 @@ import io.github.chrisjmendoza.yearal.feature.settings.R
 /**
  * The Privacy screen (docs/FEATURES.md P5; docs/ROADMAP.md M2 T12's in-app half): a truthful,
  * plain-language statement of what the app does and does not do with data, as the app is actually
- * built today. Every claim here is backed by `docs/security-and-privacy.md` (the allow-list in §5) or
- * the merged manifest — nothing is aspirational. This is the composable `:app` places behind
- * `PrivacyKey`; the back arrow pops through [navigator].
+ * built today. Every claim here is backed by `docs/security-and-privacy.md` (the allow-list in §5, the
+ * widget privacy ruling in §3.2, and the "Send feedback" intent in §6.3) or the merged manifest —
+ * nothing is aspirational. Kept in step with `docs/privacy-policy.md`, the same claims in the
+ * standalone document that will eventually be published on the web (`privacy_policy_body` below).
+ * This is the composable `:app` places behind `PrivacyKey`; the back arrow pops through [navigator].
  *
  * @param modifier applied to the screen's root [Scaffold].
  */
@@ -104,6 +106,14 @@ fun PrivacyScreen(
 
             SectionHeading(stringResource(R.string.privacy_section_backup))
             BodyParagraph(stringResource(R.string.privacy_backup_body))
+            HorizontalDivider()
+
+            SectionHeading(stringResource(R.string.privacy_section_widgets))
+            BodyParagraph(stringResource(R.string.privacy_widgets_body))
+            HorizontalDivider()
+
+            SectionHeading(stringResource(R.string.privacy_section_feedback))
+            BodyParagraph(stringResource(R.string.privacy_feedback_body))
             HorizontalDivider()
 
             SectionHeading(stringResource(R.string.privacy_section_policy))

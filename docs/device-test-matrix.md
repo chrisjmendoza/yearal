@@ -34,7 +34,7 @@ version and date when it passes. Target coverage: API 26, 33 and 36, plus one Sa
 | L3 | Set the clock backwards across midnight with a screen open: the earlier date is shown. | |
 | L4 | The Convert tab icon reads as "swap", not "refresh", in light and dark, on the bar and on the rail. | |
 
-## Reminders (M6 T1, T3)
+## Reminders (M6 T1, T3, T4)
 
 | # | Check | Result |
 |---|---|---|
@@ -49,6 +49,8 @@ version and date when it passes. Target coverage: API 26, 33 and 36, plus one Sa
 | R9 | API 31/32: revoke "Alarms & reminders"; reminders still arrive (up to ~10 minutes late); re-grant restores punctuality without reopening the app. | |
 | R10 | Force-stop the app, reopen it: the pending reminder is armed again. | |
 | R11 | Samsung / Xiaomi battery management: the app is not put to sleep; note any OEM limit for the in-app help text. | |
+| R12 | Tap "Snooze 10 min" on a reminder notification: it dismisses immediately, and a new one with the same title/time and both actions arrives 10 minutes later — including a lock-screen check that it is still redacted the same way. Tap "Done" on another: it dismisses and nothing else happens. | |
+| R13 | Snooze a reminder, then reboot the device before the 10 minutes are up (`adb reboot`, or a battery pull if available): the snooze **survives** — it still fires at its original time, not immediately and not never — because it is persisted in `SharedPreferences`, not just in memory (`docs/ARCHITECTURE.md` §3.2). | |
 
 ## Intent routing (M3 T5)
 
@@ -83,7 +85,18 @@ otherwise. Expected text comes from each module's own `strings.xml`; substitute 
 | T13 | Settings and More: every group heading is announced as a heading; every More row (Holidays, Settings, Learn, Privacy, Send feedback) is a full-width button. Intro: switching pages starts at the top of the new page with its heading focused. | |
 | T14 | Month widget: each day cell reads "Sol 13", "Sol 13, today", "Sol 21, holiday, has events" — never an event title; the widget root still reads both labelled weekdays. Today widget at its smallest size: the tap target is not cramped. | |
 | T15 | 200% font (Settings → Accessibility → Display size and text): Today, Month with its day card, Year, Events, Settings and More show nothing clipped or overlapping; grid cells and buttons stay tappable. | |
-| T16 | Reduced motion (Settings → Accessibility → Remove animations): note that the Month/Year pager still animates page changes — recorded as the one unimplemented bullet of ARCHITECTURE §4 "Accessibility" (audit finding #22, deferred). | |
+| T16 | Reduced motion (Settings → Accessibility → Remove animations): open Month on a month other than today's and tap "Today" — the page should jump straight there with no scroll animation (ARCHITECTURE §4 "Accessibility", audit finding #22, done; `rememberReducedMotion()` in `:core:designsystem`). Year has no pager animation to check. | |
+
+## Release build (M8 T2)
+
+R8 shrinks and obfuscates the release build ([release-builds.md](release-builds.md) "R8 and resource
+shrinking"), so code reached only by reflection can break there and nowhere else. The whole of RB1 passed
+on an API 36 emulator on 2026-09-26; this row is the same pass on a real phone. Row IDs start with `RB` so
+they do not clash with the Reminders rows above.
+
+| # | Check | Result |
+|---|---|---|
+| RB1 | Release APK smoke test. `.\gradlew.bat :app:assembleRelease`, then `adb install -r app\build\outputs\apk\release\app-release.apk` (uninstall first if Android refuses: a signing-key or a version-downgrade mismatch, see release-builds.md). Keep `adb logcat` running and search it afterwards for `FATAL EXCEPTION`, `ClassNotFoundException`, `NoSuchMethodError`, `SerializationException` and `Could not create Input Merger`. Then: **(1)** cold start — a fresh install shows the intro; step through it and tap Done. **(2)** Today shows the date, both weekdays, holidays and the agenda. **(3)** Calendar: tap a day (the day card opens), tap "Show year", open a month from the Year view. **(4)** Switch the phone to dark mode and back while the Month view is open: the same screen comes back. **(5)** Press Home, run `adb shell am kill io.github.chrisjmendoza.yearal`, reopen from Recents: the same Month-over-Year stack is restored and Back returns to Year. **(6)** Events: add an event with "Monthly on this IFC day" and an "At the time" reminder, save, reopen it, go back. **(7)** Convert: change the date. **(8)** More → Settings: pick Dark, "IFC only" and Material You; force-stop the app, reopen: all three are still selected and the intro does not reappear. **(9)** More → Holidays (toggle a set), Learn, Privacy, Send feedback (the email subject carries the `0.1.0+<count>.<sha>` version). **(10)** Add both widgets from the launcher: they show today's date (not a spinner), the Month widget marks the event day; tap a Month widget day: the app opens on that day. **(11)** Optional: `adb shell monkey -p io.github.chrisjmendoza.yearal --pct-syskeys 0 --pct-appswitch 0 --throttle 60 -v 3000`. Pass = no crash and none of the log strings above. | ✅ 2026-09-26, API 36 emulator (x86_64), build `0.1.0+45.72dbfa1.dirty` (the R8 change before commit): all eleven steps pass and 7,000 monkey events; in step 9 Gmail opened with the prefilled mail but had no account, so the subject line was not inspected. Phone: |
 
 ## App
 

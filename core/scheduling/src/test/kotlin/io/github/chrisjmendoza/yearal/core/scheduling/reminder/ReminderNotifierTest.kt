@@ -9,7 +9,9 @@ import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.chrisjmendoza.yearal.core.scheduling.R
 import io.github.chrisjmendoza.yearal.core.testing.EventFixtures
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -147,5 +149,86 @@ class ReminderNotifierTest {
 
         val intents = notifications.allNotifications.map { shadowOf(it.contentIntent).savedIntent }
         intents.map { it.getLongExtra(ReminderIntent.EXTRA_EVENT_ID, -1L) } shouldBe listOf(9L, 9L)
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Snooze and Done actions (ROADMAP M6 T4; FEATURES E11)
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    fun `the notification carries exactly two actions, Snooze and Done`() {
+        grantNotifications()
+        val event = EventFixtures.allDay(id = 42L, date = LocalDate.of(2026, 6, 30), title = "Dentist")
+
+        notifier.post(listOf(reminderFor(42L, "Dentist")), mapOf(42L to event), zone)
+
+        val actions =
+            notifications.allNotifications
+                .single()
+                .actions
+                .orEmpty()
+        actions.map { it.title.toString() } shouldBe
+            listOf(
+                context.getString(R.string.reminder_action_snooze),
+                context.getString(R.string.reminder_action_done),
+            )
+    }
+
+    @Test
+    fun `both action intents are explicit broadcasts carrying only the three id extras`() {
+        grantNotifications()
+        val date = LocalDate.of(2026, 6, 30)
+        val event = EventFixtures.allDay(id = 42L, date = date, title = "Dentist")
+
+        notifier.post(listOf(reminderFor(42L, "Dentist")), mapOf(42L to event), zone)
+
+        val notificationId = ReminderNotifier.notificationId(reminderFor(42L, "Dentist"))
+        notifications.allNotifications.single().actions.orEmpty().forEach { action ->
+            val operation = shadowOf(action.actionIntent)
+            operation.isBroadcast shouldBe true
+            (operation.flags and PendingIntent.FLAG_IMMUTABLE) shouldBe PendingIntent.FLAG_IMMUTABLE
+            (operation.flags and PendingIntent.FLAG_MUTABLE) shouldBe 0
+            val intent = operation.savedIntent
+            intent.component shouldBe ComponentName(context, ReminderActionReceiver::class.java)
+            intent.extras?.keySet() shouldBe
+                setOf(
+                    ReminderActionIntent.EXTRA_EVENT_ID,
+                    ReminderActionIntent.EXTRA_OCCURRENCE_EPOCH_DAY,
+                    ReminderActionIntent.EXTRA_NOTIFICATION_ID,
+                )
+            intent.getLongExtra(ReminderActionIntent.EXTRA_EVENT_ID, -1L) shouldBe 42L
+            intent.getLongExtra(ReminderActionIntent.EXTRA_OCCURRENCE_EPOCH_DAY, -1L) shouldBe date.toEpochDay()
+            intent.getIntExtra(ReminderActionIntent.EXTRA_NOTIFICATION_ID, 0) shouldBe notificationId
+        }
+    }
+
+    @Test
+    fun `the Snooze and Done actions never share a request code`() {
+        grantNotifications()
+        val event = EventFixtures.allDay(id = 42L, date = LocalDate.of(2026, 6, 30), title = "Dentist")
+
+        notifier.post(listOf(reminderFor(42L, "Dentist")), mapOf(42L to event), zone)
+
+        val actions =
+            notifications.allNotifications
+                .single()
+                .actions
+                .orEmpty()
+        val requestCodes = actions.map { shadowOf(it.actionIntent).requestCode }
+        requestCodes.toSet() shouldHaveSize 2
+    }
+
+    @Test
+    fun `the public version also carries the Snooze and Done actions`() {
+        grantNotifications()
+        val event = EventFixtures.allDay(id = 42L, date = LocalDate.of(2026, 6, 30), title = "Dentist")
+
+        notifier.post(listOf(reminderFor(42L, "Dentist")), mapOf(42L to event), zone)
+
+        notifications.allNotifications
+            .single()
+            .publicVersion!!
+            .actions
+            .orEmpty() shouldHaveSize 2
     }
 }

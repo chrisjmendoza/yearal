@@ -12,6 +12,7 @@ import io.github.chrisjmendoza.yearal.core.domain.event.ReminderScheduler
 import io.github.chrisjmendoza.yearal.core.domain.rollover.DayRolloverListener
 import io.github.chrisjmendoza.yearal.core.scheduling.RolloverBroadcastHandler
 import io.github.chrisjmendoza.yearal.core.scheduling.reminder.AlarmReminderScheduler
+import io.github.chrisjmendoza.yearal.core.scheduling.reminder.ReminderActionHandler
 import io.github.chrisjmendoza.yearal.core.scheduling.reminder.ReminderBroadcastHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -89,4 +90,10 @@ internal interface SchedulingEntryPoint {
      * [io.github.chrisjmendoza.yearal.core.scheduling.SystemEventReceiver], delegate to.
      */
     fun reminderBroadcastHandler(): ReminderBroadcastHandler
+
+    /**
+     * The handler `ReminderActionReceiver` delegates to for the Snooze and Done notification
+     * actions, and for the delayed alarm a snooze arms (ROADMAP M6 T4).
+     */
+    fun reminderActionHandler(): ReminderActionHandler
 }

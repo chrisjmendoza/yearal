@@ -3,8 +3,10 @@ import com.android.build.api.dsl.ApplicationExtension
 import java.util.Properties
 
 // Convention for the :app module. Shared Android configuration lives in IfcAndroid.kt; this adds the
-// target SDK, the SemVer-derived versionCode (docs/ARCHITECTURE.md §7 "Versioning"), the JUnit4 +
-// Robolectric test stack, and release signing (docs/release-builds.md, docs/security-and-privacy.md §8.2).
+// target SDK, the git-derived versionCode/versionName (GitBuildVersion.kt, docs/ARCHITECTURE.md §7
+// "Versioning"), the JUnit4 + Robolectric test stack, release signing (docs/release-builds.md,
+// docs/security-and-privacy.md §8.2) and R8 on the release build (docs/release-builds.md "R8 and resource
+// shrinking").
 
 plugins {
     id("com.android.application")
@@ -17,15 +19,13 @@ extensions.configure<ApplicationExtension> {
     defaultConfig {
         targetSdk = libs.findVersion("targetSdk").get().requiredVersion.toInt()
 
-        // VERSION_NAME lives in gradle.properties; VERSION_BUILD may be passed by a release job.
-        val versionName = providers.gradleProperty("VERSION_NAME").get()
-        val build = providers.gradleProperty("VERSION_BUILD").orNull?.toInt() ?: 0
-        val (major, minor, patch) = versionName.split('.').map { it.toInt() }
-        require(minor < 100 && patch < 100 && build < 100) {
-            "VERSION_NAME $versionName / VERSION_BUILD $build overflow the versionCode scheme"
-        }
-        this.versionName = versionName
-        versionCode = major * 1_000_000 + minor * 10_000 + patch * 100 + build
+        // versionCode = commit count of HEAD, versionName = "$VERSION_NAME+$count.$shortSha[.dirty]"
+        // (VERSION_NAME is the human SemVer in gradle.properties). The count is a valid Play versionCode
+        // because main only ever moves by fast-forward (docs/WORKFLOW.md §1), so it never decreases.
+        // Falls back to VERSION_BUILD / 1 with a warning when git cannot answer — see GitBuildVersion.kt.
+        val buildVersion = resolveBuildVersion()
+        versionName = buildVersion.versionName
+        versionCode = buildVersion.versionCode.toInt()
     }
 
     // The release signing config never needs a secret to build (security-and-privacy.md §8.2): it is
@@ -44,11 +44,20 @@ extensions.configure<ApplicationExtension> {
             // attach Android Studio's CPU/memory profiler to the exact APK they're judging for jank
             // (the debug build is not representative: debuggable=true plus Compose's debug
             // instrumentation both cost real frame time). Deliberately NOT isDebuggable — AGP warns if
-            // a build type is both. isMinifyEnabled is left at its current default (off): R8 needs its
-            // own keep rules for Hilt/Room3/kotlinx-serialization first (ROADMAP M8 T2); enabling it
-            // here without them risks a release-only crash, exactly what the owner must not hit while
-            // judging performance.
+            // a build type is both.
             isProfileable = true
+
+            // R8 (ROADMAP M8 T2) through AGP 9's `optimization {}` DSL. Verified in the pinned AGP 9.3.3
+            // (gradle-api and gradle sources): `Optimization.enable` is stable (not @Incubating), and
+            // OptimizationDslInfoImpl turns it into *both* code shrinking (what isMinifyEnabled did) and
+            // resource shrinking (isShrinkResources), so neither legacy flag is set as well.
+            // `keepRules.includeDefault` defaults to true, which adds proguard-android-optimize.txt. The
+            // app's own rules live in the `keepRules` source directory, src/main/keepRules/*.keep (the
+            // replacement for the deprecated `keepRules.files` / `proguardFiles`); every library's
+            // consumer rules are still merged in. See docs/release-builds.md "R8 and resource shrinking".
+            optimization {
+                enable = true
+            }
         }
     }
 }

@@ -39,6 +39,14 @@
             android:name="io.github.chrisjmendoza.yearal.core.scheduling.reminder.ReminderAlarmReceiver"
             android:exported="false" />
 
+        <!-- Target of the Snooze/Done notification action buttons and of the delayed alarm a snooze
+             arms (ROADMAP M6 T4; FEATURES E11). Explicit, immutable PendingIntents only, carrying the
+             event id, the occurrence's epoch day and the notification id and nothing else; no intent
+             filter, not exported (docs/security-and-privacy.md §6.3, §6.4; CLAUDE.md rule 8). -->
+        <receiver
+            android:name="io.github.chrisjmendoza.yearal.core.scheduling.reminder.ReminderActionReceiver"
+            android:exported="false" />
+
         <!-- Layer 2 of docs/ARCHITECTURE.md §5 "Midnight rollover (layered)". A manifest receiver may
              only listen for these because TIME_SET, TIMEZONE_CHANGED, LOCALE_CHANGED and BOOT_COMPLETED
              are on the implicit-broadcast exemption list, and MY_PACKAGE_REPLACED and
