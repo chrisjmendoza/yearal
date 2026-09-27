@@ -38,6 +38,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
+import io.github.chrisjmendoza.yearal.core.calendar.IfcYearMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.format.IfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.format.rememberIfcDateFormatter
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.Dimens
@@ -195,15 +196,20 @@ private fun FloatingDaysSection(formatter: IfcDateFormatter) {
 /** Why nominal and actual weekdays differ, with the spec's own worked example (calendar-spec §4.1). */
 @Composable
 private fun WeekdaySection(formatter: IfcDateFormatter) {
-    val nominal = requireNotNull(LearnFacts.weekdayExampleIfc.nominalDayOfWeek)
-    val nominalName = formatter.weekdayName(nominal)
-    val actualName = formatter.weekdayName(LearnFacts.weekdayExampleIfc.actualDayOfWeek)
+    val example = LearnFacts.weekdayExampleIfc as IfcDate.Regular
+    val nominalName = formatter.weekdayName(requireNotNull(example.nominalDayOfWeek))
+    val actualName = formatter.weekdayName(example.actualDayOfWeek)
     GridIllustration(
         variant = GridIllustrationVariant.NOMINAL_VS_ACTUAL,
         contentDescription =
-            stringResource(R.string.illustration_nominal_vs_actual_description, nominalName, actualName),
-        nominalWeekdayLabel = nominalName,
-        actualWeekdayLabel = actualName,
+            stringResource(
+                R.string.illustration_nominal_vs_actual_description,
+                formatter.monthTitle(IfcYearMonth.from(example)),
+                formatter.formatLong(example),
+                nominalName,
+                actualName,
+            ),
+        example = example,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = Dimens.SpaceS),
     )
     SectionHeading(stringResource(R.string.learn_section_weekday))

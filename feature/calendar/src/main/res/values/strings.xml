@@ -15,7 +15,9 @@
 
     <!-- Joins the day-and-week text with the quarter on one line.
          %1$s = "Day 260 · Week 38 of 52", %2$s = "Q3". -->
-    <string name="today_day_week_quarter">%1$s · %2$s</string>
+    <!-- The hero's facts line: the numeric IFC date (with its mandatory prefix), then day/week, then the
+         quarter, e.g. "IFC 2026-10-08 · Day 260 · Week 38 of 52 · Q3". -->
+    <string name="today_numeric_day_week_quarter">%1$s · %2$s · %3$s</string>
 
     <!-- Shown in the Holidays card when today has none, instead of hiding the card (`docs/design-plan.md`
          §4.1: "Empty Today ... shows one quiet line inside a card, not nothing"). -->

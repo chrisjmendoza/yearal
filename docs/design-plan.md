@@ -110,12 +110,12 @@ Each item says what changes and what it fixes; nothing here changes behaviour.
 
 ```
 ┌────────────────────────────────────────┐
+│ ▓▓ IFC ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │  eyebrow: this block is the IFC
 │ ▓▓ Thursday ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │  the IFC weekday (owner, 2026-09-25)
 │ ▓▓ Sol 12, 2026 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │  hero card, heroContainer
-│ ▓▓ IFC 2026-07-12 · Tue 23 Jun 2026 ▓  │  eyebrow captions "IFC" and "Gregorian"
-│ ▓▓ [ IFC weekday: Thursday ]  ▓▓▓▓▓▓▓  │  weekday block keeps its sage container
-│ ▓▓ [ Actual weekday: Tuesday ] ▓▓▓▓▓▓  │
-│ ▓▓ Day 180 · Week 26 · Q3   ▓▓▓▓▓▓▓▓▓  │
+│ ▓▓ GREGORIAN ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │  eyebrow: this block is the real calendar
+│ ▓▓ Tuesday, June 23, 2026 ▓▓▓▓▓▓▓▓▓▓▓  │  the real weekday lives here, once
+│ ▓▓ IFC 2026-07-12 · Day 180 · Wk 26 · Q3│  the facts line (numeric form keeps its prefix)
 │ ▓▓ ━━━━━━━━━━━━━━━──────── 49 % ▓▓▓▓▓  │  year progress, tinted track
 └────────────────────────────────────────┘
   ◆ Year Day in 185 days                     intercalary accent chip (amber)
@@ -123,16 +123,21 @@ Each item says what changes and what it fixes; nothing here changes behaviour.
   ● Today's events          (card, event swatches, times)
 ```
 
-- Above the date, today's **IFC (nominal)** weekday in `titleLarge` (owner request and ruling,
-  2026-09-25: "that's the whole point of the app"), so the hero reads as one IFC date, "Thursday / Sol
-  12, 2026". It is shown bare — a deliberate exception to spec §4.1 item 6, which the owner made after
-  the actual weekday was tried there first — with three safeguards: TalkBack speaks it labelled ("IFC
-  weekday: Thursday"); the real weekday stays one glance below, in the Gregorian line and the labelled
-  weekday block; and on Year Day and Leap Day, which have no IFC weekday, the line is omitted rather
-  than filled with the real one.
-- Hero card on `heroContainer` with the IFC date in `displayMedium`, the numeric IFC form and the
-  Gregorian date as *eyebrow + value* pairs so a newcomer sees which is which (the review's acceptance
-  test: "what Gregorian date is this?").
+- **Two labelled blocks, every fact once (owner, 2026-09-27).** The card had said "IFC" four times and
+  each weekday twice (bare above the date, again in an "IFC weekday / Actual weekday" block, and again in
+  the Gregorian line). The rule now: an eyebrow labels its whole block, so a weekday inside a block needs
+  no label of its own — "IFC → Thursday / Sol 12, 2026" mirrors "Gregorian → Tuesday, June 23, 2026" — and
+  the weekday block is gone. Designed against the same personas as the intro (§4.8): the newcomer still
+  sees which date is which at a glance, the large-font reader gets one fewer container, the IFC regular
+  still gets the canonical numeric form, and TalkBack still hears both weekdays labelled in one node
+  (spec §4.1 item 7: the hero weekday speaks `weekdaysDescription`, "IFC Thursday, actual Tuesday").
+- Above the date, today's **IFC (nominal)** weekday in `titleLarge` (owner ruling, 2026-09-25: "that's
+  the whole point of the app"), bare under its block's eyebrow — a deliberate exception to spec §4.1
+  item 6. On Year Day and Leap Day the slot says "no IFC weekday" (item 5) rather than the real weekday.
+- The numeric IFC form moves into the facts line ("IFC 2026-07-12 · Day 180 · Week 26 of 52 · Q3"): it is
+  a fact, not a second copy of the headline date, and it keeps its `IFC` prefix there (CLAUDE.md rule 5).
+- The Gregorian date, with its real weekday, is the review's acceptance test ("what Gregorian date is
+  this?") answered at a glance, so it steps up to `bodyLarge`.
 - The year-progress bar and the day/week/quarter line move into the hero; the intercalary countdown
   becomes an amber chip under it. The "next holiday" line joins the Holidays card.
 - Holidays get a leading diamond mark; agenda rows sit in a card with their swatch and a hairline
@@ -222,9 +227,25 @@ card below the grid (and in the expanded-width detail pane), so everything below
   a miniature 7-day row with a today ring and one holiday diamond, drawn with the design system's own
   components, so the owner and users see the palette before committing.
 - More hub rows get tinted leading icons in a `secondaryContainer` circle.
-- Intro pages each get one **illustration built from the grid itself** (13 × 28 dots, the Sol month
-  highlighted, the Year Day pill outside the week), no bitmap assets; the third page shows the pill in
-  amber. Learn reuses the same three drawings as section headers.
+- Intro pages each get one **illustration built from the grid itself**, no bitmap assets. Learn reuses
+  the same three drawings as section headers. **Labelled, 2026-09-27** (owner: the bare shapes "still
+  leave room for confusion"; designed against five personas — a curious first-timer, a large-font
+  reader, an IFC regular checking correctness, a TalkBack user, and an RTL-locale user):
+  - *13 months:* each block under its locale's month initial (J F M A M J **S** J A S O N D), Sol a
+    pill in amber with its name beneath — the S between two J's answers "which J is which".
+  - *Two weekdays:* the Month screen's own `WeekdayHeaders` (`BOTH`) over the dots, so the intro
+    teaches the exact header the Calendar tab shows; the ring is on the **Sunday** column (it had been
+    drawn on the middle column while the caption said Sunday) and that column's dots carry 1, 8, 15, 22
+    so "September 8" is visible; captions name the IFC and actual weekday.
+  - *Two days outside the week:* "December" over the grid, 1 and 28 on the end dots, then a filled
+    **Year Day** pill and an outlined **Leap Day** pill (outline = only some years) — both days the
+    heading promises.
+  - Built from Compose layout, not a `Canvas`, so labels and shapes mirror together under RTL and the
+    card grows with the font instead of squeezing the drawing (dots are sized in `sp`; only a sparse
+    set of dots is numbered so nothing collides at 200%).
+  - **The plain dots and blocks use `miniGridCell`, not `gridCell`** (R13): the drawings sit on a
+    `cardContainer` card, where `gridCell` is invisible in dark mode — the same trap as the Year
+    overview (R11). Pinned by `GridIllustrationPixelTest`.
 
 ### 4.9 Widgets (🟠)
 

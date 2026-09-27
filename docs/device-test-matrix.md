@@ -70,8 +70,8 @@ otherwise. Expected text comes from each module's own `strings.xml`; substitute 
 
 | # | Check | Result |
 |---|---|---|
-| T1 | Today: swipe to the hero. The bare weekday above the date (e.g. "Thursday") is spoken as "IFC weekday: Thursday", never as the bare word; on Year Day / Leap Day there is no such line at all. | |
-| T2 | Today, further down the hero: a line spoken as "Actual weekday: <today's real weekday>", distinct from T1. | |
+| T1 | Today: swipe to the hero. "IFC" is announced, then the bare weekday above the date (e.g. "Thursday") is spoken as "IFC Thursday, actual Tuesday" — both weekdays, labelled, never the bare word; on Year Day / Leap Day that slot reads "no IFC weekday, actual <weekday>". | |
+| T2 | Today, further down the hero: "Gregorian" is announced, then the real date with its real weekday (e.g. "Tuesday, June 23, 2026"); the weekday is not announced a third time anywhere on the card. | |
 | T3 | Today: the year-progress bar and its "N% of the year" caption are one spoken node — you hear the percentage once, not twice in a row. | |
 | T4 | Today: the Holidays and Today's events cards read either their quiet empty line or one merged sentence per row. | |
 | T5 | Month: the header rows announce "IFC weekdays" then the abbreviated names, then "Actual weekdays" and its row. | |

@@ -466,11 +466,14 @@
 
     <string name="intro_floating_heading">Two days outside the week</string>
 
-    <!-- %1$s = Year Day's IFC long form, e.g. "Year Day, 2026". %2$s = its Gregorian long form. -->
-    <string name="intro_floating_year_day">%1$s happens every year. It is always Gregorian %2$s, and it belongs to no week.</string>
+    <!-- %1$s = one year's Year Day in IFC long form, e.g. "Year Day, 2026". %2$s = that same day's
+         Gregorian long form, weekday included. The date is always December 31 but the weekday changes
+         every year, so the sentence must not say "always" about %2$s (owner device report, 2026-09-27). -->
+    <string name="intro_floating_year_day">Year Day happens every year, right after December 28, and belongs to no week. It is always Gregorian December 31: %1$s is Gregorian %2$s.</string>
 
-    <!-- %1$s = Leap Day's IFC long form, e.g. "Leap Day, 2024". %2$s = its Gregorian long form. -->
-    <string name="intro_floating_leap_day">%1$s happens only in leap years. It is always Gregorian %2$s.</string>
+    <!-- %1$s = one leap year's Leap Day in IFC long form, e.g. "Leap Day, 2024". %2$s = that same day's
+         Gregorian long form, weekday included. Always June 17, but the weekday changes. -->
+    <string name="intro_floating_leap_day">Leap Day happens only in leap years, right after June 28, and is also outside the week. It is always Gregorian June 17: %1$s is Gregorian %2$s.</string>
 
     <string name="intro_find_birthday_prompt">Curious what your birthday looks like on the IFC?</string>
 
@@ -482,17 +485,17 @@
          Shared by the first-run intro (one per page) and the Learn screen (the same three, reused as
          section headers), so the two can never describe the same fact differently. -->
 
-    <!-- Content description of the "what the IFC is" illustration: 13 month blocks, one highlighted. -->
-    <string name="illustration_thirteen_months_description">A row of 13 equal month blocks. One of them, Sol, is highlighted to show it sits between June and July.</string>
+    <!-- Content description of the "what the IFC is" illustration: 13 month blocks under their initials,
+         Sol highlighted and named. -->
+    <string name="illustration_thirteen_months_description">A row of 13 month blocks, each under its initial, January to December. The seventh, Sol, is highlighted between June and July.</string>
 
-    <!-- Content description of the nominal-vs-actual weekday illustration: a 4 by 7 dot grid with one
-         weekday column ringed. %1$s = the worked example's IFC (nominal) weekday name.
-         %2$s = the same date's real (actual) weekday name. -->
-    <string name="illustration_nominal_vs_actual_description">A 4 by 7 grid of dots standing in for one IFC month, with one weekday column ringed. That column\'s IFC weekday is %1$s; the same day\'s actual weekday is %2$s.</string>
+    <!-- Content description of the nominal-vs-actual weekday illustration. %1$s = the month shown, e.g.
+         "September 2026"; %2$s = the example day, e.g. "September 8, 2026"; %3$s = that day's IFC weekday;
+         %4$s = its actual weekday. -->
+    <string name="illustration_nominal_vs_actual_description">One IFC month, %1$s, as a 4 by 7 grid under two header rows: the IFC weekdays, Sunday to Saturday, and that month\'s actual weekdays beneath them. The column holding %2$s is ringed and numbered: its IFC weekday is %3$s and its actual weekday is %4$s.</string>
 
-    <!-- Content description of the Year Day illustration: a 4 by 7 dot grid with the Year Day pill
-         shown outside it. -->
-    <string name="illustration_year_day_description">A 4 by 7 grid of dots standing in for one IFC month, with a Year Day pill shown outside the grid, since Year Day belongs to no week.</string>
+    <!-- Content description of the Year Day illustration: December's grid, then the two pills. -->
+    <string name="illustration_year_day_description">December as a 4 by 7 grid of 28 days, followed by two pills outside the grid: Year Day, and Leap Day drawn in outline because it exists only in leap years. Neither belongs to any week.</string>
 
     <!-- Visible label in the nominal-vs-actual illustration's first caption row. -->
     <string name="illustration_nominal_weekday_label">IFC weekday</string>
@@ -504,8 +507,9 @@
          illustration_actual_weekday_label. %2$s = the computed weekday name. -->
     <string name="illustration_weekday_caption">%1$s: %2$s</string>
 
-    <!-- Visible label inside the Year Day illustration's pill. -->
+    <!-- Visible labels inside the Year Day illustration's two pills. -->
     <string name="illustration_year_day_pill_label">Year Day</string>
+    <string name="illustration_leap_day_pill_label">Leap Day</string>
 
     <!-- ===== Palette preview strip (docs/design-plan.md §4.8, ROADMAP wave 3 J3) ===== -->
 

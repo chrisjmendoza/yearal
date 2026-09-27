@@ -24,9 +24,9 @@ sealed interface TodayUiState {
      * @property gregorianDate the same physical day in the Gregorian calendar.
      * @property heroWeekday today's **IFC (nominal)** weekday, unlabelled (`Sunday`), shown above
      * [heroDate] so the hero reads as one IFC date (owner ruling, 2026-09-25: "that's the whole point
-     * of the app"). `null` on Leap Day and Year Day, which have no IFC weekday — the line is omitted
-     * there and the weekday block below says "no IFC weekday". The real weekday stays in
-     * [gregorianLongDate] and [actualWeekday].
+     * of the app"). `null` on Leap Day and Year Day, which have no IFC weekday — the hero shows
+     * [nominalWeekday]'s "no IFC weekday" in that slot instead. The real weekday is in
+     * [gregorianLongDate]; TalkBack hears both through [weekdaysDescription].
      * @property heroDate the long style (`September 8, 2026`, `Leap Day, 2028`, `Year Day, 2026`).
      * @property mediumDate the medium style (`Sep 8, 2026`).
      * @property numericDate the canonical numeric style with its mandatory prefix (`IFC 2026-10-08`).

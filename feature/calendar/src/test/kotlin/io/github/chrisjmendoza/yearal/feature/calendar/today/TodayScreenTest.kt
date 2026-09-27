@@ -66,22 +66,24 @@ class TodayScreenTest {
     }
 
     @Test
-    fun `regular day shows the hero, numeric, Gregorian and both weekday lines`() {
+    fun `regular day shows the labelled IFC and Gregorian blocks, each weekday once`() {
         show(LocalDate.of(2026, 9, 17))
 
-        // Above the hero date: the IFC weekday, spoken with its label so it is never heard as the real one.
-        compose.onNodeWithText("Sunday").assertIsDisplayed()
-        compose.onNodeWithContentDescription("IFC weekday: Sunday").assertIsDisplayed()
-        compose.onAllNodesWithText("Thursday").assertCountEquals(0)
-        compose.onNodeWithText("September 8, 2026").assertIsDisplayed()
+        // The "IFC" block: eyebrow, the bare IFC weekday (spoken with both weekdays labelled, spec §4.1
+        // item 7), the hero date.
         compose.onNodeWithText("IFC", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("IFC 2026-10-08").assertIsDisplayed()
+        compose.onNodeWithText("Sunday").assertIsDisplayed()
+        compose.onNodeWithContentDescription("IFC Sunday, actual Thursday").assertIsDisplayed()
+        compose.onNodeWithText("September 8, 2026").assertIsDisplayed()
+        // The "Gregorian" block carries the real weekday — the only place it is drawn.
         compose.onNodeWithText("GREGORIAN", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Thursday, September 17, 2026").assertIsDisplayed()
-        compose.onNodeWithText("IFC weekday: Sunday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Actual weekday: Thursday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithContentDescription("IFC Sunday, actual Thursday").assertIsDisplayed()
-        compose.onNodeWithText("Day 260 · Week 38 of 52 · Q3").assertIsDisplayed()
+        compose.onAllNodesWithText("Thursday").assertCountEquals(0)
+        // No second, labelled copy of either weekday (the former weekday block is gone).
+        compose.onAllNodesWithText("IFC weekday: Sunday", useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Actual weekday: Thursday", useUnmergedTree = true).assertCountEquals(0)
+        // The facts line: the numeric form keeps its IFC prefix (CLAUDE.md rule 5).
+        compose.onNodeWithText("IFC 2026-10-08 · Day 260 · Week 38 of 52 · Q3").assertIsDisplayed()
         compose.onNodeWithContentDescription("71% of the year").assertIsDisplayed()
         compose.onNodeWithText("105 days until Year Day").assertIsDisplayed()
     }
@@ -90,14 +92,13 @@ class TodayScreenTest {
     fun `Year Day shows no IFC weekday and its actual weekday`() {
         show(LocalDate.of(2026, 12, 31))
 
-        // No IFC weekday, so no weekday line above the date — and never the real one in its place.
+        // No IFC weekday: the weekday slot says so (spec §4.1 item 5) rather than showing the real one.
         compose.onAllNodesWithText("Thursday").assertCountEquals(0)
-        compose.onNodeWithText("Year Day, 2026").assertIsDisplayed()
-        compose.onNodeWithText("IFC 2026-13-29").assertIsDisplayed()
-        compose.onNodeWithText("no IFC weekday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Actual weekday: Thursday", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("no IFC weekday").assertIsDisplayed()
         compose.onNodeWithContentDescription("no IFC weekday, actual Thursday").assertIsDisplayed()
-        compose.onNodeWithText("Day 365 · outside the weeks · Q4").assertIsDisplayed()
+        compose.onNodeWithText("Year Day, 2026").assertIsDisplayed()
+        compose.onNodeWithText("Thursday, December 31, 2026").assertIsDisplayed()
+        compose.onNodeWithText("IFC 2026-13-29 · Day 365 · outside the weeks · Q4").assertIsDisplayed()
     }
 
     @Test
@@ -105,10 +106,11 @@ class TodayScreenTest {
         show(LocalDate.of(2028, 6, 17))
 
         compose.onAllNodesWithText("Saturday").assertCountEquals(0)
+        compose.onNodeWithText("no IFC weekday").assertIsDisplayed()
+        compose.onNodeWithContentDescription("no IFC weekday, actual Saturday").assertIsDisplayed()
         compose.onNodeWithText("Leap Day, 2028").assertIsDisplayed()
-        compose.onNodeWithText("IFC 2028-06-29").assertIsDisplayed()
-        compose.onNodeWithText("no IFC weekday", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("Actual weekday: Saturday", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Saturday, June 17, 2028").assertIsDisplayed()
+        compose.onNodeWithText("IFC 2028-06-29 · Day 169 · outside the weeks · Q2").assertIsDisplayed()
         compose.onNodeWithText("197 days until Year Day").assertIsDisplayed()
     }
 

@@ -245,6 +245,11 @@ Architecture, tooling and CI:
 
 ### Changed
 
+- The Today card says each thing once. It is now two labelled blocks — "IFC" over the IFC weekday and
+  date, "Gregorian" over the real date with its weekday — followed by one facts line ("IFC 2026-10-17 ·
+  Day 269 · Week 39 of 52 · Q3") and the year progress. The separate "IFC weekday / Actual weekday" box
+  is gone, since each block already names its weekday; on Year Day and Leap Day the weekday slot reads
+  "no IFC weekday". Screen readers still hear both weekdays, labelled, on the IFC weekday line.
 - **The version shown in More and in feedback emails now identifies the exact build**, e.g.
   `0.1.0+45.72dbfa1`: the release number, the build number and the commit it was built from (`.dirty` if it
   had uncommitted changes). The build number (`versionCode`) is now the commit count of `main`, which only
@@ -341,6 +346,16 @@ Architecture, tooling and CI:
 
 ### Fixed
 
+- The first-run intro's illustrations looked broken in dark mode — a single amber bar, a column of four
+  rings, an empty card — because their plain blocks and dots were drawn in the same colour as the card
+  behind them. They are now visible in every palette and mode (R13). The intro's third page also claimed
+  Year Day is "always" a particular weekday; it now says what is actually fixed: Year Day is always
+  December 31 and Leap Day always June 17, on whatever weekday that year gives them.
+- The intro's pictures now say what they show: month initials over the 13 blocks with Sol named; the
+  Calendar tab's own "IFC weekdays / Actual weekdays" headers over the month grid, with the Sunday column
+  ringed and numbered 1, 8, 15, 22 (the ring had been on the middle column); "December" over the Year
+  Day grid with a Year Day pill and an outlined Leap Day pill beneath it. They also mirror correctly in
+  right-to-left languages and grow with the font size instead of squeezing.
 - Accessibility audit fixes in `:core:designsystem` (ROADMAP M8 T1): `DayCell`, `IntercalaryBand` and the
   Year overview's mini-month/Year Day tiles now merge their descendants (`mergeDescendants = true`), so
   TalkBack speaks each one's description once instead of also re-announcing the inner day numbers, labels
@@ -397,7 +412,7 @@ Architecture, tooling and CI:
 - Settings and the More hub (M8 T1 a11y audit): the 13-month illustration's highlighted Sol block now
   differs in shape (a capsule/pill), not only colour; Settings' "Colour source"/"Palette"/"Widgets"
   sub-headings are reachable by TalkBack's heading gesture like every other heading; the first-run intro
-  resets its scroll position and moves focus to each page's heading on Back/Next instead of landing
+  resets its scroll position and moves focus to the start of each page on Back/Next instead of landing
   scrolled past it; and every More hub row, including Send feedback, now shares one full-width, ≥48dp
   touch target.
 - Reduced motion (M8 T1 a11y audit finding #22): the Month screen's "Today" action — the only purely

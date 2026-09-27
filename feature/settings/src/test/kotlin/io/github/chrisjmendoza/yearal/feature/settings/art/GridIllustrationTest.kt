@@ -4,6 +4,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.chrisjmendoza.yearal.core.calendar.IfcDate
+import io.github.chrisjmendoza.yearal.core.calendar.IfcMonth
 import io.github.chrisjmendoza.yearal.core.designsystem.theme.IfcTheme
 import io.kotest.assertions.throwables.shouldThrow
 import org.junit.Rule
@@ -13,8 +15,8 @@ import org.junit.runner.RunWith
 /**
  * [GridIllustration] under Robolectric: each variant is described to TalkBack by exactly the caller's
  * [contentDescription] (`docs/design-plan.md` §4.8, ROADMAP wave 3 J3), and
- * [GridIllustrationVariant.NOMINAL_VS_ACTUAL] refuses to render without both weekday labels rather
- * than silently showing a blank caption.
+ * [GridIllustrationVariant.NOMINAL_VS_ACTUAL] refuses to render without its example day rather
+ * than silently showing blank headers and captions.
  */
 @RunWith(AndroidJUnit4::class)
 class GridIllustrationTest {
@@ -56,8 +58,7 @@ class GridIllustrationTest {
                 GridIllustration(
                     variant = GridIllustrationVariant.NOMINAL_VS_ACTUAL,
                     contentDescription = "Ringed weekday column, Sunday vs Thursday",
-                    nominalWeekdayLabel = "Sunday",
-                    actualWeekdayLabel = "Thursday",
+                    example = IfcDate.Regular(2026, IfcMonth.SEPTEMBER, 8),
                 )
             }
         }
@@ -66,13 +67,13 @@ class GridIllustrationTest {
     }
 
     @Test
-    fun `NOMINAL_VS_ACTUAL without both weekday labels throws`() {
+    fun `NOMINAL_VS_ACTUAL without an example day throws`() {
         shouldThrow<IllegalArgumentException> {
             compose.setContent {
                 IfcTheme(dynamicColor = false) {
                     GridIllustration(
                         variant = GridIllustrationVariant.NOMINAL_VS_ACTUAL,
-                        contentDescription = "Missing labels",
+                        contentDescription = "Missing example",
                     )
                 }
             }

@@ -72,20 +72,23 @@ class LearnScreenTest {
 
         compose
             .onNodeWithContentDescription(
-                "A row of 13 equal month blocks. One of them, Sol, is highlighted to show it sits " +
-                    "between June and July.",
+                "A row of 13 month blocks, each under its initial, January to December. The seventh, Sol, " +
+                    "is highlighted between June and July.",
             ).performScrollTo()
             .assertIsDisplayed()
         compose
             .onNodeWithContentDescription(
-                "A 4 by 7 grid of dots standing in for one IFC month, with a Year Day pill shown outside " +
-                    "the grid, since Year Day belongs to no week.",
+                "December as a 4 by 7 grid of 28 days, followed by two pills outside the grid: Year Day, " +
+                    "and Leap Day drawn in outline because it exists only in leap years. Neither belongs to " +
+                    "any week.",
             ).performScrollTo()
             .assertIsDisplayed()
         compose
             .onNodeWithContentDescription(
-                "A 4 by 7 grid of dots standing in for one IFC month, with one weekday column ringed. " +
-                    "That column's IFC weekday is Sunday; the same day's actual weekday is Thursday.",
+                "One IFC month, September 2026, as a 4 by 7 grid under two header rows: the IFC weekdays, " +
+                    "Sunday to Saturday, and that month's actual weekdays beneath them. The column holding " +
+                    "September 8, 2026 is ringed and numbered: its IFC weekday is Sunday and its actual " +
+                    "weekday is Thursday.",
             ).performScrollTo()
             .assertIsDisplayed()
     }

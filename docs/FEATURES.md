@@ -73,7 +73,7 @@ Counts are from the 51 incumbent reviews retrieved, plus the iOS app's review fe
 
 | Pri | ID | Feature | Notes |
 |:---:|---|---|---|
-| 🔴 | T1 | Today screen: large IFC date with the Gregorian equivalent beneath | App opens here. Renders Year Day / Leap Day as "today" correctly. Today's IFC weekday sits above the date (owner, 2026-09-25: "that's the whole point of the app"); omitted on Year Day and Leap Day, which have none. |
+| 🔴 | T1 | Today screen: large IFC date with the Gregorian equivalent beneath | App opens here. Renders Year Day / Leap Day as "today" correctly. Today's IFC weekday sits above the date (owner, 2026-09-25: "that's the whole point of the app"), "no IFC weekday" on Year Day and Leap Day. Since 2026-09-27 the hero is two labelled blocks ("IFC", "Gregorian") plus one facts line — every fact once (design-plan §4.1). |
 | 🔴 | T2 | Nominal (IFC) weekday vs actual weekday, clearly labelled | calendar-spec §4.1. Reading "Sunday" on a real Thursday must be impossible to do by accident. |
 | 🔴 | T6 | Live update at midnight, on time change, and on time-zone change | "Today" is never cached. |
 | 🟠 | T3 | Day of year, week (1–52), quarter, year-progress bar | Cheap once the core exists; makes the screen feel alive. |

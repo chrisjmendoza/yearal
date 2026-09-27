@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -89,10 +90,11 @@ fun TodayRoute(
  * (docs/ARCHITECTURE.md §4 "State management").
  *
  * A hero card (`docs/design-plan.md` §4.1) on [YearalTheme.colors]' `heroContainer`/`onHero` carries
- * today's IFC weekday above the IFC date in `displayMedium`, an "IFC"/"Gregorian" eyebrow pair, the weekday block, the
- * day/week/quarter line and the year-progress bar. Below it: an amber intercalary countdown chip, a
- * Holidays card and an Events card, both showing a quiet line rather than vanishing when there is
- * nothing to show (§4.1).
+ * two labelled blocks — "IFC": today's IFC weekday over the IFC date in `displayMedium`; "Gregorian":
+ * the real date with its real weekday — then one facts line (the numeric IFC form, day of year, week,
+ * quarter) and the year-progress bar. Every fact appears once (owner, 2026-09-27: no redundancy).
+ * Below it: an amber intercalary countdown chip, a Holidays card and an Events card, both showing a
+ * quiet line rather than vanishing when there is nothing to show (§4.1).
  *
  * @param onAgendaItemClick invoked with an agenda row's event id (FEATURES T5); holidays are plain text.
  */
@@ -145,10 +147,16 @@ private fun LoadedContent(
 }
 
 /**
- * The hero card (`docs/design-plan.md` §4.1): today's IFC weekday above the IFC date in
- * `displayMedium`, the "IFC" / "Gregorian"
- * eyebrow pair (the review's acceptance test — "what Gregorian date is this?" — answered at a glance),
- * the weekday block, the day/week/quarter line and the tinted year-progress bar.
+ * The hero card (`docs/design-plan.md` §4.1): an "IFC" eyebrow over today's IFC weekday and the IFC date
+ * in `displayMedium`, a "Gregorian" eyebrow over the real date (the review's acceptance test — "what
+ * Gregorian date is this?" — answered at a glance), one facts line and the tinted year-progress bar.
+ *
+ * Redesigned on 2026-09-27 (owner: the card said "IFC" four times and each weekday twice). The rule
+ * now: each block is labelled once by its eyebrow, so a weekday inside a block needs no label of its
+ * own, and the former "IFC weekday / Actual weekday" block is gone. Spec §4.1 items 4 and 7 are still
+ * met: the two weekdays sit under explicit "IFC" / "Gregorian" labels, and TalkBack speaks the hero
+ * weekday as [TodayUiState.Loaded.weekdaysDescription] ("IFC Sunday, actual Thursday"). On Year Day
+ * and Leap Day the weekday slot shows "no IFC weekday" (item 5) instead of standing empty.
  */
 @Composable
 private fun HeroCard(state: TodayUiState.Loaded) {
@@ -161,32 +169,42 @@ private fun HeroCard(state: TodayUiState.Loaded) {
             modifier = Modifier.padding(Dimens.SpaceL),
             verticalArrangement = Arrangement.spacedBy(Dimens.SpaceS),
         ) {
-            // The IFC weekday, bare, so the hero reads as one IFC date (owner ruling, 2026-09-25). TalkBack
-            // speaks the labelled form ("IFC weekday: Sunday") so it is never heard as the real weekday,
-            // which stays in the Gregorian line and the weekday block. Absent on Year Day and Leap Day.
-            state.heroWeekday?.let { weekday ->
-                Text(
-                    text = weekday,
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.semantics { contentDescription = state.nominalWeekday },
-                )
-            }
+            Eyebrow(stringResource(R.string.eyebrow_ifc))
+            // The IFC weekday, bare under its block's "IFC" eyebrow (owner ruling, 2026-09-25); on Year
+            // Day and Leap Day the same slot says "no IFC weekday" (spec §4.1 item 5). TalkBack hears both
+            // weekdays here, labelled ("IFC Sunday, actual Thursday", item 7), so it is never mistaken for
+            // the real one.
+            Text(
+                text = state.heroWeekday ?: state.nominalWeekday,
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.semantics { contentDescription = state.weekdaysDescription },
+            )
             Text(
                 text = state.heroDate,
                 style = MaterialTheme.typography.displayMedium,
                 modifier = Modifier.semantics { heading() },
             )
-            EyebrowValue(stringResource(R.string.eyebrow_ifc), state.numericDate)
-            EyebrowValue(stringResource(R.string.eyebrow_gregorian), state.gregorianLongDate)
 
             Spacer(modifier = Modifier.height(Dimens.SpaceS))
 
-            WeekdayBlock(state)
+            EyebrowValue(
+                eyebrow = stringResource(R.string.eyebrow_gregorian),
+                value = state.gregorianLongDate,
+                style = MaterialTheme.typography.bodyLarge,
+            )
 
             Spacer(modifier = Modifier.height(Dimens.SpaceS))
 
+            // The facts line: the canonical numeric form keeps its `IFC` prefix (CLAUDE.md rule 5) — here
+            // it is a fact among facts, not a second copy of the headline date.
             Text(
-                text = stringResource(R.string.today_day_week_quarter, state.dayAndWeek, state.quarter),
+                text =
+                    stringResource(
+                        R.string.today_numeric_day_week_quarter,
+                        state.numericDate,
+                        state.dayAndWeek,
+                        state.quarter,
+                    ),
                 style = MaterialTheme.typography.bodyLarge,
             )
             // clearAndSetSemantics on the wrapper is the single spoken node for both children
@@ -210,15 +228,22 @@ private fun HeroCard(state: TodayUiState.Loaded) {
     }
 }
 
-/** One eyebrow (`labelSmall`, uppercased) over its value, e.g. "IFC" over "IFC 2026-10-08". */
+/** An eyebrow caption (`labelSmall`, uppercased) naming the block beneath it, e.g. "IFC" or "GREGORIAN". */
+@Composable
+private fun Eyebrow(text: String) {
+    Text(text = text.uppercase(), style = MaterialTheme.typography.labelSmall)
+}
+
+/** One [Eyebrow] over its value, e.g. "GREGORIAN" over "Thursday, September 17, 2026". */
 @Composable
 private fun EyebrowValue(
     eyebrow: String,
     value: String,
+    style: TextStyle = MaterialTheme.typography.bodyMedium,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXs / 2)) {
-        Text(text = eyebrow.uppercase(), style = MaterialTheme.typography.labelSmall)
-        Text(text = value, style = MaterialTheme.typography.bodyMedium)
+        Eyebrow(eyebrow)
+        Text(text = value, style = style)
     }
 }
 
@@ -392,32 +417,6 @@ private fun TodayAgendaRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-    }
-}
-
-/**
- * Both weekdays, each line labelled by the formatter (spec §4.1 item 4) and merged into one spoken
- * description, "IFC Sunday, actual Thursday" (§4.1 item 7), so neither can be mistaken for the other.
- * Keeps its sage `secondaryContainer` fill (design-plan §4.1: "keep its sage container").
- */
-@Composable
-private fun WeekdayBlock(state: TodayUiState.Loaded) {
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        shape = MaterialTheme.shapes.medium,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .semantics(mergeDescendants = true) { contentDescription = state.weekdaysDescription },
-    ) {
-        Column(
-            modifier = Modifier.padding(Dimens.SpaceL),
-            verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXs),
-        ) {
-            Text(text = state.nominalWeekday, style = MaterialTheme.typography.bodyLarge)
-            Text(text = state.actualWeekday, style = MaterialTheme.typography.bodyLarge)
         }
     }
 }

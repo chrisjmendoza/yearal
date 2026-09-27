@@ -75,8 +75,8 @@ class IntroScreenTest {
         // docs/design-plan.md §4.8 (ROADMAP wave 3 J3): each page opens with a grid illustration.
         compose
             .onNodeWithContentDescription(
-                "A row of 13 equal month blocks. One of them, Sol, is highlighted to show it sits " +
-                    "between June and July.",
+                "A row of 13 month blocks, each under its initial, January to December. The seventh, Sol, " +
+                    "is highlighted between June and July.",
             ).assertIsDisplayed()
     }
 
@@ -98,10 +98,12 @@ class IntroScreenTest {
         compose.onNodeWithText("Screen 2 of 3").assertIsDisplayed()
         compose
             .onNodeWithContentDescription(
-                "A 4 by 7 grid of dots standing in for one IFC month, with one weekday column ringed. " +
-                    "That column's IFC weekday is Sunday; the same day's actual weekday is Thursday.",
+                "One IFC month, September 2026, as a 4 by 7 grid under two header rows: the IFC weekdays, " +
+                    "Sunday to Saturday, and that month's actual weekdays beneath them. The column holding " +
+                    "September 8, 2026 is ringed and numbered: its IFC weekday is Sunday and its actual " +
+                    "weekday is Thursday.",
             ).assertIsDisplayed()
-        heading("Two weekdays for every date").assertIsDisplayed()
+        heading("Two weekdays for every date").performScrollTo().assertIsDisplayed()
         // The spec's own worked example (calendar-spec §4.1), same reference date LearnScreenTest checks.
         compose
             .onNodeWithText(
@@ -124,16 +126,20 @@ class IntroScreenTest {
     // A11y audit finding #26: the shared scroll state used to carry over between pages, so a user who
     // scrolled down on one screen landed on the next already scrolled past its own heading.
     @Test
-    fun `moving to the next page resets scroll to the top and focuses the new heading`() {
+    fun `moving to the next page resets scroll to the top and focuses the page start`() {
         show()
         // Scroll screen 1 down to its last paragraph before moving on.
         compose.onNodeWithText("An extra month, Sol, sits between June and July.").performScrollTo()
 
         compose.onNodeWithText("Next").performClick()
 
-        // If the scroll position had carried over, screen 2's heading would still be scrolled past and
-        // this would fail without a performScrollTo() call.
-        heading("Two weekdays for every date").assertIsDisplayed().assertIsFocused()
+        // If the scroll position had carried over, the page's first line would still be scrolled past
+        // and this would fail without a performScrollTo() call. Focus lands on that first line, not on
+        // the heading: focusing the heading would scroll the illustration off a short screen.
+        compose.onNodeWithText("Screen 2 of 3").assertIsDisplayed().assertIsFocused()
+        // The heading sits below the taller illustration, off the bottom of Robolectric's short default
+        // window, so reaching it takes a scroll — which is the point: the page opened at its top.
+        heading("Two weekdays for every date").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -145,19 +151,21 @@ class IntroScreenTest {
         compose.onNodeWithText("Screen 3 of 3").assertIsDisplayed()
         compose
             .onNodeWithContentDescription(
-                "A 4 by 7 grid of dots standing in for one IFC month, with a Year Day pill shown outside " +
-                    "the grid, since Year Day belongs to no week.",
+                "December as a 4 by 7 grid of 28 days, followed by two pills outside the grid: Year Day, " +
+                    "and Leap Day drawn in outline because it exists only in leap years. Neither belongs to " +
+                    "any week.",
             ).assertIsDisplayed()
         heading("Two days outside the week").assertIsDisplayed()
         compose
             .onNodeWithText(
-                "Year Day, 2026 happens every year. It is always Gregorian Thursday, December 31, 2026, " +
-                    "and it belongs to no week.",
+                "Year Day happens every year, right after December 28, and belongs to no week. " +
+                    "It is always Gregorian December 31: Year Day, 2026 is Gregorian Thursday, December 31, 2026.",
             ).performScrollTo()
             .assertIsDisplayed()
         compose
             .onNodeWithText(
-                "Leap Day, 2024 happens only in leap years. It is always Gregorian Monday, June 17, 2024.",
+                "Leap Day happens only in leap years, right after June 28, and is also outside the week. " +
+                    "It is always Gregorian June 17: Leap Day, 2024 is Gregorian Monday, June 17, 2024.",
             ).performScrollTo()
             .assertIsDisplayed()
         compose.onNodeWithText("Find my IFC birthday").assertIsDisplayed()
