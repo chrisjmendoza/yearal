@@ -70,7 +70,8 @@ import io.github.chrisjmendoza.yearal.feature.settings.feedback.sendFeedbackEmai
  *
  * @param appName the launcher label, e.g. `Yearal`; it lives in `:app`'s resources, so the caller
  * passes it rather than the feature duplicating the string.
- * @param versionName the app's `versionName`, e.g. `0.1.0+112.72dbfa1`; supplied by `:app`, which owns the
+ * @param versionName the app's `versionName`: `0.1.0` in a release build, `0.1.0+112.72dbfa1` in a debug
+ * one; the About row shows the part before any `+`, the feedback email the whole thing. Supplied by `:app`, which owns the
  * package information (the feature never reads `PackageManager`).
  * @param versionCode the app's `versionCode`, e.g. `3`; supplied by `:app` alongside [versionName], for
  * the feedback email's subject and diagnostics.
@@ -183,7 +184,9 @@ fun MoreScreen(
             HorizontalDivider()
             ListItem(
                 headlineContent = { Text(appName) },
-                supportingContent = { Text(stringResource(R.string.more_version, versionName)) },
+                supportingContent = {
+                    Text(stringResource(R.string.more_version, versionName.substringBefore('+'), versionCode))
+                },
                 leadingContent = { Icon(imageVector = Icons.Filled.Info, contentDescription = null) },
             )
         }

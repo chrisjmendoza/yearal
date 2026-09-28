@@ -262,10 +262,11 @@ Architecture, tooling and CI:
   the answer never scrolls out of view; the Month grid keeps square cells on medium-width windows and
   splits half and half with the day card on wide ones, where the day card now scrolls; the Year view
   sits in a centred column of four tiles per row instead of spreading across the screen.
-- **The version shown in More and in feedback emails now identifies the exact build**, e.g.
-  `0.1.0+45.72dbfa1`: the release number, the build number and the commit it was built from (`.dirty` if it
-  had uncommitted changes). The build number (`versionCode`) is now the commit count of `main`, which only
-  goes up; it replaces the fixed `0.1.0 (10000)` every build used to carry. Installing a new build over one
+- **Every build now has its own build number**: the commit count of `main`, which only goes up, replacing
+  the fixed `0.1.0 (10000)` every build used to carry. More → About reads "Version 0.1.0 (45)". Release
+  builds (and so the Play listing) show the plain `0.1.0`; debug builds' version name also carries the
+  commit it was built from (`0.1.0+45.72dbfa1`, `.dirty` with uncommitted changes), which feedback emails
+  include. Installing a new build over one
   from before this change needs a one-time uninstall. See
   [docs/release-builds.md](docs/release-builds.md) "Version numbers".
 - **Smaller, faster release build** (M8 T2): R8 now shrinks and optimizes the release APK (16.9 MB → 8.2 MB)

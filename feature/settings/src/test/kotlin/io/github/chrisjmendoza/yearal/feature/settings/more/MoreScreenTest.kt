@@ -5,11 +5,13 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -59,6 +61,8 @@ class MoreScreenTest {
     private fun show(
         settings: UserSettings = UserSettings.DEFAULT,
         fontScale: Float = 1f,
+        versionName: String = "0.1.0",
+        versionCode: Int = 3,
     ) {
         compose.setContent {
             val density = LocalDensity.current
@@ -66,8 +70,8 @@ class MoreScreenTest {
                 IfcTheme(dynamicColor = false) {
                     MoreScreen(
                         appName = "Yearal",
-                        versionName = "0.1.0",
-                        versionCode = 3,
+                        versionName = versionName,
+                        versionCode = versionCode,
                         settings = settings,
                         onHolidaysClick = { holidaysClicks++ },
                         onSettingsClick = { settingsClicks++ },
@@ -146,8 +150,18 @@ class MoreScreenTest {
             .performScrollTo()
             .assertIsDisplayed()
             .assertHasNoClickAction()
-        compose.onNodeWithText("Version 0.1.0").assertIsDisplayed()
+        compose.onNodeWithText("Version 0.1.0 (3)").assertIsDisplayed()
         compose.onNodeWithText("More").assertIsDisplayed()
+    }
+
+    // A debug build's versionName carries SemVer build metadata (docs/release-builds.md "Version
+    // numbers"); the About row shows the release version and build number only, the Android convention.
+    @Test
+    fun `About row shows a debug build as version and build number, without the metadata`() {
+        show(versionName = "0.1.0+46.576c910.dirty", versionCode = 46)
+
+        compose.onNodeWithText("Version 0.1.0 (46)").performScrollTo().assertIsDisplayed()
+        compose.onAllNodesWithText("576c910", substring = true).assertCountEquals(0)
     }
 
     @Test

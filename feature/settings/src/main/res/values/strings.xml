@@ -40,8 +40,9 @@
     <!-- Supporting line under the Send feedback row. -->
     <string name="more_feedback_detail">Report a bug or suggestion by email</string>
 
-    <!-- Supporting line of the About row. %1$s = the app's version name, e.g. "0.1.0". -->
-    <string name="more_version">Version %1$s</string>
+    <!-- Supporting line of the About row. %1$s = the release version, e.g. "0.1.0" (any "+…" build
+         metadata cut off); %2$d = the build number (the versionCode). Reads "Version 0.1.0 (46)". -->
+    <string name="more_version">Version %1$s (%2$d)</string>
 
     <!-- ===== Send feedback (ROADMAP M8 T6; docs/security-and-privacy.md §6.3) =====
          An ACTION_SENDTO "mailto:" intent, restricted to email apps and needing no permission. The

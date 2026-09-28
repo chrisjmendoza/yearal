@@ -22,11 +22,14 @@ private const val MAX_VERSION_CODE = 2_000_000_000L
  * The `versionCode` and `versionName` an `:app` build is stamped with.
  *
  * @property versionCode the commit count of `HEAD` (or the fallback in [resolveBuildVersion]).
- * @property versionName `VERSION_NAME` plus SemVer build metadata, e.g. `0.1.0+112.72dbfa1` or
- *   `0.1.0+112.72dbfa1.dirty`. **Not plain SemVer** — anything that needs the release number alone must
- *   cut it at the first `+`.
+ * @property versionName the plain SemVer from `VERSION_NAME`, e.g. `0.1.0` — what a release build ships
+ *   and what the Play listing's "Version" line shows (owner, 2026-09-28: the `+` metadata looked
+ *   technical on a store page).
+ * @property debugSuffix SemVer build metadata for debug builds only, appended through AGP's
+ *   `versionNameSuffix`: `+112.72dbfa1`, `+112.72dbfa1.dirty` with uncommitted changes, or `+0.unknown`
+ *   when git cannot answer. Anything that needs the release number alone cuts a name at the first `+`.
  */
-data class BuildVersion(val versionCode: Long, val versionName: String)
+data class BuildVersion(val versionCode: Long, val versionName: String, val debugSuffix: String)
 
 /**
  * Asks git, once per configuration, for `HEAD`'s commit count, its 7-character short hash and whether
@@ -87,9 +90,10 @@ abstract class GitHeadValueSource : ValueSource<String, GitHeadValueSource.Param
  * - `versionCode` = `git rev-list --count HEAD`. `main` only ever moves by fast-forward
  *   (docs/WORKFLOW.md §1), so its commit count never goes down between two builds of `main` — which is
  *   what makes it a valid Play `versionCode` (Play requires each upload to be higher than the last).
- * - `versionName` = `"$VERSION_NAME+$count.$shortSha"`, with `.dirty` appended when the worktree has
- *   uncommitted changes (SemVer build metadata; harmless for Play, and it tells a feedback email apart
- *   from a clean build).
+ * - `versionName` = `VERSION_NAME`, plain (`0.1.0`), for every build type; debug builds add
+ *   [BuildVersion.debugSuffix] = `"+$count.$shortSha"`, with `.dirty` appended when the worktree has
+ *   uncommitted changes (SemVer build metadata — it tells a feedback email from a debug install apart
+ *   from a clean build, and never reaches the store).
  *
  * When git cannot answer (a source archive, no git on PATH, a shallow clone), the `VERSION_BUILD` Gradle
  * property is used as the `versionCode` if given, else `1`, and the name ends in `.unknown`; a warning
@@ -108,7 +112,7 @@ fun Project.resolveBuildVersion(): BuildVersion {
         if (!head.startsWith("!")) {
             val (count, sha, state) = head.split(' ')
             val suffix = if (state == "dirty") ".dirty" else ""
-            BuildVersion(count.toLong(), "$semver+$count.$sha$suffix")
+            BuildVersion(count.toLong(), semver, "+$count.$sha$suffix")
         } else {
             val build = providers.gradleProperty("VERSION_BUILD").orNull?.toLong()
             logger.warn(
@@ -117,7 +121,7 @@ fun Project.resolveBuildVersion(): BuildVersion {
                     ". Installs of this build cannot be told apart from other fallback builds. " +
                     "See docs/release-builds.md \"Version numbers\".",
             )
-            BuildVersion(build ?: 1L, "$semver+${build ?: 0}.unknown")
+            BuildVersion(build ?: 1L, semver, "+${build ?: 0}.unknown")
         }
 
     if (version.versionCode !in 1..MAX_VERSION_CODE) {

@@ -13,17 +13,19 @@ plugins {
     id("com.diffplug.spotless")
 }
 
+val buildVersion = resolveBuildVersion()
+
 extensions.configure<ApplicationExtension> {
     configureIfcAndroid(this)
 
     defaultConfig {
         targetSdk = libs.findVersion("targetSdk").get().requiredVersion.toInt()
 
-        // versionCode = commit count of HEAD, versionName = "$VERSION_NAME+$count.$shortSha[.dirty]"
-        // (VERSION_NAME is the human SemVer in gradle.properties). The count is a valid Play versionCode
-        // because main only ever moves by fast-forward (docs/WORKFLOW.md §1), so it never decreases.
-        // Falls back to VERSION_BUILD / 1 with a warning when git cannot answer — see GitBuildVersion.kt.
-        val buildVersion = resolveBuildVersion()
+        // versionCode = commit count of HEAD; versionName = VERSION_NAME, the plain SemVer in
+        // gradle.properties (what the Play listing shows). The count is a valid Play versionCode because
+        // main only ever moves by fast-forward (docs/WORKFLOW.md §1), so it never decreases. Debug builds
+        // add "+$count.$shortSha[.dirty]" below. Falls back to VERSION_BUILD / 1 with a warning when git
+        // cannot answer — see GitBuildVersion.kt.
         versionName = buildVersion.versionName
         versionCode = buildVersion.versionCode.toInt()
     }
@@ -36,6 +38,11 @@ extensions.configure<ApplicationExtension> {
     val releaseSigningConfig = releaseSigningConfig(this)
 
     buildTypes {
+        debug {
+            // SemVer build metadata on debug installs only (0.1.0+46.576c910[.dirty]): it identifies the
+            // exact commit in a feedback email, and a release build never carries it.
+            versionNameSuffix = buildVersion.debugSuffix
+        }
         release {
             signingConfig = releaseSigningConfig
             // AGP 9 DSL property confirmed from the gradle-api-9.3.3-sources.jar KDoc

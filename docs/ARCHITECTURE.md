@@ -1439,10 +1439,12 @@ is tracked in git (guarded, not unconditional — see "Goldens" above).
   - `versionCode` = `git rev-list --count HEAD`. `main` is only ever fast-forwarded (WORKFLOW.md §1), so its
     commit count never decreases, which is what Play requires of a `versionCode`. The build fails above
     2,000,000,000 (Play's cap is 2,100,000,000).
-  - `versionName` = `VERSION_NAME+<count>.<7-char sha>`, plus `.dirty` for a worktree with uncommitted
-    changes (SemVer build metadata), e.g. `0.1.0+45.72dbfa1`. The More screen and the feedback email show
-    it, so every install and every report identifies its exact commit. **It is not plain SemVer** — cut at
-    the first `+` for the release number.
+  - `versionName` = `VERSION_NAME`, plain SemVer (`0.1.0`), in a **release** build — that is what the
+    Play listing's "Version" line shows (owner, 2026-09-28). A **debug** build appends SemVer build
+    metadata through AGP's `versionNameSuffix`: `+<count>.<7-char sha>`, plus `.dirty` for a worktree
+    with uncommitted changes, e.g. `0.1.0+45.72dbfa1`. The More screen's About row shows
+    `Version 0.1.0 (45)` in both (the name cut at the first `+`, then the `versionCode`); the feedback
+    email carries the full name, so a report from a debug install still names its exact commit.
   - Computed at configuration time by `build-logic/convention/src/main/kotlin/GitBuildVersion.kt` through
     a Gradle `ValueSource` (configuration-cache safe: re-evaluated every build, cache invalidated only when
     the commit or the clean/dirty state changes). Without usable git (source archive, no `git`, shallow

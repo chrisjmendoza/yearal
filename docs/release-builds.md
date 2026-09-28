@@ -43,10 +43,14 @@ Every build is stamped from git by `build-logic/convention/src/main/kotlin/GitBu
 | | Value | Example |
 |---|---|---|
 | `versionCode` | `git rev-list --count HEAD` | `45` |
-| `versionName` | `VERSION_NAME` (from `gradle.properties`) `+` count `.` 7-character commit hash, plus `.dirty` if the worktree had uncommitted changes | `0.1.0+45.72dbfa1`, `0.1.0+45.72dbfa1.dirty` |
+| `versionName`, release | `VERSION_NAME` from `gradle.properties`, plain — what the Play listing shows | `0.1.0` |
+| `versionName`, debug | the same, plus SemVer build metadata: `+` count `.` 7-character commit hash, plus `.dirty` if the worktree had uncommitted changes | `0.1.0+45.72dbfa1`, `0.1.0+45.72dbfa1.dirty` |
 
-The More screen's About row and the feedback email's subject and body show the `versionName`, so a bug
-report names the exact commit it was built from. Only builds of `main` are ever uploaded; `main` moves
+The `+` is SemVer's build-metadata marker, not arithmetic: it labels a build without changing the
+version (`0.1.0+45` and `0.1.0+46` are both 0.1.0). The More screen's About row reads `Version 0.1.0
+(45)` — the name up to any `+`, then the `versionCode` — in both build types, the usual Android
+convention. The feedback email's subject and body carry the full `versionName`, so a report from a
+debug install names the exact commit it was built from. Only builds of `main` are ever uploaded; `main` moves
 only by fast-forward ([WORKFLOW.md](WORKFLOW.md) §1), so its commit count only goes up and is a valid
 Play `versionCode`. A `local/*` branch build carries its own count, which can equal a different `main`
 commit's — the hash in the name tells them apart. The build fails if the count ever passes 2,000,000,000
@@ -54,7 +58,7 @@ commit's — the hash in the name tells them apart. The build fails if the count
 
 **When git can't answer** — a source archive with no `.git`, no `git` on `PATH`, or a shallow clone (whose
 count would be wrong) — the build still succeeds with a warning: the `versionCode` is the `VERSION_BUILD`
-Gradle property if one is passed (`-PVERSION_BUILD=123`), else `1`, and the name ends in `.unknown`
+Gradle property if one is passed (`-PVERSION_BUILD=123`), else `1`, and the debug name ends in `.unknown`
 (`0.1.0+0.unknown`). CI checks out with `fetch-depth: 0` so its builds are numbered properly.
 
 **One-time downgrade (2026-09-26).** Builds made before this scheme were `0.1.0` with `versionCode`
