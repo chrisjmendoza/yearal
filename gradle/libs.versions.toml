@@ -37,7 +37,7 @@ glance = "1.2.0"
 
 # Android tests
 robolectric = "4.17"
-roborazzi = "1.74.0"
+roborazzi = "1.75.0"
 # ROADMAP R6 / M2 T10: drives Roborazzi's generateComposePreviewRobolectricTests so every existing
 # @Preview in :core:designsystem is captured without a hand-written test per preview (MIT licence,
 # testImplementation-only — never ships in the app; docs/ARCHITECTURE.md §6 "Goldens").
