@@ -51,7 +51,7 @@ jobs:
       # glob must match that path with its module-relative structure preserved: the owner unzips the
       # artifact at the repo root and `git add`s the result directly.
       - name: Upload recorded goldens
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: roborazzi-goldens
           path: "**/src/test/screenshots/**"
@@ -82,7 +82,7 @@ jobs:
 
       - name: Upload Roborazzi HTML report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: roborazzi-report
           path: "**/build/reports/roborazzi/**"
