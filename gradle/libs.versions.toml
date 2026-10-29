@@ -23,7 +23,7 @@ minSdk = "26"
 # AndroidX
 composeBom = "2026.09.00"
 activity = "1.13.0"
-coreKtx = "1.19.0"
+coreKtx = "1.19.1"
 lifecycle = "2.11.0"
 nav3 = "1.1.7"
 hilt = "2.60.1"
